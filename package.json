@@ -5,13 +5,22 @@
   "main": "index.js",
   "scripts": {
     "deploy": "pnpm deploy:frontend && pnpm deploy:backend",
-    "deploy:frontend": "pnpm --filter frontend deploy",
-    "deploy:backend": "pnpm --filter backend deploy"
+    "deploy:frontend": "pnpm --filter frontend run deploy",
+    "deploy:backend": "pnpm --filter backend run deploy",
+    "db:migrate:production": "pnpm --filter backend run db:migrate:production",
+    "lint": "pnpm --filter frontend lint && pnpm --filter backend lint",
+    "lint:fix": "pnpm --filter frontend lint:fix && pnpm --filter backend lint:fix",
+    "test": "pnpm --filter backend test:run"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "packageManager": "pnpm@10.26.0",
+  "pnpm": {
+    "overrides": {
+      "typescript": "5.9.2"
+    }
+  },
   "volta": {
     "node": "24.13.0"
   }

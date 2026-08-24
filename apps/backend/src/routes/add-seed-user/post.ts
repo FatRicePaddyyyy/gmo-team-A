@@ -3,7 +3,7 @@ import { auth } from "../../lib/better-auth";
 
 const CreateSeedUserRequestSchema = z
   .object({
-    email: z.string().email().openapi({
+    email: z.email().openapi({
       example: "admin@example.com",
       description: "メールアドレス",
     }),
@@ -31,7 +31,7 @@ const SuccessResponseSchema = z
           example: "user_123456789",
           description: "ユーザーID",
         }),
-        email: z.string().email().openapi({
+        email: z.email().openapi({
           example: "admin@example.com",
           description: "メールアドレス",
         }),
@@ -131,16 +131,6 @@ export const createSeedUserRouteHandler = app.openapi(
         },
       });
 
-      if (!result || !result.user) {
-        return ctx.json(
-          {
-            success: false,
-            error: "ユーザーの作成に失敗しました",
-          },
-          500
-        );
-      }
-
       return ctx.json(
         {
           success: true,
@@ -148,7 +138,7 @@ export const createSeedUserRouteHandler = app.openapi(
             id: result.user.id,
             email: result.user.email,
             name: result.user.name,
-            createdAt: result.user.createdAt?.toISOString() || new Date().toISOString(),
+            createdAt: result.user.createdAt.toISOString(),
           },
         },
         200
@@ -156,8 +146,8 @@ export const createSeedUserRouteHandler = app.openapi(
     } catch (error: unknown) {
       console.error("Create seed user error:", error);
 
-      if (error && typeof error === "object" && "message" in error) {
-        const errorMessage = error.message as string;
+      if (error && typeof error === "object" && "message" in error && typeof error.message === "string") {
+        const errorMessage = error.message;
         
         // Better Authのエラーメッセージに基づいて適切なステータスコードを返す
         if (errorMessage.toLowerCase().includes("duplicate") || errorMessage.toLowerCase().includes("already exists") || errorMessage.toLowerCase().includes("重複")) {

@@ -1,17 +1,38 @@
 {
   "name": "backend",
   "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy --minify --env production",
-    "cf-typegen": "wrangler types --env-interface CloudflareBindings"
+    "db:migrate:local": "wrangler d1 migrations apply db-local --local",
+    "db:migrate:production": "wrangler d1 migrations apply db-production --env production --remote",
+    "cf-typegen": "wrangler types --env-interface CloudflareBindings",
+    "lint": "eslint . --config ./eslint.config.mjs --ext .js,.jsx,.ts,.tsx",
+    "lint:staged": "eslint --config ./eslint.config.mjs --ext .js,.jsx,.ts,.tsx --max-warnings=0 --no-warn-ignored",
+    "lint:fix": "eslint . --config ./eslint.config.mjs --ext .js,.jsx,.ts,.tsx --fix",
+    "test": "vitest",
+    "test:run": "vitest run"
   },
   "devDependencies": {
+    "@eslint/eslintrc": "^3.3.6",
+    "@eslint/js": "^9.39.5",
+    "@hono/eslint-config": "^2.1.1",
     "@hono/swagger-ui": "0.5.2",
     "@types/node": "^26.2.0",
     "@types/sql.js": "1.4.9",
+    "@typescript-eslint/eslint-plugin": "^8.67.0",
+    "@typescript-eslint/parser": "^8.67.0",
     "drizzle-kit": "0.31.5",
+    "eslint": "^9.39.5",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-import-x": "^4.17.1",
+    "eslint-plugin-n": "^18.3.0",
     "sql.js": "1.13.0",
+    "typescript": "5.9.2",
+    "typescript-eslint": "^8.67.0",
+    "vitest": "^4.1.11",
     "wrangler": "^4.110.0"
   },
   "dependencies": {

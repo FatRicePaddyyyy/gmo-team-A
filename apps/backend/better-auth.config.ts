@@ -1,9 +1,9 @@
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { admin } from "better-auth/plugins";
-import { schema } from "./src/lib/schema"
-import initSqlJs from "sql.js";
 import { drizzle } from "drizzle-orm/sql-js";
+import initSqlJs from "sql.js";
+import { schema } from "./src/lib/schema"
 
 const SQL = await initSqlJs();
 const sqlite = new SQL.Database();

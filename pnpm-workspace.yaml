@@ -1,2 +1,7 @@
 packages:
   - 'apps/*'
+
+# Pre-approve build scripts for workerd (Wrangler) and esbuild native bindings.
+allowBuilds:
+  esbuild: true
+  workerd: true
