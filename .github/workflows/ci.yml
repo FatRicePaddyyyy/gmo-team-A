@@ -83,7 +83,7 @@ jobs:
         with:
           path: |
             node_modules
-            apps/frontend/node_modules
+            apps/frontend/node_modulesbb
             apps/backend/node_modules
           key: node-modules-${{ runner.os }}-${{ hashFiles('**/pnpm-lock.yaml') }}
       - name: Install dependencies
@@ -187,18 +187,30 @@ jobs:
         working-directory: apps/backend
         env:
           BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
+          SECRET_KEY: ${{ secrets.SECRET_KEY }}
         run: |
           pnpm dev &
           echo "Backend PID: $!"
-          # Wait for backend to be ready (max 60s)
+          # /api は OpenAPI spec を返す認証不要エンドポイント
           for i in $(seq 1 30); do
-            if curl -sf http://localhost:8787 > /dev/null 2>&1; then
-              echo "Backend is ready after ${i}x2s"
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8787/api)
+            if [ "$STATUS" = "200" ]; then
+              echo "Backend is ready after ${i}x2s (HTTP $STATUS)"
               break
             fi
-            echo "Waiting for backend... ($i/30)"
+            echo "Waiting for backend... ($i/30) (HTTP $STATUS)"
             sleep 2
           done
+      - name: Seed test user
+        env:
+          SECRET_KEY: ${{ secrets.SECRET_KEY }}
+          E2E_TEST_EMAIL: ${{ secrets.E2E_TEST_EMAIL }}
+          E2E_TEST_PASSWORD: ${{ secrets.E2E_TEST_PASSWORD }}
+        run: |
+          curl -sf -X POST "http://localhost:8787/api/v1/secret/create-seed-user" \
+            -H "Authorization: Bearer $SECRET_KEY" \
+            -H "Content-Type: application/json" \
+            -d "{\"email\":\"$E2E_TEST_EMAIL\",\"name\":\"テストユーザー\",\"password\":\"$E2E_TEST_PASSWORD\"}"
       - name: Run Playwright tests
         working-directory: apps/frontend
         env:
