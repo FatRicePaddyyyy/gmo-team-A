@@ -11,9 +11,19 @@
       "migrations_dir": "drizzle"
     }
   ],
+  "vars": {
+    "BACKEND_URL": "http://localhost:8787",
+    "FRONTEND_URL": "http://localhost:3000",
+    "crossSubDomainCookies": "localhost"
+  },
   "env": {
     "production": {
-      "name": "backend",
+      "name": "backend-production",
+      "vars": {
+        "BACKEND_URL": "https://backend-production.fatricepaddy.workers.dev",
+        "FRONTEND_URL": "https://frontend-production.fatricepaddy.workers.dev",
+        "crossSubDomainCookies": ".fatricepaddy.workers.dev"
+      },
       "observability": {
         "logs": {
           "enabled": false,
@@ -35,9 +45,6 @@
   // "compatibility_flags": [
   //   "nodejs_compat"
   // ],
-  // "vars": {
-  //   "MY_VAR": "my-variable"
-  // },
   // "kv_namespaces": [
   //   {
   //     "binding": "MY_KV_NAMESPACE",
