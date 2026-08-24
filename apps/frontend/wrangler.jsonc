@@ -5,19 +5,23 @@
 {
 	"$schema": "node_modules/wrangler/config-schema.json",
 	"name": "frontend",
-	"main": ".open-next/worker.js",
-	"compatibility_date": "2025-03-01",
-	"compatibility_flags": [
-		"nodejs_compat",
-		"global_fetch_strictly_public"
-	],
+	"compatibility_date": "2026-08-24",
+	"main": "vinext/server/fetch-handler",
 	"assets": {
-		"binding": "ASSETS",
-		"directory": ".open-next/assets"
+		"directory": "dist/client",
+		"not_found_handling": "none",
+		"binding": "ASSETS"
+	},
+	"cache": {
+		"enabled": true
+	},
+	"images": {
+		"binding": "IMAGES"
 	},
 	"observability": {
 		"enabled": true
 	},
+	"upload_source_maps": true,
 	"env": {
 		"production": {
 			"name": "frontend-production"
