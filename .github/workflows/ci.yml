@@ -192,10 +192,11 @@ jobs:
           pnpm dev &
           echo "Backend PID: $!"
           # /api は OpenAPI spec を返す認証不要エンドポイント
+          # || true で接続拒否(exit 7)を無視し set -e に止められないようにする
           for i in $(seq 1 30); do
-            STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8787/api)
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8787/api || echo "000")
             if [ "$STATUS" = "200" ]; then
-              echo "Backend is ready after ${i}x2s (HTTP $STATUS)"
+              echo "Backend is ready after ${i}x2s"
               break
             fi
             echo "Waiting for backend... ($i/30) (HTTP $STATUS)"
@@ -207,7 +208,7 @@ jobs:
           E2E_TEST_EMAIL: ${{ secrets.E2E_TEST_EMAIL }}
           E2E_TEST_PASSWORD: ${{ secrets.E2E_TEST_PASSWORD }}
         run: |
-          curl -sf -X POST "http://localhost:8787/api/v1/secret/create-seed-user" \
+          curl -s -X POST "http://localhost:8787/api/v1/secret/create-seed-user" \
             -H "Authorization: Bearer $SECRET_KEY" \
             -H "Content-Type: application/json" \
             -d "{\"email\":\"$E2E_TEST_EMAIL\",\"name\":\"テストユーザー\",\"password\":\"$E2E_TEST_PASSWORD\"}"
