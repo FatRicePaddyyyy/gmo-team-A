@@ -1,0 +1,29 @@
+{
+	"name": "frontend",
+	"version": "0.1.0",
+	"private": true,
+	"packageManager": "pnpm@10.26.0",
+	"dependencies": {
+		"@opennextjs/cloudflare": "^1.20.2",
+		"next": "^16.3.2",
+		"react": "latest",
+		"react-dom": "latest"
+	},
+	"devDependencies": {
+		"@tailwindcss/postcss": "latest",
+		"@types/node": "latest",
+		"@types/react": "latest",
+		"@types/react-dom": "latest",
+		"tailwindcss": "latest",
+		"typescript": "latest",
+		"wrangler": "latest"
+	},
+	"type": "module",
+	"scripts": {
+		"dev": "next dev",
+		"build": "next build",
+		"preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
+		"deploy": "opennextjs-cloudflare build --minify && opennextjs-cloudflare deploy --env production",
+		"cf-typegen": "wrangler types --env-interface CloudflareEnv ./worker-configuration.d.ts"
+	}
+}

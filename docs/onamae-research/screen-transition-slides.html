@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>疑似レジストラ 画面遷移</title>
+  <script type="module">
+    import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+    mermaid.initialize({
+      startOnLoad: true,
+      securityLevel: "loose",
+      theme: "base",
+      flowchart: { curve: "basis", htmlLabels: true },
+    });
+  </script>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --panel: #111827;
+      --text: #f8fafc;
+      --muted: #94a3b8;
+      --accent: #38bdf8;
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: "Hiragino Sans", "Noto Sans JP", sans-serif;
+    }
+    .deck { height: 100%; }
+    .slide {
+      display: none;
+      height: 100%;
+      padding: 36px 48px 56px;
+      flex-direction: column;
+    }
+    .slide.active { display: flex; }
+    h1, h2 { margin: 0 0 16px; font-weight: 700; letter-spacing: 0.02em; }
+    h1 { font-size: 42px; }
+    h2 { font-size: 30px; color: var(--accent); }
+    p, li { color: #e2e8f0; }
+    .sub { color: var(--muted); margin-bottom: 20px; font-size: 16px; }
+    .mermaid {
+      flex: 1;
+      overflow: auto;
+      background: #f8fafc;
+      border-radius: 12px;
+      padding: 16px;
+    }
+    .legend { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 12px; font-size: 14px; }
+    .chip { display: flex; align-items: center; gap: 8px; }
+    .dot { width: 14px; height: 14px; border-radius: 4px; }
+    table { border-collapse: collapse; width: 100%; font-size: 18px; }
+    th, td { border-bottom: 1px solid #334155; padding: 10px 8px; text-align: left; }
+    th { color: var(--accent); }
+    .footer {
+      position: fixed;
+      left: 24px;
+      right: 24px;
+      bottom: 16px;
+      display: flex;
+      justify-content: space-between;
+      color: var(--muted);
+      font-size: 13px;
+    }
+    kbd {
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 4px;
+      padding: 1px 6px;
+    }
+  </style>
+</head>
+<body>
+  <div class="deck">
+    <section class="slide active">
+      <h1>疑似レジストラアプリ<br />画面遷移</h1>
+      <p class="sub">出典: docs/onamae-research/screen-transition.md ／ お名前.com UI 調査を簡易化</p>
+      <ul>
+        <li>会員向け必須機能: check / create / update / renew / delete / restore / transfer / info</li>
+        <li>ハブはダッシュボードとドメイン詳細</li>
+        <li>廃止は EPP 準拠の廃止ボタン（お名前.com の自動更新OFF方式ではない）</li>
+      </ul>
+      <p class="sub">操作: <kbd>→</kbd> 次へ ／ <kbd>←</kbd> 戻る ／ <kbd>F</kbd> 全画面</p>
+    </section>
+
+    <section class="slide">
+      <h2>色の意味</h2>
+      <div class="legend">
+        <div class="chip"><span class="dot" style="background:#fde68a"></span>黄: 認証</div>
+        <div class="chip"><span class="dot" style="background:#bbf7d0"></span>緑: ハブ</div>
+        <div class="chip"><span class="dot" style="background:#bfdbfe"></span>青: 通常操作</div>
+        <div class="chip"><span class="dot" style="background:#fecaca"></span>赤: 危険操作</div>
+        <div class="chip"><span class="dot" style="background:#fed7aa"></span>橙: 保留中</div>
+      </div>
+      <div class="mermaid">
+flowchart LR
+  A["認証<br/>ログイン / 新規登録"] --> B["ハブ<br/>一覧 / 詳細"]
+  B --> C["通常操作<br/>検索 更新 NS 移管"]
+  B --> D["危険操作<br/>廃止 / 復旧"]
+  B --> E["保留<br/>pendingDelete / pendingTransfer"]
+  classDef auth fill:#fde68a,stroke:#d97706,color:#1c1917
+  classDef hub fill:#bbf7d0,stroke:#16a34a,color:#14532d
+  classDef action fill:#bfdbfe,stroke:#2563eb,color:#1e3a8a
+  classDef danger fill:#fecaca,stroke:#dc2626,color:#7f1d1d
+  classDef pending fill:#fed7aa,stroke:#ea580c,color:#7c2d12
+  class A auth
+  class B hub
+  class C action
+  class D danger
+  class E pending
+      </div>
+    </section>
+
+    <section class="slide">
+      <h2>全体俯瞰</h2>
+      <p class="sub">詳細は以降のフロー別スライド</p>
+      <div class="mermaid">
+flowchart TD
+  TOP[トップ] --> LOGIN[ログイン]
+  TOP --> REGISTER[新規登録]
+  TOP --> SEARCH[検索 check]
+  LOGIN --> DASH[ダッシュボード info]
+  REGISTER --> DASH
+  SEARCH --> RESULT[検索結果]
+  RESULT --> CONFIRM[登録確認 create]
+  CONFIRM --> DASH
+  DASH --> DETAIL[ドメイン詳細]
+  DASH --> RENEW[更新 renew]
+  DASH --> TIN[移管IN]
+  DASH --> APPROVE[移管承認/拒否]
+  DETAIL --> NS[NS変更 update]
+  DETAIL --> WHOIS[Whois変更 update]
+  DETAIL --> DEL[廃止 delete]
+  DETAIL --> TOUT[移管OUT]
+  DEL --> PD[pendingDelete]
+  PD --> REST[復旧 restore]
+  TIN --> TP[pendingTransfer]
+  classDef auth fill:#fde68a,stroke:#d97706,color:#1c1917
+  classDef hub fill:#bbf7d0,stroke:#16a34a,color:#14532d
+  classDef action fill:#bfdbfe,stroke:#2563eb,color:#1e3a8a
+  classDef danger fill:#fecaca,stroke:#dc2626,color:#7f1d1d
+  classDef pending fill:#fed7aa,stroke:#ea580c,color:#7c2d12
+  class LOGIN,REGISTER auth
+  class DASH,DETAIL hub
+  class SEARCH,RESULT,CONFIRM,RENEW,NS,WHOIS,TIN,TOUT,APPROVE action
+  class DEL,REST danger
+  class PD,TP pending
+      </div>
+    </section>
+
+    <section class="slide">
+      <h2>登録フロー（check → create）</h2>
+      <div class="mermaid">
+flowchart TD
+  TOP["トップ<br/>検索窓 / 取得リンク"] -->|"ドメイン検索"| SEARCH["検索画面<br/>文字列 + TLD<br/>API: check"]
+  SEARCH --> RESULT["検索結果<br/>空き / 取得済み"]
+  RESULT -->|"未ログイン"| LOGIN["ログイン / 新規登録"]
+  LOGIN --> CONFIRM
+  RESULT -->|"ログイン済み"| CONFIRM["登録確認・支払い<br/>年数選択<br/>API: create"]
+  CONFIRM --> DONE["登録完了"]
+  DONE --> DASH["ダッシュボード"]
+  classDef auth fill:#fde68a,stroke:#d97706,color:#1c1917
+  classDef hub fill:#bbf7d0,stroke:#16a34a,color:#14532d
+  classDef action fill:#bfdbfe,stroke:#2563eb,color:#1e3a8a
+  class LOGIN auth
+  class DASH hub
+  class SEARCH,RESULT,CONFIRM,DONE action
+      </div>
+    </section>
+
+    <section class="slide">
+      <h2>ハブ：一覧と詳細（info）</h2>
+      <div class="mermaid">
+flowchart TD
+  DASH["ダッシュボード<br/>保有ドメイン一覧<br/>status: ok / pendingDelete / pendingTransfer<br/>API: info"]
+  DASH -->|"ドメイン選択"| DETAIL["ドメイン詳細<br/>期限 / AuthCode / NS / 変更履歴"]
+  DASH -->|"更新メニュー"| RENEW[更新リスト]
+  DASH -->|"移管IN"| TIN[移管IN]
+  DASH -->|"Poll通知"| APPROVE[移管承認・拒否]
+  DETAIL --> NS[NS変更]
+  DETAIL --> WHOIS[Whois変更]
+  DETAIL --> DEL[廃止]
+  DETAIL --> TOUT[移管OUT]
+  DETAIL --> RENEW
+  classDef hub fill:#bbf7d0,stroke:#16a34a,color:#14532d
+  classDef action fill:#bfdbfe,stroke:#2563eb,color:#1e3a8a
+  classDef danger fill:#fecaca,stroke:#dc2626,color:#7f1d1d
+  class DASH,DETAIL hub
+  class RENEW,TIN,APPROVE,NS,WHOIS,TOUT action
+  class DEL danger
+      </div>
+    </section>
+
+    <section class="slide">
+      <h2>更新・情報修正（renew / update）</h2>
+      <div class="mermaid">
+flowchart TD
+  DASH[ダッシュボード] -->|"更新メニュー"| LIST["更新リスト<br/>対象選択"]
+  DETAIL[ドメイン詳細] -->|"更新"| LIST
+  LIST -->|"次へ"| CONFIRM["更新確認・支払い<br/>API: renew"]
+  CONFIRM --> DASH
+  DETAIL -->|"NS変更"| NS["NS変更画面<br/>API: update"]
+  DETAIL -->|"Whois変更"| WHOIS["Whois変更画面<br/>Registrant / TECH<br/>API: update"]
+  NS -->|"保存"| DETAIL
+  WHOIS -->|"保存"| DETAIL
+  classDef hub fill:#bbf7d0,stroke:#16a34a,color:#14532d
+  classDef action fill:#bfdbfe,stroke:#2563eb,color:#1e3a8a
+  class DASH,DETAIL hub
+  class LIST,CONFIRM,NS,WHOIS action
+      </div>
+    </section>
+
+    <section class="slide">
+      <h2>廃止・復旧（delete / restore）</h2>
+      <div class="mermaid">
+flowchart TD
+  DETAIL[ドメイン詳細] -->|"廃止"| DEL["廃止確認<br/>復旧に費用が発生する警告<br/>API: delete"]
+  DEL -->|"廃止実行"| PD["pendingDelete<br/>Grace Period 残日数"]
+  PD -->|"期間中"| REST["復旧確認<br/>手数料警告<br/>API: restore"]
+  PD -->|"期間終了"| GONE[完全削除]
+  REST -->|"復旧成功"| DETAIL
+  classDef hub fill:#bbf7d0,stroke:#16a34a,color:#14532d
+  classDef danger fill:#fecaca,stroke:#dc2626,color:#7f1d1d
+  classDef pending fill:#fed7aa,stroke:#ea580c,color:#7c2d12
+  class DETAIL hub
+  class DEL,REST danger
+  class PD pending
+      </div>
+    </section>
+
+    <section class="slide">
+      <h2>移管（IN / OUT / 承認）</h2>
+      <div class="mermaid">
+flowchart TD
+  DASH[ダッシュボード] -->|"移管IN"| CHK["ドメイン名入力<br/>移管可否確認"]
+  CHK -->|"移管可能"| AUTH["AuthCode入力<br/>API: transfer request"]
+  AUTH --> PENDING["pendingTransfer<br/>20分で自動承認<br/>API: transfer cancel"]
+  PENDING -->|"承認 / 自動承認 / 取消"| DASH
+  DASH -->|"Poll通知"| APPR["承認・拒否画面<br/>API: approve / reject"]
+  APPR --> DASH
+  DETAIL[ドメイン詳細] -->|"移管OUT"| OUT["AuthCode表示 / 再生成<br/>API: rotate-auth-info"]
+  classDef hub fill:#bbf7d0,stroke:#16a34a,color:#14532d
+  classDef action fill:#bfdbfe,stroke:#2563eb,color:#1e3a8a
+  classDef pending fill:#fed7aa,stroke:#ea580c,color:#7c2d12
+  class DASH,DETAIL hub
+  class CHK,AUTH,APPR,OUT action
+  class PENDING pending
+      </div>
+    </section>
+
+    <section class="slide">
+      <h2>お名前.com との設計差分</h2>
+      <table>
+        <thead>
+          <tr><th>項目</th><th>お名前.com</th><th>本アプリ</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>廃止</td><td>自動更新OFFで期限切れ</td><td>廃止ボタンで EPP delete</td></tr>
+          <tr><td>復旧</td><td>追加費用・数日</td><td>Grace Period 中に即時 restore</td></tr>
+          <tr><td>移管完了</td><td>10日前後</td><td>20分で自動承認</td></tr>
+          <tr><td>移管IN</td><td>可否確認 → AuthCode</td><td>同じ順番</td></tr>
+          <tr><td>更新</td><td>独立した更新リスト</td><td>同じ構成</td></tr>
+        </tbody>
+      </table>
+    </section>
+  </div>
+  <div class="footer">
+    <span>screen-transition.md より</span>
+    <span id="page"></span>
+  </div>
+  <script>
+    const slides = [...document.querySelectorAll(".slide")];
+    let i = 0;
+    const page = document.getElementById("page");
+    function show(n) {
+      i = Math.max(0, Math.min(slides.length - 1, n));
+      slides.forEach((s, idx) => s.classList.toggle("active", idx === i));
+      page.textContent = `${i + 1} / ${slides.length}`;
+    }
+    show(0);
+    window.addEventListener("keydown", (e) => {
+      if (e.key === "ArrowRight" || e.key === " ") { e.preventDefault(); show(i + 1); }
+      if (e.key === "ArrowLeft") { e.preventDefault(); show(i - 1); }
+      if (e.key === "f" || e.key === "F") document.documentElement.requestFullscreen?.();
+    });
+  </script>
+</body>
+</html>
