@@ -189,6 +189,9 @@ jobs:
           BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
           SECRET_KEY: ${{ secrets.SECRET_KEY }}
         run: |
+          # wrangler dev に secrets を渡す (.dev.vars は wrangler が自動で読み込む)
+          printf 'BETTER_AUTH_SECRET=%s\nSECRET_KEY=%s\n' \
+            "$BETTER_AUTH_SECRET" "$SECRET_KEY" > .dev.vars
           pnpm dev &
           echo "Backend PID: $!"
           # /api は OpenAPI spec を返す認証不要エンドポイント
