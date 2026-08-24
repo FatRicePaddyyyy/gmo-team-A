@@ -183,6 +183,9 @@ jobs:
       - name: Install Playwright browsers
         working-directory: apps/frontend
         run: pnpm exec playwright install --with-deps chromium
+      - name: Run DB migration (local)
+        working-directory: apps/backend
+        run: pnpm db:migrate:local
       - name: Start backend dev server
         working-directory: apps/backend
         env:
