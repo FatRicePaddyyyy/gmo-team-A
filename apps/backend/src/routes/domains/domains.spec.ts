@@ -1,13 +1,13 @@
 /// <reference types="../../../worker-configuration" />
 import { beforeEach, describe, expect, test, vi } from "vitest";
-import { checkDomainRouteHandler } from "./check/post";
-import { createDomainRouteHandler } from "./post";
-import { listDomainsRouteHandler } from "./get";
-import { getDomainRouteHandler } from "./[domain-id]/get";
-import { renewDomainRouteHandler } from "./[domain-id]/renew/post";
-import { updateDomainRouteHandler } from "./[domain-id]/put";
 import { deleteDomainRouteHandler } from "./[domain-id]/delete";
+import { getDomainRouteHandler } from "./[domain-id]/get";
+import { updateDomainRouteHandler } from "./[domain-id]/put";
+import { renewDomainRouteHandler } from "./[domain-id]/renew/post";
 import { restoreDomainRouteHandler } from "./[domain-id]/restore/post";
+import { checkDomainRouteHandler } from "./check/post";
+import { listDomainsRouteHandler } from "./get";
+import { createDomainRouteHandler } from "./post";
 import { DomainService } from "./service";
 
 const mockEnv = {} as CloudflareBindings;
@@ -45,7 +45,7 @@ describe("POST /api/v1/public/domains/check", () => {
   test("[正常系] 空きドメイン", async () => {
     vi.spyOn(DomainService, "check").mockResolvedValue({
       success: true,
-      data: { avail: true },
+      data: { avail: true, registry: "kitaqsign" },
       error: null,
     });
 
@@ -67,7 +67,7 @@ describe("POST /api/v1/public/domains/check", () => {
   test("[正常系] 取得済みドメイン（avail: false）", async () => {
     vi.spyOn(DomainService, "check").mockResolvedValue({
       success: true,
-      data: { avail: false },
+      data: { avail: false, registry: "kitaqsign" },
       error: null,
     });
 
@@ -86,13 +86,19 @@ describe("POST /api/v1/public/domains/check", () => {
     expect(json).toMatchObject({ success: true, data: { avail: false } });
   });
 
-  test("[異常系] registryが不正", async () => {
+  test("[異常系] 非対応TLD", async () => {
+    vi.spyOn(DomainService, "check").mockResolvedValue({
+      success: false,
+      data: null,
+      error: "unsupported_tld",
+    });
+
     const res = await checkDomainRouteHandler.request(
       "/api/v1/public/domains/check",
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: "example.com", registry: "invalid" }),
+        body: JSON.stringify({ name: "example.zzz" }),
       },
       mockEnv,
     );
@@ -268,7 +274,7 @@ describe("GET /api/v1/secure/domains", () => {
     );
 
     expect(res.status).toBe(200);
-    const json = await res.json() as { data: unknown[] };
+    const json = await res.json();
     expect(json.data).toHaveLength(1);
   });
 
@@ -286,7 +292,7 @@ describe("GET /api/v1/secure/domains", () => {
     );
 
     expect(res.status).toBe(200);
-    const json = await res.json() as { data: unknown[] };
+    const json = await res.json();
     expect(json.data).toHaveLength(0);
   });
 });

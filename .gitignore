@@ -2,3 +2,4 @@ node_modules/
 .playwright-mcp
 docs/githubに共有できないコマンド集.md
 apps/frontend/playwright-report
+apps/backend/scripts

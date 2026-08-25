@@ -10,16 +10,17 @@ import { getAllCategoriesAndProductsRouteHandler } from "./routes/category/get";
 import { createCategoryRouteHandler } from "./routes/category/post";
 import { deleteDomainRouteHandler } from "./routes/domains/[domain-id]/delete";
 import { getDomainRouteHandler } from "./routes/domains/[domain-id]/get";
+import { updateDomainRouteHandler } from "./routes/domains/[domain-id]/put";
 import { renewDomainRouteHandler } from "./routes/domains/[domain-id]/renew/post";
 import { restoreDomainRouteHandler } from "./routes/domains/[domain-id]/restore/post";
 import { approveTransferRouteHandler } from "./routes/domains/[domain-id]/transfer/approve/post";
 import { rejectTransferRouteHandler } from "./routes/domains/[domain-id]/transfer/reject/post";
-import { updateDomainRouteHandler } from "./routes/domains/[domain-id]/put";
 import { checkDomainRouteHandler } from "./routes/domains/check/post";
 import { listDomainsRouteHandler } from "./routes/domains/get";
 import { createDomainRouteHandler } from "./routes/domains/post";
 import { helloRouteHandler } from "./routes/hello/post";
 import { cancelTransferRouteHandler } from "./routes/transfers/[transfer-id]/cancel/post";
+import { listTransfersRouteHandler } from "./routes/transfers/get";
 import { requestTransferRouteHandler } from "./routes/transfers/post";
 import { handleTransferPollQueue } from "./scheduled/transfer-poll";
 import type { Variables } from "./types";
@@ -56,6 +57,7 @@ export const routes = app
   .route("/", approveTransferRouteHandler)
   .route("/", rejectTransferRouteHandler)
   .route("/", requestTransferRouteHandler)
+  .route("/", listTransfersRouteHandler)
   .route("/", cancelTransferRouteHandler);
 
 routes

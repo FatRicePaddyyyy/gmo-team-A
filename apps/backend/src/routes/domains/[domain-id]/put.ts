@@ -13,7 +13,8 @@ const RequestSchema = z.object({
   remStatuses: z.array(z.string()).optional(),
   chg: z.object({
     registrant: z.string().optional(),
-    authInfo: z.string().optional(),
+    // B18: Swagger 上 authInfo は 1〜64 文字
+    authInfo: z.string().min(1).max(64).optional(),
   }).optional(),
   // Issue #24: 自動更新設定
   autoRenew: z.boolean().optional().openapi({

@@ -11,6 +11,8 @@ const errorMessages: Record<string, string> = {
   invalid_tld: "このドメインの拡張子（TLD）には対応していません。別のドメイン名をお試しください。",
   invalid_period: "登録期間の指定が正しくありません。1〜10年の範囲で指定してください。",
   invalid_expires_at: "有効期限の取得に失敗しました。しばらく待ってから再試行してください。",
+  invalid_domain_name: "ドメイン名の形式が正しくありません。TLD（.com など）を含めて入力してください。",
+  unsupported_tld: "このドメインの拡張子（TLD）には対応していません。別のドメインをお試しください。",
 
   // 操作制限
   operation_prohibited: "現在の状態ではこの操作はできません。ドメインのステータスを確認してください。",
@@ -20,12 +22,21 @@ const errorMessages: Record<string, string> = {
   authInfo_mismatch: "認証コード（AuthCode）が正しくありません。移管元レジストラから正しいコードを取得してください。",
   transfer_not_found: "移管申請が見つかりませんでした。",
   transfer_not_cancellable: "この移管申請はすでに処理済みのため取り消しできません。",
+  self_transfer: "自分が所有するドメインには移管申請できません。",
+  transfer_already_pending: "このドメインには既に処理中の移管申請があります。取消してから再申請してください。",
+  transfer_already_processed: "この移管申請は既に処理済みです。",
+  transfer_expired: "移管申請の待機時間が上限を超えました。もう一度申請してください。",
+  invalid_domain_registry: "ドメイン名とレジストリの組み合わせが正しくありません。",
+  registry_operation_failed: "レジストリ側の処理に失敗しました。",
 
   // コンタクト
   contact_create_failed: "レジストリへの接続中に問題が発生しました。しばらく待ってから再試行してください。",
   contact_not_found: "コンタクト情報が見つかりませんでした。しばらく待ってから再試行してください。",
   contact_id_not_found: "レジストリからコンタクトIDを取得できませんでした。しばらく待ってから再試行してください。",
   contact_id_conflict: "登録処理が競合しました。もう一度お試しください。",
+
+  // ユーザー
+  user_not_found: "ユーザー情報が見つかりませんでした。ログインし直してから再試行してください。",
 
   // 通信 / レジストリ
   network_error: "レジストリとの通信に失敗しました。しばらく待ってから再試行してください。",
