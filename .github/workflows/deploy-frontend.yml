@@ -32,4 +32,4 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Build & Deploy
         working-directory: apps/frontend
-        run: pnpm deploy
+        run: pnpm run deploy
