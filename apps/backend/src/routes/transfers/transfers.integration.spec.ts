@@ -47,8 +47,11 @@ beforeEach(() => vi.restoreAllMocks());
 // ─── transfer request ─────────────────────────────────────────────────────────
 
 describe("結合: POST /api/v1/secure/transfers", () => {
+  // request 正常系: userId=undefined (ctx.get 未通過) と owner を区別しないと self_transfer で弾かれる
+  const otherOwnerDomain = { ...mockDomainRow, ownerUserId: "other-owner" };
+
   test("[正常系] 移管申請成功 → 202 + pendingTransfer", async () => {
-    vi.spyOn(TransferDomainRepository, "findByName").mockResolvedValue({ success: true, data: mockDomainRow, error: null });
+    vi.spyOn(TransferDomainRepository, "findByName").mockResolvedValue({ success: true, data: otherOwnerDomain, error: null });
     vi.spyOn(TransferDomainRepository, "updateStatus").mockResolvedValue({ success: true, data: undefined, error: null });
     vi.spyOn(TransferRepository, "create").mockResolvedValue({ success: true, data: mockTransferRow, error: null });
     vi.spyOn(RegistryBridge, "transferRequest").mockResolvedValue({
@@ -67,9 +70,9 @@ describe("結合: POST /api/v1/secure/transfers", () => {
     expect(json.data.status).toBe("pendingTransfer");
   });
 
-  test("[異常系] pendingDelete ドメインは移管不可 → 500 + ユーザー向けメッセージ", async () => {
+  test("[異常系] pendingDelete ドメインは移管不可 → 409 + ユーザー向けメッセージ", async () => {
     vi.spyOn(TransferDomainRepository, "findByName").mockResolvedValue({
-      success: true, data: { ...mockDomainRow, status: "pendingDelete" }, error: null,
+      success: true, data: { ...otherOwnerDomain, status: "pendingDelete" }, error: null,
     });
 
     const res = await requestTransferRouteHandler.request(
@@ -77,13 +80,13 @@ describe("結合: POST /api/v1/secure/transfers", () => {
       { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: "example.com", authInfo: "auth", registry: "kitaqsign" }) },
       mockEnv,
     );
-    expect(res.status).toBe(500);
+    expect(res.status).toBe(409);
     const json = await res.json();
     expect(json.error).toContain("移管できません");
   });
 
   test("[異常系] authInfo 不一致 → 409 + ユーザー向けメッセージ", async () => {
-    vi.spyOn(TransferDomainRepository, "findByName").mockResolvedValue({ success: true, data: mockDomainRow, error: null });
+    vi.spyOn(TransferDomainRepository, "findByName").mockResolvedValue({ success: true, data: otherOwnerDomain, error: null });
     vi.spyOn(RegistryBridge, "transferRequest").mockResolvedValue({ success: false, data: null, error: "authInfo_mismatch" });
 
     const res = await requestTransferRouteHandler.request(
@@ -124,7 +127,7 @@ describe("結合: POST /api/v1/secure/transfers", () => {
 describe("結合: POST /api/v1/secure/domains/{id}/transfer/approve", () => {
   test("[正常系] losing 側が承認 → 200", async () => {
     vi.spyOn(DomainRepository, "findById").mockResolvedValue({ success: true, data: mockDomainRow, error: null });
-    vi.spyOn(DomainTransferRepository, "findByDomainId").mockResolvedValue({
+    vi.spyOn(DomainTransferRepository, "findPendingByDomainId").mockResolvedValue({
       success: true,
       data: { id: "tr-001", domainId: "dom-001", registry: "kitaqsign" as const, status: "pendingTransfer", gainingUserId: "user-002", createdAt: new Date() },
       error: null,
@@ -156,7 +159,7 @@ describe("結合: POST /api/v1/secure/domains/{id}/transfer/approve", () => {
 
   test("[異常系] DB上に transfer レコードが存在しない → 409 + ユーザー向けメッセージ", async () => {
     vi.spyOn(DomainRepository, "findById").mockResolvedValue({ success: true, data: mockDomainRow, error: null });
-    vi.spyOn(DomainTransferRepository, "findByDomainId").mockResolvedValue({ success: true, data: null, error: null });
+    vi.spyOn(DomainTransferRepository, "findPendingByDomainId").mockResolvedValue({ success: true, data: null, error: null });
 
     const res = await approveTransferRouteHandler.request(
       "/api/v1/secure/domains/dom-001/transfer/approve",
@@ -174,7 +177,7 @@ describe("結合: POST /api/v1/secure/domains/{id}/transfer/approve", () => {
 describe("結合: POST /api/v1/secure/domains/{id}/transfer/reject", () => {
   test("[正常系] reject 成功 → 200（DB 更新を含む）", async () => {
     vi.spyOn(DomainRepository, "findById").mockResolvedValue({ success: true, data: { ...mockDomainRow, status: "pendingTransfer" }, error: null });
-    vi.spyOn(DomainTransferRepository, "findByDomainId").mockResolvedValue({ success: true, data: { id: "tr-001", domainId: "dom-001", registry: "kitaqsign" as const, status: "pendingTransfer", gainingUserId: "user-002", createdAt: new Date() }, error: null });
+    vi.spyOn(DomainTransferRepository, "findPendingByDomainId").mockResolvedValue({ success: true, data: { id: "tr-001", domainId: "dom-001", registry: "kitaqsign" as const, status: "pendingTransfer", gainingUserId: "user-002", createdAt: new Date() }, error: null });
     vi.spyOn(DomainTransferRepository, "updateStatus").mockResolvedValue({ success: true, data: undefined, error: null });
     vi.spyOn(DomainRepository, "updateStatus").mockResolvedValue({ success: true, data: undefined, error: null });
     vi.spyOn(RegistryBridge, "transferReject").mockResolvedValue({ success: true, data: { domain: "example.com", status: "clientApproved", gainingRegistrar: "R2", losingRegistrar: "R1" }, error: null });
