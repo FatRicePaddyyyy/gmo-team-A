@@ -3,6 +3,10 @@
     "playwright": {
       "command": "npx",
       "args": ["@playwright/mcp@latest"]
+    },
+    "cloudflare": {
+      "command": "npx",
+      "args": ["@cloudflare/mcp-server-cloudflare@latest"]
     }
   }
 }
