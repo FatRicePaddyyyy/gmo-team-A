@@ -28,6 +28,7 @@ const mockDomainRow = {
   createdAt: new Date("2026-08-25T00:00:00.000Z"),
   authInfo: "test-auth-info",
   ownerUserId: undefined as unknown as string,
+  autoRenew: false,
 };
 
 const mockDomainResponse = {
@@ -38,19 +39,20 @@ const mockDomainResponse = {
   expiresAt: "2027-08-25T00:00:00.000Z",
   createdAt: "2026-08-25T00:00:00.000Z",
   ownerUserId: "user-001",
+  autoRenew: false,
 };
 
 beforeEach(() => vi.restoreAllMocks());
 
 // ─── check ───────────────────────────────────────────────────────────────────
 
-describe("結合: POST /api/v1/secure/domains/check", () => {
+describe("結合: POST /api/v1/public/domains/check", () => {
   test("[正常系] avail:true → 200", async () => {
     vi.spyOn(RegistryBridge, "check").mockResolvedValue({
       success: true, data: { results: [{ name: "example.com", avail: true }] }, error: null,
     });
     const res = await checkDomainRouteHandler.request(
-      "/api/v1/secure/domains/check",
+      "/api/v1/public/domains/check",
       { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: "example.com", registry: "kitaqsign" }) },
       mockEnv,
     );
@@ -64,7 +66,7 @@ describe("結合: POST /api/v1/secure/domains/check", () => {
       success: true, data: { results: [{ name: "taken.com", avail: false }] }, error: null,
     });
     const res = await checkDomainRouteHandler.request(
-      "/api/v1/secure/domains/check",
+      "/api/v1/public/domains/check",
       { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: "taken.com", registry: "kitaqsign" }) },
       mockEnv,
     );
@@ -75,7 +77,7 @@ describe("結合: POST /api/v1/secure/domains/check", () => {
 
   test("[異常系] registry 不正 → 400", async () => {
     const res = await checkDomainRouteHandler.request(
-      "/api/v1/secure/domains/check",
+      "/api/v1/public/domains/check",
       { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: "example.com", registry: "invalid" }) },
       mockEnv,
     );
@@ -85,7 +87,7 @@ describe("結合: POST /api/v1/secure/domains/check", () => {
   test("[異常系] Bridge エラー → 500 + ユーザー向けメッセージ", async () => {
     vi.spyOn(RegistryBridge, "check").mockResolvedValue({ success: false, data: null, error: "network_error" });
     const res = await checkDomainRouteHandler.request(
-      "/api/v1/secure/domains/check",
+      "/api/v1/public/domains/check",
       { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: "example.com", registry: "kitaqsign" }) },
       mockEnv,
     );
@@ -145,10 +147,10 @@ describe("結合: POST /api/v1/secure/domains", () => {
     expect(json.error).toContain("対応していません");
   });
 
-  test("[異常系] registry 省略 → 400", async () => {
+  test("[異常系] TLD 判定不能なドメイン → 400（Issue #25）", async () => {
     const res = await createDomainRouteHandler.request(
       "/api/v1/secure/domains",
-      { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: "example.com", period: { unit: "Y", value: 1 } }) },
+      { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: "invalid-no-tld", period: { unit: "Y", value: 1 } }) },
       mockEnv,
     );
     expect(res.status).toBe(400);
@@ -276,7 +278,17 @@ describe("結合: PUT /api/v1/secure/domains/{id}", () => {
   test("[正常系] 更新成功 → 200", async () => {
     vi.spyOn(DomainRepository, "findById").mockResolvedValue({ success: true, data: mockDomainRow, error: null });
     vi.spyOn(DomainRepository, "updateAuthInfo").mockResolvedValue({ success: true, data: undefined, error: null });
-    vi.spyOn(RegistryBridge, "update").mockResolvedValue({ success: true, data: {}, error: null });
+    vi.spyOn(DomainRepository, "updateExpiresAtAndStatus").mockResolvedValue({ success: true, data: undefined, error: null });
+    vi.spyOn(RegistryBridge, "update").mockResolvedValue({
+      success: true,
+      data: {
+        domain: "example.com", status: ["ok"], registrant: "C-0001",
+        contacts: {}, nameservers: ["ns1.example.com"],
+        crDate: "2026-08-25T00:00:00.000Z", exDate: "2027-08-25T00:00:00.000Z",
+        rgpStatus: [],
+      },
+      error: null,
+    });
 
     const res = await updateDomainRouteHandler.request(
       "/api/v1/secure/domains/dom-001",

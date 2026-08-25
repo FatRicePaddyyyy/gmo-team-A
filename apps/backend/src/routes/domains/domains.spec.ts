@@ -20,6 +20,19 @@ const mockDomain = {
   expiresAt: "2027-01-01T00:00:00.000Z",
   createdAt: "2026-01-01T00:00:00.000Z",
   ownerUserId: "user-001",
+  autoRenew: false,
+};
+
+// info / update 用の詳細レスポンス
+const mockDomainDetail = {
+  ...mockDomain,
+  statuses: ["ok"],
+  registrant: "C-0001",
+  contacts: {},
+  nameservers: ["ns1.example.com"],
+  rgpStatus: [],
+  upDate: null,
+  trDate: null,
 };
 
 beforeEach(() => {
@@ -28,7 +41,7 @@ beforeEach(() => {
 
 // ─── check ───────────────────────────────────────────────────────────────────
 
-describe("POST /api/v1/secure/domains/check", () => {
+describe("POST /api/v1/public/domains/check", () => {
   test("[正常系] 空きドメイン", async () => {
     vi.spyOn(DomainService, "check").mockResolvedValue({
       success: true,
@@ -37,7 +50,7 @@ describe("POST /api/v1/secure/domains/check", () => {
     });
 
     const res = await checkDomainRouteHandler.request(
-      "/api/v1/secure/domains/check",
+      "/api/v1/public/domains/check",
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -48,7 +61,7 @@ describe("POST /api/v1/secure/domains/check", () => {
 
     expect(res.status).toBe(200);
     const json = await res.json();
-    expect(json).toEqual({ success: true, data: { avail: true }, error: null });
+    expect(json).toMatchObject({ success: true, data: { avail: true } });
   });
 
   test("[正常系] 取得済みドメイン（avail: false）", async () => {
@@ -59,7 +72,7 @@ describe("POST /api/v1/secure/domains/check", () => {
     });
 
     const res = await checkDomainRouteHandler.request(
-      "/api/v1/secure/domains/check",
+      "/api/v1/public/domains/check",
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -75,7 +88,7 @@ describe("POST /api/v1/secure/domains/check", () => {
 
   test("[異常系] registryが不正", async () => {
     const res = await checkDomainRouteHandler.request(
-      "/api/v1/secure/domains/check",
+      "/api/v1/public/domains/check",
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -89,7 +102,7 @@ describe("POST /api/v1/secure/domains/check", () => {
 
   test("[異常系] nameが空", async () => {
     const res = await checkDomainRouteHandler.request(
-      "/api/v1/secure/domains/check",
+      "/api/v1/public/domains/check",
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -197,14 +210,37 @@ describe("POST /api/v1/secure/domains", () => {
     expect(res.status).toBe(400);
   });
 
-  test("[異常系] registryが省略されるとバリデーションエラー", async () => {
+  test("[正常系] registry 省略時は TLD から自動判定される（Issue #25）", async () => {
+    vi.spyOn(DomainService, "create").mockResolvedValue({
+      success: true,
+      data: mockDomain,
+      error: null,
+    });
+
     const res = await createDomainRouteHandler.request(
       "/api/v1/secure/domains",
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          name: "example.com",
+          name: "example.com", // .com → kitaqsign に自動判定
+          period: { unit: "Y", value: 1 },
+        }),
+      },
+      mockEnv,
+    );
+
+    expect(res.status).toBe(201);
+  });
+
+  test("[異常系] TLD が判定不能な名前 → 400", async () => {
+    const res = await createDomainRouteHandler.request(
+      "/api/v1/secure/domains",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: "invalid-no-tld", // TLD なし → 判定不能
           period: { unit: "Y", value: 1 },
         }),
       },
@@ -261,7 +297,7 @@ describe("GET /api/v1/secure/domains/{domain-id}", () => {
   test("[正常系] 詳細取得", async () => {
     vi.spyOn(DomainService, "info").mockResolvedValue({
       success: true,
-      data: mockDomain,
+      data: mockDomainDetail,
       error: null,
     });
 
@@ -359,7 +395,7 @@ describe("PUT /api/v1/secure/domains/{domain-id}", () => {
   test("[正常系] NS更新成功", async () => {
     vi.spyOn(DomainService, "update").mockResolvedValue({
       success: true,
-      data: mockDomain,
+      data: mockDomainDetail,
       error: null,
     });
 

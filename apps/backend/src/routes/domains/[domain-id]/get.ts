@@ -11,10 +11,19 @@ const DomainSchema = z.object({
   id: z.string(),
   name: z.string(),
   registry: z.string(),
-  status: z.string(),
+  status: z.string(),           // DB上の主要ステータス（ok / pendingDelete / pendingTransfer）
   expiresAt: z.string(),
   createdAt: z.string(),
   ownerUserId: z.string(),
+  autoRenew: z.boolean(),
+  // レジストリから取得した詳細
+  statuses: z.array(z.string()),
+  registrant: z.string(),
+  contacts: z.record(z.string(), z.string()),
+  nameservers: z.array(z.string()),
+  rgpStatus: z.array(z.string()),
+  upDate: z.string().nullable(),
+  trDate: z.string().nullable(),
 }).openapi("DomainDetail");
 
 const SuccessSchema = z.object({

@@ -1,9 +1,18 @@
 import { RegistryBridge } from "../../lib/bridge";
 import type { Registry } from "../../lib/bridge/types";
 import type { Result } from "../../types/result";
-import { DomainMapper, type DomainResponse } from "./mapper";
+import { DomainMapper, type DomainDetailResponse, type DomainResponse } from "./mapper";
 import { DomainRepository } from "./repository";
 import { DomainTransferRepository } from "./transfer-repository";
+
+// レジストリの status[] を DB カラム用の1つの status に集約する。
+// pendingTransfer / pendingDelete があれば優先、なければ status[0]、最終的に "ok"。
+function pickPrimaryStatus(statuses: string[], fallback: string): string {
+  if (statuses.includes("pendingDelete")) return "pendingDelete";
+  if (statuses.includes("pendingTransfer")) return "pendingTransfer";
+  if (statuses.length > 0 && statuses[0]) return statuses[0];
+  return fallback;
+}
 
 export class DomainService {
   static async check({
@@ -53,12 +62,14 @@ export class DomainService {
     if (!createResult.success) return createResult;
 
     const expiresAt = new Date(createResult.data.exDate);
+    const createdAt = new Date(createResult.data.crDate); // レジストリ登録日時
     const dbResult = await DomainRepository.create({
       data: {
         name,
         registry,
         status: "ok",
         expiresAt,
+        createdAt,
         authInfo,
         ownerUserId: userId,
       },
@@ -89,7 +100,7 @@ export class DomainService {
     domainId: string;
     userId: string;
     env: CloudflareBindings;
-  }): Promise<Result<DomainResponse>> {
+  }): Promise<Result<DomainDetailResponse>> {
     const domainResult = await DomainRepository.findById({ id: domainId, env });
     if (!domainResult.success) return domainResult;
     if (!domainResult.data || domainResult.data.ownerUserId !== userId) {
@@ -101,14 +112,14 @@ export class DomainService {
     if (!infoResult.success) return infoResult;
 
     const expiresAt = new Date(infoResult.data.exDate);
-    const status = infoResult.data.status[0] ?? domain.status;
+    const status = pickPrimaryStatus(infoResult.data.status, domain.status);
 
     // expiresAt と status を1クエリでアトミックに更新（2回に分けると並行読み取りで不整合が起きる）
     const updateResult = await DomainRepository.updateExpiresAtAndStatus({ id: domainId, expiresAt, status, env });
     if (!updateResult.success) return updateResult;
 
-    const updated = { ...domain, expiresAt, status };
-    return { success: true, data: DomainMapper.toResponse(updated), error: null };
+    const updatedRow = { ...domain, expiresAt, status };
+    return { success: true, data: DomainMapper.toDetailResponse(updatedRow, infoResult.data), error: null };
   }
 
   static async renew({
@@ -146,7 +157,8 @@ export class DomainService {
     if (!renewResult.success) return renewResult;
 
     const expiresAt = new Date(renewResult.data.exDate);
-    await DomainRepository.updateExpiresAt({ id: domainId, expiresAt, env });
+    const updateResult = await DomainRepository.updateExpiresAt({ id: domainId, expiresAt, env });
+    if (!updateResult.success) return updateResult;
 
     const updated = { ...domain, expiresAt };
     return { success: true, data: DomainMapper.toResponse(updated), error: null };
@@ -158,6 +170,7 @@ export class DomainService {
     addStatuses,
     remStatuses,
     chg,
+    autoRenew,
     userId,
     env,
   }: {
@@ -166,9 +179,10 @@ export class DomainService {
     addStatuses?: string[];
     remStatuses?: string[];
     chg?: { registrant?: string; authInfo?: string };
+    autoRenew?: boolean; // Issue #24: 自動更新設定
     userId: string;
     env: CloudflareBindings;
-  }): Promise<Result<DomainResponse>> {
+  }): Promise<Result<DomainDetailResponse>> {
     const domainResult = await DomainRepository.findById({ id: domainId, env });
     if (!domainResult.success) return domainResult;
     if (!domainResult.data || domainResult.data.ownerUserId !== userId) {
@@ -178,6 +192,18 @@ export class DomainService {
 
     if (domain.status === "pendingTransfer") {
       return { success: false, data: null, error: "domain_pending_transfer" };
+    }
+
+    // autoRenew のみ変更する場合は、Bridge を呼ばず DB だけ更新して early return
+    const hasRegistryChanges = Boolean(nameServers || addStatuses || remStatuses || chg);
+    if (!hasRegistryChanges && autoRenew !== undefined) {
+      const arResult = await DomainRepository.updateAutoRenew({ id: domainId, autoRenew, env });
+      if (!arResult.success) return arResult;
+      const updatedRow = { ...domain, autoRenew };
+      // レジストリからの最新情報はないので info を呼ぶ
+      const infoResult = await RegistryBridge.info({ name: domain.name, registry: domain.registry as Registry, env });
+      if (!infoResult.success) return infoResult;
+      return { success: true, data: DomainMapper.toDetailResponse(updatedRow, infoResult.data), error: null };
     }
 
     const add = (nameServers || addStatuses)
@@ -199,12 +225,31 @@ export class DomainService {
     });
     if (!updateResult.success) return updateResult;
 
+    // レジストリが返した最新の DomainResponse で DB を同期
+    const registryData = updateResult.data;
+    const expiresAt = new Date(registryData.exDate);
+    const status = pickPrimaryStatus(registryData.status, domain.status);
+    const syncResult = await DomainRepository.updateExpiresAtAndStatus({ id: domainId, expiresAt, status, env });
+    if (!syncResult.success) return syncResult;
+
     if (chg?.authInfo) {
-      await DomainRepository.updateAuthInfo({ id: domainId, authInfo: chg.authInfo, env });
+      const authInfoResult = await DomainRepository.updateAuthInfo({ id: domainId, authInfo: chg.authInfo, env });
+      if (!authInfoResult.success) return authInfoResult;
     }
 
-    const updated = { ...domain, ...(chg?.authInfo ? { authInfo: chg.authInfo } : {}) };
-    return { success: true, data: DomainMapper.toResponse(updated), error: null };
+    if (autoRenew !== undefined) {
+      const arResult = await DomainRepository.updateAutoRenew({ id: domainId, autoRenew, env });
+      if (!arResult.success) return arResult;
+    }
+
+    const updatedRow = {
+      ...domain,
+      expiresAt,
+      status,
+      ...(chg?.authInfo ? { authInfo: chg.authInfo } : {}),
+      ...(autoRenew !== undefined ? { autoRenew } : {}),
+    };
+    return { success: true, data: DomainMapper.toDetailResponse(updatedRow, registryData), error: null };
   }
 
   static async delete({
@@ -234,7 +279,9 @@ export class DomainService {
     });
     if (!deleteResult.success) return deleteResult;
 
-    await DomainRepository.updateStatus({ id: domainId, status: "pendingDelete", env });
+    const updateResult = await DomainRepository.updateStatus({ id: domainId, status: "pendingDelete", env });
+    if (!updateResult.success) return updateResult;
+
     const updated = { ...domain, status: "pendingDelete" };
     return { success: true, data: DomainMapper.toResponse(updated), error: null };
   }
@@ -319,7 +366,8 @@ export class DomainService {
     });
     if (!rejectStatusResult.success) return rejectStatusResult;
 
-    await DomainRepository.updateStatus({ id: domainId, status: "ok", env });
+    const domainStatusResult = await DomainRepository.updateStatus({ id: domainId, status: "ok", env });
+    if (!domainStatusResult.success) return domainStatusResult;
 
     return { success: true, data: undefined, error: null };
   }
@@ -347,7 +395,9 @@ export class DomainService {
     });
     if (!restoreResult.success) return restoreResult;
 
-    await DomainRepository.updateStatus({ id: domainId, status: "ok", env });
+    const updateResult = await DomainRepository.updateStatus({ id: domainId, status: "ok", env });
+    if (!updateResult.success) return updateResult;
+
     const updated = { ...domain, status: "ok" };
     return { success: true, data: DomainMapper.toResponse(updated), error: null };
   }

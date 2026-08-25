@@ -1,0 +1,1 @@
+ALTER TABLE `domains` ADD `auto_renew` integer DEFAULT false NOT NULL;

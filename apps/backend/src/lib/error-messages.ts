@@ -25,10 +25,14 @@ const errorMessages: Record<string, string> = {
   contact_create_failed: "レジストリへの接続中に問題が発生しました。しばらく待ってから再試行してください。",
   contact_not_found: "コンタクト情報が見つかりませんでした。しばらく待ってから再試行してください。",
   contact_id_not_found: "レジストリからコンタクトIDを取得できませんでした。しばらく待ってから再試行してください。",
+  contact_id_conflict: "登録処理が競合しました。もう一度お試しください。",
 
-  // 通信
+  // 通信 / レジストリ
   network_error: "レジストリとの通信に失敗しました。しばらく待ってから再試行してください。",
   ack_failed: "通知の処理中に問題が発生しました。しばらく待ってから再試行してください。",
+  invalid_registry_response: "レジストリから予期しない応答がありました。しばらく待ってから再試行してください。",
+  registry_error: "レジストリでエラーが発生しました。しばらく待ってから再試行してください。",
+  poll_failed: "通知の取得に失敗しました。しばらく待ってから再試行してください。",
 };
 
 export function toUserMessage(error: string): string {

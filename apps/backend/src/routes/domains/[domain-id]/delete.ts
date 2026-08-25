@@ -15,6 +15,7 @@ const DomainSchema = z.object({
   expiresAt: z.string(),
   createdAt: z.string(),
   ownerUserId: z.string(),
+  autoRenew: z.boolean(),
 }).openapi("DomainDeleted");
 
 const SuccessSchema = z.object({

@@ -11,6 +11,7 @@ const DomainSchema = z.object({
   expiresAt: z.string(),
   createdAt: z.string(),
   ownerUserId: z.string(),
+  autoRenew: z.boolean(),
 }).openapi("DomainListItem");
 
 const SuccessSchema = z.object({
