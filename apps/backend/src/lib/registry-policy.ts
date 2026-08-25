@@ -18,9 +18,9 @@ const KITAQSIGN_TLDS = new Set(["com", "net", "org", "info"]);
 export function detectRegistry(name: string): Registry | null {
   const trimmed = name.trim().toLowerCase();
   const lastDot = trimmed.lastIndexOf(".");
-  if (lastDot < 0 || lastDot === trimmed.length - 1) return null;
+  if (lastDot < 0 || lastDot === trimmed.length - 1) {return null;}
   const tld = trimmed.slice(lastDot + 1);
-  if (!tld) return null;
-  if (KITAQSIGN_TLDS.has(tld)) return "kitaqsign";
+  if (!tld) {return null;}
+  if (KITAQSIGN_TLDS.has(tld)) {return "kitaqsign";}
   return "kitaqnic";
 }

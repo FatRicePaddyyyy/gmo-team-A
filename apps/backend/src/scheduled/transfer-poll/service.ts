@@ -1,5 +1,4 @@
 import { RegistryBridge } from "../../lib/bridge";
-import type { Registry } from "../../lib/bridge/types";
 import type { Result } from "../../types/result";
 import { TransferPollRepository } from "./repository";
 
@@ -12,7 +11,7 @@ export class TransferPollService {
     env: CloudflareBindings;
   }): Promise<Result<void>> {
     const transferResult = await TransferPollRepository.findTransferById({ id: transferId, env });
-    if (!transferResult.success) return transferResult;
+    if (!transferResult.success) {return transferResult;}
     if (!transferResult.data) {
       return { success: false, data: null, error: "transfer_not_found" };
     }
@@ -26,7 +25,7 @@ export class TransferPollService {
     }
 
     const domainResult = await TransferPollRepository.findDomainById({ id: transfer.domainId, env });
-    if (!domainResult.success) return domainResult;
+    if (!domainResult.success) {return domainResult;}
     if (!domainResult.data) {
       return { success: false, data: null, error: "domain_not_found" };
     }
@@ -34,10 +33,10 @@ export class TransferPollService {
 
     // Step 1: Poll のみ（ack はまだ）
     const pollResult = await RegistryBridge.poll({
-      registry: transfer.registry as Registry,
+      registry: transfer.registry,
       env,
     });
-    if (!pollResult.success) return pollResult;
+    if (!pollResult.success) {return pollResult;}
 
     if (!pollResult.data) {
       // メッセージなし（まだ pending か自動承認前）→ 正常終了。次回の scheduled で再度確認される
@@ -64,20 +63,20 @@ export class TransferPollService {
     // Step 3: DB を先に更新（失敗したら Queue retry で再実行される）
     if (status === "serverApproved" || status === "clientApproved") {
       const t = await TransferPollRepository.updateTransferStatus({ id: transferId, status, env });
-      if (!t.success) return t;
+      if (!t.success) {return t;}
       const o = await TransferPollRepository.updateDomainOwner({
         id: transfer.domainId,
         newOwnerUserId: transfer.gainingUserId,
         env,
       });
-      if (!o.success) return o;
+      if (!o.success) {return o;}
       const s = await TransferPollRepository.updateDomainStatus({ id: transfer.domainId, status: "ok", env });
-      if (!s.success) return s;
+      if (!s.success) {return s;}
     } else if (status === "clientRejected" || status === "clientCancelled") {
       const t = await TransferPollRepository.updateTransferStatus({ id: transferId, status, env });
-      if (!t.success) return t;
+      if (!t.success) {return t;}
       const s = await TransferPollRepository.updateDomainStatus({ id: transfer.domainId, status: "ok", env });
-      if (!s.success) return s;
+      if (!s.success) {return s;}
     } else {
       // 未知のステータス — ack せず失敗を返す。Queue で retry される
       console.error(`TransferPollService: unknown status="${status}" for transferId=${transferId}`);
@@ -89,7 +88,7 @@ export class TransferPollService {
     // 上の transfer.status !== "pendingTransfer" チェックで冪等にスキップされる
     const ackResult = await RegistryBridge.ackMessage({
       messageId: pollMessage.id,
-      registry: transfer.registry as Registry,
+      registry: transfer.registry,
       env,
     });
     if (!ackResult.success) {

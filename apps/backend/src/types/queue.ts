@@ -1,3 +1,3 @@
-export type TransferPollMessage = {
+export interface TransferPollMessage {
   transferId: string;
-};
+}

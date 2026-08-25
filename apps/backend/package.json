@@ -9,6 +9,8 @@
     "db:migrate:local": "wrangler d1 migrations apply db-local --local",
     "db:migrate:production": "wrangler d1 migrations apply db-production --env production --remote",
     "cf-typegen": "wrangler types --env-interface CloudflareBindings",
+    "openapi:gen": "openapi-typescript https://docs.kitaqsign.com/v3/api-docs.yaml -o ./src/lib/bridge/generated/kitaqsign.d.ts && openapi-typescript https://docs.kitaqnic.com/v3/api-docs.yaml -o ./src/lib/bridge/generated/kitaqnic.d.ts",
+    "typecheck": "tsc --noEmit -p ./tsconfig.build.json",
     "lint": "eslint . --config ./eslint.config.mjs --ext .js,.jsx,.ts,.tsx",
     "lint:staged": "eslint --config ./eslint.config.mjs --ext .js,.jsx,.ts,.tsx --max-warnings=0 --no-warn-ignored",
     "lint:fix": "eslint . --config ./eslint.config.mjs --ext .js,.jsx,.ts,.tsx --fix",
@@ -29,6 +31,7 @@
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-import-x": "^4.17.1",
     "eslint-plugin-n": "^18.3.0",
+    "openapi-typescript": "^7.13.0",
     "sql.js": "1.13.0",
     "typescript": "5.9.2",
     "typescript-eslint": "^8.67.0",
@@ -40,6 +43,7 @@
     "better-auth": "1.4.5",
     "drizzle-orm": "0.44.7",
     "hono": "4.11.1",
+    "openapi-fetch": "^0.17.0",
     "zod": "4.2.1"
   }
 }

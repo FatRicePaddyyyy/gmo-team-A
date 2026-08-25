@@ -1,7 +1,7 @@
 import { RegistryBridge } from "../../lib/bridge";
 import type { Registry } from "../../lib/bridge/types";
+import type { transfers } from "../../lib/schema/general-schema";
 import type { Result } from "../../types/result";
-import { transfers } from "../../lib/schema/general-schema";
 import { TransferDomainRepository } from "./domain-repository";
 import { TransferRepository } from "./repository";
 
@@ -22,7 +22,7 @@ export class TransferService {
     env: CloudflareBindings;
   }): Promise<Result<Transfer>> {
     const domainResult = await TransferDomainRepository.findByName({ name, env });
-    if (!domainResult.success) return domainResult;
+    if (!domainResult.success) {return domainResult;}
     if (!domainResult.data) {
       return { success: false, data: null, error: "domain_not_found" };
     }
@@ -33,7 +33,7 @@ export class TransferService {
     }
 
     const bridgeResult = await RegistryBridge.transferRequest({ name, authInfo, registry, env });
-    if (!bridgeResult.success) return bridgeResult;
+    if (!bridgeResult.success) {return bridgeResult;}
 
     const transferResult = await TransferRepository.create({
       data: {
@@ -44,10 +44,10 @@ export class TransferService {
       },
       env,
     });
-    if (!transferResult.success) return transferResult;
+    if (!transferResult.success) {return transferResult;}
 
     const statusUpdateResult = await TransferDomainRepository.updateStatus({ id: domain.id, status: "pendingTransfer", env });
-    if (!statusUpdateResult.success) return statusUpdateResult;
+    if (!statusUpdateResult.success) {return statusUpdateResult;}
 
     if (env.TRANSFER_QUEUE) {
       try {
@@ -75,7 +75,7 @@ export class TransferService {
     env: CloudflareBindings;
   }): Promise<Result<void>> {
     const transferResult = await TransferRepository.findById({ id: transferId, env });
-    if (!transferResult.success) return transferResult;
+    if (!transferResult.success) {return transferResult;}
     if (!transferResult.data) {
       return { success: false, data: null, error: "transfer_not_found" };
     }
@@ -89,7 +89,7 @@ export class TransferService {
     }
 
     const domainResult = await TransferDomainRepository.findById({ id: transfer.domainId, env });
-    if (!domainResult.success) return domainResult;
+    if (!domainResult.success) {return domainResult;}
     if (!domainResult.data) {
       return { success: false, data: null, error: "domain_not_found" };
     }
@@ -97,16 +97,16 @@ export class TransferService {
 
     const bridgeResult = await RegistryBridge.transferCancel({
       name: domain.name,
-      registry: domain.registry as Registry,
+      registry: domain.registry,
       env,
     });
-    if (!bridgeResult.success) return bridgeResult;
+    if (!bridgeResult.success) {return bridgeResult;}
 
     const cancelStatusResult = await TransferRepository.updateStatus({ id: transferId, status: "clientCancelled", env });
-    if (!cancelStatusResult.success) return cancelStatusResult;
+    if (!cancelStatusResult.success) {return cancelStatusResult;}
 
     const domainStatusResult = await TransferDomainRepository.updateStatus({ id: transfer.domainId, status: "ok", env });
-    if (!domainStatusResult.success) return domainStatusResult;
+    if (!domainStatusResult.success) {return domainStatusResult;}
 
     return { success: true, data: undefined, error: null };
   }

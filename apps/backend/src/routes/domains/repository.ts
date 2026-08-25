@@ -50,8 +50,9 @@ export class DomainRepository {
   }): Promise<Result<Domain>> {
     try {
       const db = createDBClient(env);
-      const rows = await db.insert(domains).values(data).returning();
-      const created = rows[0];
+      const [created] = await db.insert(domains).values(data).returning();
+      // Drizzle の returning() 型上は必ず 1 行返る前提だが、D1 の異常系で 0 件のケースを保険で検知する
+      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
       if (!created) {
         return { success: false, data: null, error: "ドメインの作成に失敗しました" };
       }

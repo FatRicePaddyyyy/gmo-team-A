@@ -1,14 +1,14 @@
 /// <reference types="../../../worker-configuration" />
 import { beforeEach, describe, expect, test, vi } from "vitest";
-import { requestTransferRouteHandler } from "./post";
-import { cancelTransferRouteHandler } from "./[transfer-id]/cancel/post";
+import { RegistryBridge } from "../../lib/bridge";
 import { approveTransferRouteHandler } from "../domains/[domain-id]/transfer/approve/post";
 import { rejectTransferRouteHandler } from "../domains/[domain-id]/transfer/reject/post";
-import { RegistryBridge } from "../../lib/bridge";
 import { DomainRepository } from "../domains/repository";
 import { DomainTransferRepository } from "../domains/transfer-repository";
-import { TransferRepository } from "./repository";
+import { cancelTransferRouteHandler } from "./[transfer-id]/cancel/post";
 import { TransferDomainRepository } from "./domain-repository";
+import { requestTransferRouteHandler } from "./post";
+import { TransferRepository } from "./repository";
 
 // ハンドラー→Service→Repository まで通す結合テスト。
 // RegistryBridge と各 Repository をモックして
@@ -63,7 +63,7 @@ describe("結合: POST /api/v1/secure/transfers", () => {
       mockEnv,
     );
     expect(res.status).toBe(202);
-    const json = await res.json() as { data: { status: string } };
+    const json = await res.json();
     expect(json.data.status).toBe("pendingTransfer");
   });
 
@@ -78,7 +78,7 @@ describe("結合: POST /api/v1/secure/transfers", () => {
       mockEnv,
     );
     expect(res.status).toBe(500);
-    const json = await res.json() as { error: string };
+    const json = await res.json();
     expect(json.error).toContain("移管できません");
   });
 
@@ -92,7 +92,7 @@ describe("結合: POST /api/v1/secure/transfers", () => {
       mockEnv,
     );
     expect(res.status).toBe(409);
-    const json = await res.json() as { error: string };
+    const json = await res.json();
     expect(json.error).toContain("AuthCode");
   });
 
@@ -105,7 +105,7 @@ describe("結合: POST /api/v1/secure/transfers", () => {
       mockEnv,
     );
     expect(res.status).toBe(404);
-    const json = await res.json() as { error: string };
+    const json = await res.json();
     expect(json.error).toContain("見つかりません");
   });
 
@@ -150,7 +150,7 @@ describe("結合: POST /api/v1/secure/domains/{id}/transfer/approve", () => {
       mockEnv,
     );
     expect(res.status).toBe(403);
-    const json = await res.json() as { error: string };
+    const json = await res.json();
     expect(json.error).toContain("権限");
   });
 
@@ -164,7 +164,7 @@ describe("結合: POST /api/v1/secure/domains/{id}/transfer/approve", () => {
       mockEnv,
     );
     expect(res.status).toBe(409);
-    const json = await res.json() as { error: string };
+    const json = await res.json();
     expect(json.error).toContain("見つかりません");
   });
 });
@@ -200,7 +200,7 @@ describe("結合: POST /api/v1/secure/domains/{id}/transfer/reject", () => {
       mockEnv,
     );
     expect(res.status).toBe(403);
-    const json = await res.json() as { error: string };
+    const json = await res.json();
     expect(json.error).toContain("権限");
   });
 });
@@ -238,7 +238,7 @@ describe("結合: POST /api/v1/secure/transfers/{id}/cancel", () => {
       mockEnv, // userId = undefined ≠ "user-002"
     );
     expect(res.status).toBe(403);
-    const json = await res.json() as { error: string };
+    const json = await res.json();
     expect(json.error).toContain("権限");
   });
 
@@ -250,10 +250,10 @@ describe("結合: POST /api/v1/secure/transfers/{id}/cancel", () => {
     const res = await cancelTransferRouteHandler.request(
       "/api/v1/secure/transfers/tr-001/cancel",
       { method: "POST" },
-      { ...mockEnv, __userId: "user-002" } as unknown as CloudflareBindings,
+      { ...mockEnv, __userId: "user-002" },
     );
     expect(res.status).toBe(409);
-    const json = await res.json() as { error: string };
+    const json = await res.json();
     expect(json.error).toContain("取り消しできません");
   });
 
@@ -266,7 +266,7 @@ describe("結合: POST /api/v1/secure/transfers/{id}/cancel", () => {
       mockEnv,
     );
     expect(res.status).toBe(404);
-    const json = await res.json() as { error: string };
+    const json = await res.json();
     expect(json.error).toContain("見つかりません");
   });
 });

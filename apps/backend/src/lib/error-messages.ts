@@ -11,6 +11,8 @@ const errorMessages: Record<string, string> = {
   invalid_tld: "このドメインの拡張子（TLD）には対応していません。別のドメイン名をお試しください。",
   invalid_period: "登録期間の指定が正しくありません。1〜10年の範囲で指定してください。",
   invalid_expires_at: "有効期限の取得に失敗しました。しばらく待ってから再試行してください。",
+  invalid_domain_name: "ドメイン名の形式が正しくありません。TLD（.com など）を含めて入力してください。",
+  unsupported_tld: "このドメインの拡張子（TLD）には対応していません。別のドメインをお試しください。",
 
   // 操作制限
   operation_prohibited: "現在の状態ではこの操作はできません。ドメインのステータスを確認してください。",
@@ -26,6 +28,9 @@ const errorMessages: Record<string, string> = {
   contact_not_found: "コンタクト情報が見つかりませんでした。しばらく待ってから再試行してください。",
   contact_id_not_found: "レジストリからコンタクトIDを取得できませんでした。しばらく待ってから再試行してください。",
   contact_id_conflict: "登録処理が競合しました。もう一度お試しください。",
+
+  // ユーザー
+  user_not_found: "ユーザー情報が見つかりませんでした。ログインし直してから再試行してください。",
 
   // 通信 / レジストリ
   network_error: "レジストリとの通信に失敗しました。しばらく待ってから再試行してください。",

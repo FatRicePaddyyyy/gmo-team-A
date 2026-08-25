@@ -68,7 +68,7 @@ export const createDomainRouteHandler = app.openapi(route, async (ctx) => {
     if (result.error === "domain_exists") {
       return ctx.json({ success: false as const, data: null, error: toUserMessage(result.error) }, 409);
     }
-    if (result.error === "invalid_tld") {
+    if (result.error === "invalid_tld" || result.error === "unsupported_tld") {
       return ctx.json({ success: false as const, data: null, error: toUserMessage(result.error) }, 422);
     }
     return ctx.json({ success: false as const, data: null, error: toUserMessage(result.error) }, 500);

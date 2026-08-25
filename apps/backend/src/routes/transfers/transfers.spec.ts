@@ -1,10 +1,10 @@
 /// <reference types="../../../worker-configuration" />
 import { beforeEach, describe, expect, test, vi } from "vitest";
-import { requestTransferRouteHandler } from "./post";
-import { cancelTransferRouteHandler } from "./[transfer-id]/cancel/post";
 import { approveTransferRouteHandler } from "../domains/[domain-id]/transfer/approve/post";
 import { rejectTransferRouteHandler } from "../domains/[domain-id]/transfer/reject/post";
 import { DomainService } from "../domains/service";
+import { cancelTransferRouteHandler } from "./[transfer-id]/cancel/post";
+import { requestTransferRouteHandler } from "./post";
 import { TransferService } from "./service";
 
 const mockEnv = {} as CloudflareBindings;
@@ -340,7 +340,7 @@ describe("移管フロー統合テスト（check → create → transfer request
       mockEnv,
     );
     expect(requestRes.status).toBe(202);
-    const requestJson = await requestRes.json() as { data: { status: string } };
+    const requestJson = await requestRes.json();
     expect(requestJson.data.status).toBe("pendingTransfer");
 
     // 2. losing: 移管承認（DB更新はQueue consumerが担当）
