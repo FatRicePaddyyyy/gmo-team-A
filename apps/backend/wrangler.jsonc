@@ -14,7 +14,21 @@
   "vars": {
     "BACKEND_URL": "http://localhost:8787",
     "FRONTEND_URL": "http://localhost:3000",
-    "crossSubDomainCookies": "localhost"
+    "crossSubDomainCookies": "localhost",
+    "KITAQSIGN_BASE_URL": "https://epp.kitaqsign.com",
+    "KITAQNIC_BASE_URL": "https://epp.kitaqnic.com"
+  },
+  "queues": {
+    "producers": [
+      { "binding": "TRANSFER_QUEUE", "queue": "transfer-poll" }
+    ],
+    "consumers": [
+      {
+        "queue": "transfer-poll",
+        "max_retries": 3,
+        "dead_letter_queue": "transfer-poll-dlq"
+      }
+    ]
   },
   "env": {
     "production": {
@@ -22,7 +36,9 @@
       "vars": {
         "BACKEND_URL": "https://backend-production.fatricepaddy.workers.dev",
         "FRONTEND_URL": "https://frontend-production.fatricepaddy.workers.dev",
-        "crossSubDomainCookies": ".fatricepaddy.workers.dev"
+        "crossSubDomainCookies": ".fatricepaddy.workers.dev",
+        "KITAQSIGN_BASE_URL": "https://epp.kitaqsign.com",
+        "KITAQNIC_BASE_URL": "https://epp.kitaqnic.com"
       },
       "observability": {
         "logs": {

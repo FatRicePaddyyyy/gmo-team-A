@@ -15,6 +15,13 @@
       "when": 1787573283521,
       "tag": "0001_20260824210758_create_categories_and_products",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1787625812752,
+      "tag": "0002_20260825114331_add_domains_and_transfers",
+      "breakpoints": true
     }
   ]
 }

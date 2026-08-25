@@ -37,4 +37,12 @@ jobs:
           preCommands: |
             printf '%s' "${{ secrets.BETTER_AUTH_SECRET }}" | npx wrangler secret put BETTER_AUTH_SECRET --env production
             printf '%s' "${{ secrets.SECRET_KEY }}" | npx wrangler secret put SECRET_KEY --env production
+            printf '%s' "${{ secrets.KITAQSIGN_BASIC_USER }}" | npx wrangler secret put KITAQSIGN_BASIC_USER --env production
+            printf '%s' "${{ secrets.KITAQSIGN_BASIC_PASS }}" | npx wrangler secret put KITAQSIGN_BASIC_PASS --env production
+            printf '%s' "${{ secrets.KITAQSIGN_REGISTRAR_ID }}" | npx wrangler secret put KITAQSIGN_REGISTRAR_ID --env production
+            printf '%s' "${{ secrets.KITAQSIGN_API_KEY }}" | npx wrangler secret put KITAQSIGN_API_KEY --env production
+            printf '%s' "${{ secrets.KITAQNIC_BASIC_USER }}" | npx wrangler secret put KITAQNIC_BASIC_USER --env production
+            printf '%s' "${{ secrets.KITAQNIC_BASIC_PASS }}" | npx wrangler secret put KITAQNIC_BASIC_PASS --env production
+            printf '%s' "${{ secrets.KITAQNIC_REGISTRAR_ID }}" | npx wrangler secret put KITAQNIC_REGISTRAR_ID --env production
+            printf '%s' "${{ secrets.KITAQNIC_API_KEY }}" | npx wrangler secret put KITAQNIC_API_KEY --env production
           command: deploy --env=production
