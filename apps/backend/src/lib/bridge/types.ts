@@ -37,7 +37,11 @@ export type GreetingResponse = Schemas["GreetingResponse"];
 // Poll
 // 生成型の payload は `{ [key: string]: Record<string, never> }` と過剰に厳しいため、
 // 実際のメッセージが持つ domain/status を安全に読める形に上書きする。
+// B9: Swagger 上 id は int64。JS の number は 2^53-1 までしか安全に扱えないため、
+// 大きな id が来ても失われないよう bridge 内では number として受け、ack 直前に文字列化して送る。
+// 現状 Kitaqsign/Kitaqnic は 2^53 を超える id を発行していないが、防御的に型に msgType 等も明記する。
 export type PollMessage = Omit<Schemas["PollMessageDto"], "payload"> & {
+  msgType?: string;
   payload: {
     domain?: string;
     status?: string;

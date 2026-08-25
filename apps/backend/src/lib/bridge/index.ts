@@ -365,7 +365,7 @@ export class RegistryBridge {
     authInfo: string;
     registry: Registry;
     env: CloudflareBindings;
-  }): Promise<Result<DomainTransferResponse>> {
+  }): Promise<Result<DomainTransferResponse | undefined>> {
     try {
       const { data, error, response } = await getClient(registry, env).POST(
         "/api/v1/epp/domains/{name}/transfer/request",
@@ -378,9 +378,9 @@ export class RegistryBridge {
       // Kitaqsign: authInfo不一致は result.code 2202
       if (data.result.code === 2202) {return { success: false, data: null, error: "authInfo_mismatch" };}
       // 成功: 1000（同期完了）または 1001（非同期受付）
+      // B5: Swagger 上 resData? は optional。空の resData でも result.code が成功値なら受付として扱う。
       const extracted = extractResData(data, [1000, 1001]);
       if (!extracted.success) {return extracted;}
-      if (!extracted.data) {return { success: false, data: null, error: "invalid_registry_response" };}
       return { success: true, data: extracted.data, error: null };
     } catch (e) {
       console.error("RegistryBridge.transferRequest error:", e);
@@ -408,9 +408,17 @@ export class RegistryBridge {
           : action === "reject"
           ? await client.POST("/api/v1/epp/domains/{name}/transfer/reject", { params: { path: { name } } })
           : await client.POST("/api/v1/epp/domains/{name}/transfer/cancel", { params: { path: { name } } });
+      // B12: 401 (レジストリの認証エラー) を明示的に authInfo_mismatch として扱う。
+      // これまでは invalid_registry_response に丸まって 500 化していた。
+      if (response.status === 401) {return { success: false, data: null, error: "authInfo_mismatch" };}
       if (response.status === 403) {return { success: false, data: null, error: "forbidden" };}
+      if (response.status === 404) {return { success: false, data: null, error: "transfer_not_found" };}
       if (response.status === 409) {return { success: false, data: null, error: "transfer_not_found" };}
       if (error) {return { success: false, data: null, error: "invalid_registry_response" };}
+      // B8: レジストリ実装によっては HTTP 200 でも result.code に失敗コード (例: 2303 "object does not exist")
+      // を返すことがある。extractResData で 1000 のみを success とする既存契約を維持し、
+      // 2303 のような "存在しない対象" は transfer_not_found にマッピングする。
+      if (data.result.code === 2303) {return { success: false, data: null, error: "transfer_not_found" };}
       const extracted = extractResData(data);
       if (!extracted.success) {return extracted;}
       // Swagger 上 DomainTransferResponse を返すが、レジストリ実装によっては空の可能性もある。
@@ -459,6 +467,13 @@ export class RegistryBridge {
       const message = data.resData?.message;
       if (!message || typeof message.id !== "number") {
         return { success: true, data: null, error: null };
+      }
+
+      // B9: id は int64 だが JS number は 2^53-1 までしか安全に扱えない。
+      // 精度が落ちた場合は ack が失敗する可能性があるので、明示的にエラーで返して監視できるようにする。
+      if (!Number.isSafeInteger(message.id)) {
+        console.error(`RegistryBridge.poll: message id=${message.id} is outside safe integer range`);
+        return { success: false, data: null, error: "invalid_registry_response" };
       }
 
       return { success: true, data: message, error: null };

@@ -22,6 +22,12 @@ const errorMessages: Record<string, string> = {
   authInfo_mismatch: "認証コード（AuthCode）が正しくありません。移管元レジストラから正しいコードを取得してください。",
   transfer_not_found: "移管申請が見つかりませんでした。",
   transfer_not_cancellable: "この移管申請はすでに処理済みのため取り消しできません。",
+  self_transfer: "自分が所有するドメインには移管申請できません。",
+  transfer_already_pending: "このドメインには既に処理中の移管申請があります。取消してから再申請してください。",
+  transfer_already_processed: "この移管申請は既に処理済みです。",
+  transfer_expired: "移管申請の待機時間が上限を超えました。もう一度申請してください。",
+  invalid_domain_registry: "ドメイン名とレジストリの組み合わせが正しくありません。",
+  registry_operation_failed: "レジストリ側の処理に失敗しました。",
 
   // コンタクト
   contact_create_failed: "レジストリへの接続中に問題が発生しました。しばらく待ってから再試行してください。",

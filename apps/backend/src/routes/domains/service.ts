@@ -7,12 +7,22 @@ import { DomainRepository } from "./repository";
 import { DomainTransferRepository } from "./transfer-repository";
 import { DomainUserRepository } from "./user-repository";
 
-// レジストリの status[] を DB カラム用の1つの status に集約する。
-// pendingTransfer / pendingDelete があれば優先、なければ status[0]、最終的に "ok"。
+// レジストリの status[] を DB カラム用の 1 つの status に集約する。
+// B7: DB の status は「ドメインが今どの遷移状態にあるか」を表す業務ステータスなので、
+// pending* が最優先、続いて server* の運用ロック、それ以外は "ok" に丸める。
+// clientTransferProhibited など client 系フラグは DB.status に載せない
+// (載せると "ok" 判定が壊れて transfer/renew ができなくなる)。
 function pickPrimaryStatus(statuses: string[], fallback: string): string {
   if (statuses.includes("pendingDelete")) {return "pendingDelete";}
   if (statuses.includes("pendingTransfer")) {return "pendingTransfer";}
-  if (statuses.length > 0 && statuses[0]) {return statuses[0];}
+  if (statuses.includes("pendingRenew")) {return "pendingRenew";}
+  if (statuses.includes("pendingUpdate")) {return "pendingUpdate";}
+  if (statuses.includes("pendingCreate")) {return "pendingCreate";}
+  if (statuses.includes("serverHold")) {return "serverHold";}
+  if (statuses.includes("inactive")) {return "inactive";}
+  if (statuses.includes("ok")) {return "ok";}
+  if (statuses.length === 0) {return fallback;}
+  // 未知のステータス集合。fallback を返し、client 系フラグに引きずられないようにする。
   return fallback;
 }
 
@@ -350,8 +360,11 @@ export class DomainService {
       return { success: false, data: null, error: "forbidden" };
     }
 
-    // DB上に pendingTransfer の transfer レコードが存在するか確認
-    const transferResult = await DomainTransferRepository.findByDomainId({ domainId, env });
+    // B2: pendingTransfer な transfer レコードが存在するかチェック。
+    // 既に処理済み (clientApproved/serverApproved/clientRejected/clientCancelled) なら弾く。
+    // poll consumer が先に owner 変更を反映していると、ここで元 owner がヒットしても
+    // 「pending が無い = 既に処理済み」と判断できる。
+    const transferResult = await DomainTransferRepository.findPendingByDomainId({ domainId, env });
     if (!transferResult.success) {return transferResult;}
     if (!transferResult.data) {
       return { success: false, data: null, error: "transfer_not_found" };
@@ -388,20 +401,20 @@ export class DomainService {
       return { success: false, data: null, error: "forbidden" };
     }
 
+    // B2: pendingTransfer な transfer が無ければ既に処理済みとして弾く。
+    // これを bridge の前に置くことで、確定済みの transfer に対して余分な reject リクエストを送らない。
+    const transferResult = await DomainTransferRepository.findPendingByDomainId({ domainId, env });
+    if (!transferResult.success) {return transferResult;}
+    if (!transferResult.data) {
+      return { success: false, data: null, error: "transfer_not_found" };
+    }
+
     const bridgeResult = await RegistryBridge.transferReject({
       name: domain.name,
       registry: domain.registry,
       env,
     });
     if (!bridgeResult.success) {return bridgeResult;}
-
-    // rejectは確定操作なのでDB同期的に更新する
-    const transferResult = await DomainTransferRepository.findByDomainId({ domainId, env });
-    if (!transferResult.success) {return transferResult;}
-    if (!transferResult.data) {
-      // transfer レコードが見つからない場合は domain の status 更新もスキップして不整合を防ぐ
-      return { success: false, data: null, error: "transfer_not_found" };
-    }
 
     const rejectStatusResult = await DomainTransferRepository.updateStatus({
       id: transferResult.data.id,

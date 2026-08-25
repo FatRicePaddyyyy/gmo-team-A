@@ -20,6 +20,7 @@ import { listDomainsRouteHandler } from "./routes/domains/get";
 import { createDomainRouteHandler } from "./routes/domains/post";
 import { helloRouteHandler } from "./routes/hello/post";
 import { cancelTransferRouteHandler } from "./routes/transfers/[transfer-id]/cancel/post";
+import { listTransfersRouteHandler } from "./routes/transfers/get";
 import { requestTransferRouteHandler } from "./routes/transfers/post";
 import { handleTransferPollQueue } from "./scheduled/transfer-poll";
 import type { Variables } from "./types";
@@ -56,6 +57,7 @@ export const routes = app
   .route("/", approveTransferRouteHandler)
   .route("/", rejectTransferRouteHandler)
   .route("/", requestTransferRouteHandler)
+  .route("/", listTransfersRouteHandler)
   .route("/", cancelTransferRouteHandler);
 
 routes

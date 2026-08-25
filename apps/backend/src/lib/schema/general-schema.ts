@@ -1,5 +1,5 @@
 import { relations, sql } from "drizzle-orm";
-import { sqliteTable, text, integer, index } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, index, uniqueIndex } from "drizzle-orm/sqlite-core";
 import { user } from "./auth-schema";
 
 // 親：カテゴリ（id, name のみ）
@@ -73,6 +73,11 @@ export const transfers = sqliteTable("transfers", {
 }, (table) => [
   index("transfers_domain_id_idx").on(table.domainId),
   index("transfers_gaining_user_id_idx").on(table.gainingUserId),
+  // 同一ドメインに対して pendingTransfer が同時に 2 つ以上存在しないよう部分 UNIQUE 制約を張る。
+  // SQLite の partial index で status='pendingTransfer' の行だけを対象にする。
+  uniqueIndex("transfers_pending_domain_unique_idx")
+    .on(table.domainId)
+    .where(sql`${table.status} = 'pendingTransfer'`),
 ]);
 
 export const domainsRelations = relations(domains, ({ one, many }) => ({
