@@ -1,61 +1,48 @@
-import { useCallback, useState } from "react";
+"use client";
+
+import { useCallback, useRef, useState } from "react";
 import type { DomainResult } from "@/components/domain-search-result";
+import { searchDomains } from "../client";
 
-const CANDIDATE_TLDS: Array<{
-  tld: string;
-  newPrice: string;
-  renewalPrice: string;
-  popular?: boolean;
-  sale?: boolean;
-}> = [
-  { tld: ".com", newPrice: "0円", renewalPrice: "1,408円", popular: true, sale: true },
-  { tld: ".net", newPrice: "0円", renewalPrice: "1,628円", popular: true, sale: true },
-  { tld: ".jp", newPrice: "0円", renewalPrice: "3,124円", popular: true },
-  { tld: ".co.jp", newPrice: "2,970円", renewalPrice: "2,970円" },
-  { tld: ".xyz", newPrice: "0円", renewalPrice: "2,013円", sale: true },
-  { tld: ".org", newPrice: "1,628円", renewalPrice: "1,628円" },
-];
-
-// 同じクエリなら毎回同じ空き状況になるようにするための簡易ハッシュ
-function hashString(value: string): number {
-  let hash = 0;
-  for (let i = 0; i < value.length; i++) {
-    hash = (hash << 5) - hash + value.charCodeAt(i);
-    hash |= 0;
-  }
-  return Math.abs(hash);
-}
+const SEARCH_ERROR_MESSAGE = "検索に失敗しました。時間をおいてもう一度お試しください。";
 
 /**
- * TODO(Issue #18): バックエンドにドメイン検索APIが実装されたら、
- * この関数を clients.ts 経由の実API呼び出しに差し替える。
- * 現状 apps/backend/src/routes 配下に該当エンドポイントが無いため、
- * フロント単体で確認できるようモックデータを返している。
+ * ドメイン検索の状態を持つフック。
+ * 検索処理そのものは `../client` の `searchDomains()` に閉じ込めてあるため、
+ * 実APIへの差し替え時にこのフックを変更する必要はない。
  */
-function mockSearchDomains(query: string): DomainResult[] {
-  const seed = hashString(query.toLowerCase());
-  return CANDIDATE_TLDS.map((candidate, index) => {
-    const available = (seed + index) % 5 !== 0;
-    return {
-      tld: candidate.tld,
-      name: query,
-      available,
-      price: available ? candidate.newPrice : candidate.renewalPrice,
-      renewalPrice: available ? candidate.renewalPrice : undefined,
-      popular: candidate.popular,
-      sale: available ? candidate.sale : undefined,
-    };
-  });
-}
-
 export function useDomainSearch() {
   const [query, setQuery] = useState<string | null>(null);
   const [results, setResults] = useState<DomainResult[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const search = useCallback((value: string) => {
+  // 連打時に古いレスポンスが新しい結果を上書きしないよう、最新リクエストIDだけを採用する
+  const latestRequestIdRef = useRef(0);
+
+  const search = useCallback(async (value: string) => {
+    const requestId = latestRequestIdRef.current + 1;
+    latestRequestIdRef.current = requestId;
+
     setQuery(value);
-    setResults(mockSearchDomains(value));
+    setLoading(true);
+    setError(null);
+
+    try {
+      const data = await searchDomains(value);
+      if (latestRequestIdRef.current !== requestId) return;
+      setResults(data);
+    } catch (caught) {
+      if (latestRequestIdRef.current !== requestId) return;
+      console.error("Domain search error:", caught);
+      setResults([]);
+      setError(SEARCH_ERROR_MESSAGE);
+    } finally {
+      if (latestRequestIdRef.current === requestId) {
+        setLoading(false);
+      }
+    }
   }, []);
 
-  return { query, results, search };
+  return { query, results, loading, error, search };
 }

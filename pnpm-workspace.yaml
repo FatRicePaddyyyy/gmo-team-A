@@ -1,9 +1,6 @@
 packages:
   - 'apps/*'
 
-overrides:
-  typescript: 5.9.2
-
 # Pre-approve build scripts for workerd (Wrangler) and esbuild native bindings.
 allowBuilds:
   esbuild: true

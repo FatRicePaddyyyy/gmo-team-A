@@ -173,7 +173,8 @@ npx wrangler login
 pnpm --filter backend run db:migrate:local
 
 # 本番 D1 にマイグレーション適用（--env production と --remote が必要）
-pnpm db:migrate:production
+
+
 # 内部では↓が実行される
 # npx wrangler d1 migrations apply db-production --env production --remote
 
