@@ -1,11 +1,16 @@
 import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
 import { toUserMessage } from "../../lib/error-messages";
+import { detectRegistry } from "../../lib/registry-policy";
 import type { Variables } from "../../types";
 import { DomainService } from "./service";
 
+// Issue #25: registry は省略可能。省略時は TLD から自動判定する。
 const RequestSchema = z.object({
   name: z.string().trim().min(1).openapi({ example: "example.com" }),
-  registry: z.enum(["kitaqsign", "kitaqnic"]).openapi({ example: "kitaqsign" }),
+  registry: z.enum(["kitaqsign", "kitaqnic"]).optional().openapi({
+    example: "kitaqsign",
+    description: "省略時は TLD から自動判定",
+  }),
   period: z.object({
     unit: z.enum(["Y", "M"]).openapi({ example: "Y" }),
     value: z.number().int().min(1).max(10).openapi({ example: 1 }),
@@ -21,6 +26,7 @@ const DomainSchema = z.object({
   expiresAt: z.string(),
   createdAt: z.string(),
   ownerUserId: z.string(),
+  autoRenew: z.boolean(),
 }).openapi("Domain");
 
 const SuccessSchema = z.object({
@@ -41,6 +47,7 @@ const route = createRoute({
   request: { body: { content: { "application/json": { schema: RequestSchema } } } },
   responses: {
     201: { content: { "application/json": { schema: SuccessSchema } }, description: "登録成功" },
+    400: { content: { "application/json": { schema: ErrorSchema } }, description: "ドメイン名不正" },
     409: { content: { "application/json": { schema: ErrorSchema } }, description: "ドメイン既存" },
     422: { content: { "application/json": { schema: ErrorSchema } }, description: "TLD違反" },
     500: { content: { "application/json": { schema: ErrorSchema } }, description: "サーバーエラー" },
@@ -52,7 +59,11 @@ const app = new OpenAPIHono<{ Bindings: CloudflareBindings; Variables: Variables
 export const createDomainRouteHandler = app.openapi(route, async (ctx) => {
   const payload = ctx.req.valid("json");
   const userId = ctx.get("userId");
-  const result = await DomainService.create({ ...payload, userId, env: ctx.env });
+  const registry = payload.registry ?? detectRegistry(payload.name);
+  if (!registry) {
+    return ctx.json({ success: false as const, data: null, error: "ドメイン名の形式が正しくありません。TLD（.com など）を含めて入力してください。" }, 400);
+  }
+  const result = await DomainService.create({ ...payload, registry, userId, env: ctx.env });
   if (!result.success) {
     if (result.error === "domain_exists") {
       return ctx.json({ success: false as const, data: null, error: toUserMessage(result.error) }, 409);

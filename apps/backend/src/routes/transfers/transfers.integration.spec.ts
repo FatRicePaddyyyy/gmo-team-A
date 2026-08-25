@@ -27,6 +27,7 @@ const mockDomainRow = {
   createdAt: new Date("2026-08-25T00:00:00.000Z"),
   authInfo: "test-auth",
   ownerUserId: undefined as unknown as string,
+  autoRenew: false,
 };
 
 // gainingUserId は undefined にしない。cancel 権限チェックで userId と比較するため、
@@ -128,7 +129,7 @@ describe("結合: POST /api/v1/secure/domains/{id}/transfer/approve", () => {
       data: { id: "tr-001", domainId: "dom-001", registry: "kitaqsign" as const, status: "pendingTransfer", gainingUserId: "user-002", createdAt: new Date() },
       error: null,
     });
-    vi.spyOn(RegistryBridge, "transferApprove").mockResolvedValue({ success: true, data: {}, error: null });
+    vi.spyOn(RegistryBridge, "transferApprove").mockResolvedValue({ success: true, data: { domain: "example.com", status: "clientApproved", gainingRegistrar: "R2", losingRegistrar: "R1" }, error: null });
 
     const res = await approveTransferRouteHandler.request(
       "/api/v1/secure/domains/dom-001/transfer/approve",
@@ -176,7 +177,7 @@ describe("結合: POST /api/v1/secure/domains/{id}/transfer/reject", () => {
     vi.spyOn(DomainTransferRepository, "findByDomainId").mockResolvedValue({ success: true, data: { id: "tr-001", domainId: "dom-001", registry: "kitaqsign" as const, status: "pendingTransfer", gainingUserId: "user-002", createdAt: new Date() }, error: null });
     vi.spyOn(DomainTransferRepository, "updateStatus").mockResolvedValue({ success: true, data: undefined, error: null });
     vi.spyOn(DomainRepository, "updateStatus").mockResolvedValue({ success: true, data: undefined, error: null });
-    vi.spyOn(RegistryBridge, "transferReject").mockResolvedValue({ success: true, data: {}, error: null });
+    vi.spyOn(RegistryBridge, "transferReject").mockResolvedValue({ success: true, data: { domain: "example.com", status: "clientApproved", gainingRegistrar: "R2", losingRegistrar: "R1" }, error: null });
 
     const res = await rejectTransferRouteHandler.request(
       "/api/v1/secure/domains/dom-001/transfer/reject",
@@ -213,7 +214,7 @@ describe("結合: POST /api/v1/secure/transfers/{id}/cancel", () => {
     vi.spyOn(TransferDomainRepository, "findById").mockResolvedValue({ success: true, data: mockDomainRow, error: null });
     vi.spyOn(TransferRepository, "updateStatus").mockResolvedValue({ success: true, data: undefined, error: null });
     vi.spyOn(TransferDomainRepository, "updateStatus").mockResolvedValue({ success: true, data: undefined, error: null });
-    vi.spyOn(RegistryBridge, "transferCancel").mockResolvedValue({ success: true, data: {}, error: null });
+    vi.spyOn(RegistryBridge, "transferCancel").mockResolvedValue({ success: true, data: { domain: "example.com", status: "clientApproved", gainingRegistrar: "R2", losingRegistrar: "R1" }, error: null });
 
     const res = await cancelTransferRouteHandler.request(
       "/api/v1/secure/transfers/tr-001/cancel",

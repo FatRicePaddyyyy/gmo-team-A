@@ -15,6 +15,11 @@ const RequestSchema = z.object({
     registrant: z.string().optional(),
     authInfo: z.string().optional(),
   }).optional(),
+  // Issue #24: 自動更新設定
+  autoRenew: z.boolean().optional().openapi({
+    example: true,
+    description: "自動更新の ON/OFF。true なら期限切れ前に自動 renew される（別途 Cron 実装）",
+  }),
 }).refine(
   (data) => {
     if (data.addStatuses && data.remStatuses) {
@@ -34,6 +39,13 @@ const DomainSchema = z.object({
   expiresAt: z.string(),
   createdAt: z.string(),
   ownerUserId: z.string(),
+  statuses: z.array(z.string()),
+  registrant: z.string(),
+  contacts: z.record(z.string(), z.string()),
+  nameservers: z.array(z.string()),
+  rgpStatus: z.array(z.string()),
+  upDate: z.string().nullable(),
+  trDate: z.string().nullable(),
 }).openapi("DomainUpdated");
 
 const SuccessSchema = z.object({

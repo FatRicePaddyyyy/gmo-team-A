@@ -140,6 +140,25 @@ export class DomainRepository {
     }
   }
 
+  static async updateAutoRenew({
+    id,
+    autoRenew,
+    env,
+  }: {
+    id: string;
+    autoRenew: boolean;
+    env: CloudflareBindings;
+  }): Promise<Result<void>> {
+    try {
+      const db = createDBClient(env);
+      await db.update(domains).set({ autoRenew }).where(eq(domains.id, id));
+      return { success: true, data: undefined, error: null };
+    } catch (error) {
+      console.error("DomainRepository.updateAutoRenew error:", error);
+      return { success: false, data: null, error: error instanceof Error ? error.message : "予期しないエラー" };
+    }
+  }
+
   static async updateOwner({
     id,
     newOwnerUserId,

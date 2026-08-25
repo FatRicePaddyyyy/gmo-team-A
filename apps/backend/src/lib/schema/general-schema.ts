@@ -47,6 +47,8 @@ export const domains = sqliteTable("domains", {
     .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
     .notNull(),
   authInfo: text("auth_info").notNull(),
+  // Issue #24: 自動更新設定。true なら期限切れ前に自動 renew する（今回はフラグのみ、自動実行は別途 Cron で実装予定）
+  autoRenew: integer("auto_renew", { mode: "boolean" }).notNull().default(false),
   ownerUserId: text("owner_user_id").notNull()
     .references(() => user.id, { onDelete: "cascade" }),
 }, (table) => [
