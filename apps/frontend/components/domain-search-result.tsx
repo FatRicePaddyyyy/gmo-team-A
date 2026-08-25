@@ -1,36 +1,104 @@
 "use client";
 
-import { Check, X, ShoppingCart, SearchX } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Check, X, ShoppingCart, SearchX, AlertTriangle, Info, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
+import { LearningNote } from "@/components/learning-note";
+import {
+  checkEligibility,
+  findTld,
+  LIMITED_OFFER_NOTE,
+  MISCONCEPTION,
+  NO_CHARGE_YET_NOTE,
+  tldAnchorId,
+} from "@/shared/lib/tld-catalog";
+import type { Purpose } from "@/shared/lib/purpose";
 
 export interface DomainResult {
   tld: string;
   name: string;
   available: boolean;
+  /** 初年度の価格（表示用の文字列） */
   price: string;
+  /** 2年目以降の年額（表示用の文字列） */
   renewalPrice?: string;
   popular?: boolean;
   sale?: boolean;
+  /** ここから下は任意。TLDの学習用の情報 */
+  summary?: string;
+  detail?: string;
+  /** 取得条件（.jp / .co.jp など） */
+  eligibility?: string;
+  /** 個人では取得できない（法人限定など） */
+  restricted?: boolean;
+  /** 2年目以降の値上がりが大きいときの警告 */
+  renewalWarning?: string;
+  /** 「2年使うと合計 ◯円」 */
+  twoYearTotal?: string;
+  /** 初年度価格が「お1人様1個限り」の特別価格か */
+  limitedOffer?: boolean;
 }
 
 interface DomainSearchResultProps {
   query: string;
   results: DomainResult[];
   onAddCart?: (domain: DomainResult) => void;
+  /** すでにカートに入っているか。押した結果をその場で返すために使う */
+  isAdded?: (domain: DomainResult) => boolean;
+  /** 選ばれた用途。取得条件を満たさない末尾をカートに入れさせないために使う */
+  purpose?: Purpose | null;
+  /** 「登記した会社として取得する」を選んだときに用途を切り替える */
+  onDeclarePurpose?: (purpose: Purpose) => void;
+  /**
+   * 診断（/plan-finder）が勧めた末尾。
+   * 一覧の先頭に出して目印を付け、「診断で学んだこと」がそのまま次の操作につながるようにする。
+   */
+  recommendedTld?: string | null;
 }
 
-export function DomainSearchResult({ query, results, onAddCart }: DomainSearchResultProps) {
-  const available = results.filter((r) => r.available);
+export function DomainSearchResult({
+  query,
+  results,
+  onAddCart,
+  isAdded,
+  purpose = null,
+  onDeclarePurpose,
+  recommendedTld = null,
+}: DomainSearchResultProps) {
+  // 「なぜ選べないか」を開いている末尾。隠すのではなく、押したら理由を学べるようにする
+  const [explainedTld, setExplainedTld] = useState<string | null>(null);
+  // 勧めた末尾は先頭に出す。下までスクロールしないと見つからないと、診断の結果が死ぬ
+  const available = results
+    .filter((r) => r.available)
+    .sort((a, b) =>
+      a.tld === recommendedTld ? -1 : b.tld === recommendedTld ? 1 : 0,
+    );
   const taken = results.filter((r) => !r.available);
+  const recommendedAvailable = available.some((r) => r.tld === recommendedTld);
+  const recommendedTaken = taken.some((r) => r.tld === recommendedTld);
+
+  // 診断から来た人を、勧めた末尾の行まで運ぶ
+  useEffect(() => {
+    if (!recommendedTld || !recommendedAvailable) return;
+    const target = document.getElementById(tldAnchorId(recommendedTld));
+    target?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [recommendedTld, recommendedAvailable, query]);
+  const hasLimitedOffer = available.some((r) => r.limitedOffer);
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-8">
       <h2 className="mb-1 text-xl font-bold text-gray-900">
         「<span style={{ color: "var(--brand)" }}>{query}</span>」の検索結果
       </h2>
-      <p className="mb-6 text-sm text-gray-500">
+      <p className="mb-4 text-sm text-gray-500">
         {results.length === 0
           ? "該当するドメインは見つかりませんでした"
           : `${available.length}件のドメインが取得可能です`}
@@ -47,67 +115,267 @@ export function DomainSearchResult({ query, results, onAddCart }: DomainSearchRe
         </div>
       )}
 
+      {/* 診断から来た人には、まず「さっきの結論」を画面上で再確認させる */}
+      {recommendedTld && (
+        <div className="mb-4 flex items-start gap-2 rounded-lg border border-[var(--brand)] bg-[var(--brand-light)] px-3 py-2 text-sm text-gray-800">
+          <Sparkles
+            className="mt-0.5 size-4 shrink-0 text-[var(--brand)]"
+            aria-hidden="true"
+          />
+          <span>
+            診断の結果、あなたには{" "}
+            <span className="font-bold" style={{ color: "var(--brand)" }}>
+              {recommendedTld}
+            </span>{" "}
+            をおすすめしています。
+            {recommendedAvailable
+              ? "一覧の先頭に印をつけました。"
+              : recommendedTaken
+                ? "ただし、この名前ではすでに取得されています。別の名前か、下の他の末尾を検討してください。"
+                : "この検索結果には含まれていません。別の末尾から選んでください。"}
+          </span>
+        </div>
+      )}
+
+      {available.length > 0 && (
+        <div className="mb-4 space-y-3">
+          {/* 各カードに繰り返すと読み飛ばされるので、リスト全体で1回だけ出す */}
+          <p className="flex items-start gap-2 rounded-lg border border-border bg-white px-3 py-2 text-sm text-gray-700">
+            <Info className="mt-0.5 size-4 shrink-0 text-gray-500" aria-hidden="true" />
+            {NO_CHARGE_YET_NOTE}
+          </p>
+
+          <LearningNote title="末尾（TLD）で何が変わるの？">
+            <p>
+              <span className="font-semibold">.com</span> や{" "}
+              <span className="font-semibold">.jp</span> のような末尾を「TLD」と呼びます。
+              値段だけでなく<span className="font-semibold">取れる人の条件</span>も違います。
+              各行の「このドメインについてくわしく」を開くと、選び方が分かります。
+            </p>
+          </LearningNote>
+
+          {/* 価格を見比べる、まさにその場で出す勘違い1つだけ */}
+          <LearningNote title={MISCONCEPTION.price.title} tone="warn">
+            <p>{MISCONCEPTION.price.body}</p>
+          </LearningNote>
+        </div>
+      )}
+
       {/* 取得可能 */}
       {available.length > 0 && (
-        <ul className="mb-6 space-y-2">
-          {available.map((result) => (
-            <li
-              key={result.tld}
-              className="flex flex-col gap-3 rounded-lg border border-border bg-white px-4 py-3 shadow-sm transition-shadow hover:shadow-md sm:flex-row sm:items-center sm:justify-between"
-            >
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-                <span className="inline-flex items-center gap-1 rounded-full bg-green-50 px-2 py-0.5 text-xs font-semibold text-green-700">
-                  <Check className="size-4" aria-hidden="true" />
-                  取得可能
-                </span>
-                <span className="font-semibold break-all text-gray-900">
-                  {result.name}
-                  <span style={{ color: "var(--brand)" }}>{result.tld}</span>
-                </span>
-                <span className="flex gap-1">
-                  {result.popular && (
-                    <Badge className="bg-orange-500 text-xs text-white">人気</Badge>
-                  )}
-                  {result.sale && (
-                    <Badge className="bg-yellow-400 text-xs text-gray-900">SALE</Badge>
-                  )}
-                </span>
-              </div>
-              <div className="flex items-center justify-between gap-4 sm:justify-end">
-                <div className="text-left sm:text-right">
-                  <p className="text-lg font-bold" style={{ color: "var(--brand)" }}>
-                    {result.price}
-                    <span className="text-xs font-normal text-gray-500">/年</span>
+        <ul className="mb-6 space-y-3">
+          {available.map((result) => {
+            const added = isAdded?.(result) ?? false;
+            const info = findTld(result.tld);
+            const verdict = info ? checkEligibility(info, purpose) : { allowed: true as const };
+            const explaining = explainedTld === result.tld;
+            const isRecommended = result.tld === recommendedTld;
+
+            return (
+              <li
+                key={result.tld}
+                id={tldAnchorId(result.tld)}
+                className={`scroll-mt-24 rounded-lg bg-white px-4 py-4 shadow-sm transition-shadow hover:shadow-md ${
+                  isRecommended
+                    ? "border-2 border-[var(--brand)] ring-2 ring-[var(--brand-light)]"
+                    : "border border-border"
+                }`}
+              >
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+                      <span className="inline-flex items-center gap-1 rounded-full bg-green-50 px-2 py-0.5 text-xs font-semibold text-green-700">
+                        <Check className="size-4" aria-hidden="true" />
+                        取得可能
+                      </span>
+                      <span className="font-semibold break-all text-gray-900">
+                        {result.name}
+                        <span style={{ color: "var(--brand)" }}>{result.tld}</span>
+                      </span>
+                      <span className="flex gap-1">
+                        {isRecommended && (
+                          <Badge className="bg-[var(--brand)] text-xs text-white">
+                            診断のおすすめ
+                          </Badge>
+                        )}
+                        {result.popular && (
+                          <Badge className="bg-orange-500 text-xs text-white">人気</Badge>
+                        )}
+                        {result.restricted && (
+                          <Badge className="bg-amber-500 text-xs text-white">法人のみ</Badge>
+                        )}
+                      </span>
+                    </div>
+
+                    {/* TLDが何なのかを、価格より先に1行で示す */}
+                    {result.summary && (
+                      <p className="mt-2 text-sm leading-relaxed text-gray-700">
+                        {result.summary}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* 価格: 初年度と2年目以降を同じ視認性で並べる */}
+                  <div className="shrink-0 sm:w-56 sm:text-right">
+                    <dl className="space-y-1">
+                      <div className="flex items-baseline justify-between gap-2 sm:justify-end">
+                        <dt className="text-sm text-gray-600">初年度</dt>
+                        <dd className="text-base font-bold" style={{ color: "var(--brand)" }}>
+                          {result.price}
+                          <span className="text-xs font-normal text-gray-600">（税込）</span>
+                        </dd>
+                      </div>
+                      {result.renewalPrice && (
+                        <div className="flex items-baseline justify-between gap-2 sm:justify-end">
+                          <dt className="text-sm text-gray-600">2年目以降</dt>
+                          <dd className="text-base font-bold text-gray-900">
+                            {result.renewalPrice}
+                            <span className="text-xs font-normal text-gray-600">/年（税込）</span>
+                          </dd>
+                        </div>
+                      )}
+                    </dl>
+                    {result.twoYearTotal && (
+                      <p className="mt-1 text-xs text-gray-600">{result.twoYearTotal}</p>
+                    )}
+                  </div>
+                </div>
+
+                {/* 2年目以降の値上がりが大きいTLDは、押す前に必ず見せる */}
+                {result.renewalWarning && (
+                  <p className="mt-3 flex items-start gap-2 rounded-md bg-amber-50 px-3 py-2 text-sm font-medium text-amber-900">
+                    <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+                    {result.renewalWarning}
                   </p>
-                  {result.renewalPrice && (
-                    <p className="text-xs text-gray-500">更新 {result.renewalPrice}/年</p>
+                )}
+
+                {/* 取得条件（.co.jp の法人限定など）は取得可否に直結するので目立たせる */}
+                {result.eligibility && (
+                  <p className="mt-2 flex items-start gap-2 rounded-md bg-gray-50 px-3 py-2 text-sm text-gray-800">
+                    <AlertTriangle className="mt-0.5 size-4 shrink-0 text-gray-500" aria-hidden="true" />
+                    <span>
+                      <span className="font-semibold">取得できる人: </span>
+                      {result.eligibility}
+                    </span>
+                  </p>
+                )}
+
+                {result.detail && (
+                  <Accordion className="mt-2 border-t border-border">
+                    <AccordionItem
+                      value={`detail-${result.tld}`}
+                      className="border-b-0 last:border-b-0"
+                    >
+                      <AccordionTrigger className="text-[var(--brand)]">
+                        このドメインについてくわしく
+                      </AccordionTrigger>
+                      <AccordionContent className="text-sm leading-relaxed text-gray-700">
+                        <p>{result.detail}</p>
+                      </AccordionContent>
+                    </AccordionItem>
+                  </Accordion>
+                )}
+
+                {/* 取得条件を満たさない末尾は、隠さずに止めて理由を説明する */}
+                {explaining && !verdict.allowed && (
+                  <div
+                    role="alert"
+                    className="mt-3 rounded-lg border border-amber-300 bg-amber-50 px-3 py-3"
+                  >
+                    <p className="text-sm font-bold text-amber-950">
+                      {result.tld} はカートに入れられません
+                    </p>
+                    <p className="mt-1 text-sm leading-relaxed text-amber-950">{verdict.reason}</p>
+                    {verdict.suggestion && (
+                      <p className="mt-1 text-sm leading-relaxed text-amber-950">
+                        {verdict.suggestion}
+                      </p>
+                    )}
+                    <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                      {onDeclarePurpose && (
+                        <Button
+                          variant="outline"
+                          className="h-11 px-4"
+                          onClick={() => {
+                            onDeclarePurpose("corporate");
+                            setExplainedTld(null);
+                          }}
+                        >
+                          登記した会社として取得する
+                        </Button>
+                      )}
+                      <Button
+                        variant="ghost"
+                        className="h-11 px-4"
+                        onClick={() => setExplainedTld(null)}
+                      >
+                        別の末尾を見る
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
+                <div className="mt-3 flex flex-col items-stretch gap-2 sm:flex-row sm:items-center sm:justify-end">
+                  {!verdict.allowed && (
+                    <p className="text-xs text-amber-900 sm:mr-auto">
+                      あなたの用途では取得できない末尾です
+                    </p>
+                  )}
+                  {verdict.allowed ? (
+                    <Button
+                      className="h-11 min-w-11 px-4 text-white"
+                      style={{ background: added ? "var(--brand-dark)" : "var(--brand)" }}
+                      onClick={() => onAddCart?.(result)}
+                      disabled={added}
+                    >
+                      {added ? (
+                        <Check className="mr-1 size-4" aria-hidden="true" />
+                      ) : (
+                        <ShoppingCart className="mr-1 size-4" aria-hidden="true" />
+                      )}
+                      <span>
+                        {added ? "カートに追加済み" : "カートに追加する"}
+                        <span className="sr-only">
+                          （{result.name}
+                          {result.tld}）
+                        </span>
+                      </span>
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="outline"
+                      className="h-11 min-w-11 px-4"
+                      aria-expanded={explaining}
+                      onClick={() => setExplainedTld(explaining ? null : result.tld)}
+                    >
+                      <AlertTriangle className="mr-1 size-4" aria-hidden="true" />
+                      <span>
+                        なぜ選べないか見る
+                        <span className="sr-only">
+                          （{result.name}
+                          {result.tld}）
+                        </span>
+                      </span>
+                    </Button>
                   )}
                 </div>
-                <Button
-                  className="h-11 min-w-11 px-4 text-white"
-                  style={{ background: "var(--brand)" }}
-                  onClick={() => onAddCart?.(result)}
-                >
-                  <ShoppingCart className="mr-1 size-4" aria-hidden="true" />
-                  <span>
-                    カートへ
-                    <span className="sr-only">
-                      （{result.name}
-                      {result.tld}）
-                    </span>
-                  </span>
-                </Button>
-              </div>
-            </li>
-          ))}
+              </li>
+            );
+          })}
         </ul>
+      )}
+
+      {hasLimitedOffer && (
+        <p className="mb-6 text-xs text-gray-600">※ {LIMITED_OFFER_NOTE}</p>
       )}
 
       {/* 取得済み */}
       {taken.length > 0 && (
         <>
           <Separator className="mb-4" />
-          <p className="mb-3 text-sm font-medium text-gray-600">取得済みのドメイン</p>
+          <p className="mb-3 text-sm font-medium text-gray-600">
+            取得済みのドメイン（すでに他の人が使っています）
+          </p>
           <ul className="space-y-2">
             {taken.map((result) => (
               <li

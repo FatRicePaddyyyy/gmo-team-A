@@ -7,9 +7,9 @@ export class LoginPage {
   readonly errorMessage: Locator;
 
   constructor(private page: Page) {
-    this.emailInput = page.getByLabel("Email");
-    this.passwordInput = page.getByLabel("Password");
-    this.submitButton = page.getByRole("button", { name: /^(Login|Logging in)/ });
+    this.emailInput = page.getByLabel("メールアドレス");
+    this.passwordInput = page.getByLabel("パスワード", { exact: true });
+    this.submitButton = page.getByRole("button", { name: /^(ログインする|ログイン中)/ });
     this.errorMessage = page.locator("[class*='text-red']").first();
   }
 

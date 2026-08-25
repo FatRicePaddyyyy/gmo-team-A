@@ -12,6 +12,8 @@ import {
   type DeleteCategoryRequest,
 } from "@/clients";
 import { useState, useEffect } from "react";
+import { SiteFooter } from "@/components/site-footer";
+import { SiteHeader } from "@/components/site-header";
 
 export default function DashboardPage() {
   const { data: session, isPending } = useSession();
@@ -134,7 +136,10 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
+    <div className="min-h-screen bg-gray-50">
+      {/* ヘッダー／フッターが無いと、ここから検索にも解説にも帰れない行き止まりになる */}
+      <SiteHeader />
+      <div className="mx-auto flex max-w-4xl items-center justify-center px-4 py-8">
       <div className="max-w-4xl w-full bg-white rounded-lg shadow-md p-6">
         <h1 className="text-2xl font-bold text-center mb-6 text-black">
           ダッシュボード
@@ -306,6 +311,8 @@ export default function DashboardPage() {
           </div>
         )}
       </div>
+      </div>
+      <SiteFooter />
     </div>
   );
 }

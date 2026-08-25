@@ -3,24 +3,25 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { signIn } from "@/auth-client";
+import { signUp } from "@/auth-client";
 
-const loginSchema = z.object({
+const signupSchema = z.object({
+  name: z.string().min(1, "お名前を入力してください"),
   email: z
     .string()
     .min(1, "メールアドレスを入力してください")
     .email("メールアドレスの形式が正しくありません（例: user@example.com）"),
-  password: z.string().min(6, "パスワードは6文字以上で入力してください"),
+  password: z.string().min(8, "パスワードは8文字以上で入力してください"),
 });
 
-type LoginFormData = z.infer<typeof loginSchema>;
+type SignupFormData = z.infer<typeof signupSchema>;
 
-const LOGIN_FAILED_MESSAGE =
-  "メールアドレスまたはパスワードが正しくありません。入力内容をご確認ください。";
+const SIGNUP_FAILED_MESSAGE =
+  "アカウントを作成できませんでした。このメールアドレスはすでに登録されているかもしれません。";
 const UNEXPECTED_MESSAGE =
-  "ログインできませんでした。時間をおいてもう一度お試しください。";
+  "アカウントを作成できませんでした。時間をおいてもう一度お試しください。";
 
-export const usePasswordLogin = () => {
+export const usePasswordSignup = () => {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -29,17 +30,18 @@ export const usePasswordLogin = () => {
     register,
     handleSubmit,
     formState: { errors },
-  } = useForm<LoginFormData>({
-    resolver: zodResolver(loginSchema),
+  } = useForm<SignupFormData>({
+    resolver: zodResolver(signupSchema),
   });
 
-  const onSubmit = async (data: LoginFormData) => {
+  const onSubmit = async (data: SignupFormData) => {
     setIsLoading(true);
     setError(null);
 
     try {
-      await signIn.email(
+      await signUp.email(
         {
+          name: data.name,
           email: data.email,
           password: data.password,
         },
@@ -48,9 +50,9 @@ export const usePasswordLogin = () => {
             router.push("/dashboard");
           },
           onError: () => {
-            setError(LOGIN_FAILED_MESSAGE);
+            setError(SIGNUP_FAILED_MESSAGE);
           },
-        }
+        },
       );
     } catch {
       setError(UNEXPECTED_MESSAGE);
@@ -59,12 +61,5 @@ export const usePasswordLogin = () => {
     }
   };
 
-  return {
-    register,
-    handleSubmit,
-    errors,
-    onSubmit,
-    isLoading,
-    error,
-  };
+  return { register, handleSubmit, errors, onSubmit, isLoading, error };
 };
