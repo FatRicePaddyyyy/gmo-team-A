@@ -45,10 +45,10 @@ export function FeatureCards() {
                     className="flex size-12 items-center justify-center rounded-full"
                     style={{ background: "var(--brand-light)" }}
                   >
-                    <Icon className="size-6" style={{ color: "var(--brand)" }} />
+                    <Icon className="size-6" style={{ color: "var(--brand)" }} aria-hidden="true" />
                   </div>
                   <h3 className="font-bold text-gray-900">{f.title}</h3>
-                  <p className="text-sm leading-relaxed text-gray-500">{f.description}</p>
+                  <p className="text-sm leading-relaxed text-gray-600">{f.description}</p>
                 </CardContent>
               </Card>
             );

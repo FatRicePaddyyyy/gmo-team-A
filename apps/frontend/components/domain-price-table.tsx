@@ -26,14 +26,23 @@ export function DomainPriceTable({ prices, onSelect }: DomainPriceTableProps) {
           それぞれお1人様1個限り特別価格で登録できます
         </p>
 
-        <div className="overflow-hidden rounded-xl border border-border bg-white shadow-sm">
-          <table className="w-full text-sm">
+        <div className="overflow-x-auto rounded-xl border border-border bg-white shadow-sm">
+          <table className="w-full min-w-[36rem] text-sm">
+            <caption className="sr-only">TLDごとの新規登録料金と更新料金</caption>
             <thead>
               <tr className="border-b border-border" style={{ background: "var(--brand)" }}>
-                <th className="px-4 py-3 text-left font-semibold text-white">ドメイン</th>
-                <th className="px-4 py-3 text-right font-semibold text-white">新規登録（1年）</th>
-                <th className="px-4 py-3 text-right font-semibold text-white">更新（1年）</th>
-                <th className="px-4 py-3"></th>
+                <th scope="col" className="px-4 py-3 text-left font-semibold text-white">
+                  ドメイン
+                </th>
+                <th scope="col" className="px-4 py-3 text-right font-semibold text-white">
+                  新規登録（1年）
+                </th>
+                <th scope="col" className="px-4 py-3 text-right font-semibold text-white">
+                  更新（1年）
+                </th>
+                <th scope="col" className="px-4 py-3">
+                  <span className="sr-only">操作</span>
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -44,7 +53,7 @@ export function DomainPriceTable({ prices, onSelect }: DomainPriceTableProps) {
                     i % 2 === 0 ? "bg-white" : "bg-gray-50/50"
                   }`}
                 >
-                  <td className="px-4 py-3">
+                  <th scope="row" className="px-4 py-3 text-left font-normal">
                     <div className="flex items-center gap-2">
                       <span className="text-base font-bold" style={{ color: "var(--brand)" }}>
                         {row.tld}
@@ -56,26 +65,27 @@ export function DomainPriceTable({ prices, onSelect }: DomainPriceTableProps) {
                         <Badge className="bg-yellow-400 text-xs text-gray-900">SALE</Badge>
                       )}
                     </div>
-                  </td>
+                  </th>
                   <td className="px-4 py-3 text-right">
                     <span className="text-lg font-bold" style={{ color: "var(--brand)" }}>
                       {row.newPrice}
                     </span>
-                    <span className="text-xs text-gray-400">円〜/年</span>
+                    <span className="text-xs text-gray-600">円〜/年</span>
                   </td>
                   <td className="px-4 py-3 text-right text-gray-600">
                     {row.renewalPrice}
-                    <span className="text-xs text-gray-400">円/年</span>
+                    <span className="text-xs text-gray-600">円/年</span>
                   </td>
                   <td className="px-4 py-3 text-right">
                     <Button
-                      size="sm"
-                      className="text-white"
+                      className="h-11 min-w-11 px-4 text-white"
                       style={{ background: "var(--brand)" }}
                       onClick={() => onSelect?.(row.tld)}
                     >
-                      <ShoppingCart className="mr-1 size-3" />
-                      選択
+                      <ShoppingCart className="mr-1 size-4" aria-hidden="true" />
+                      <span>
+                        選択<span className="sr-only">（{row.tld}）</span>
+                      </span>
                     </Button>
                   </td>
                 </tr>
