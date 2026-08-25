@@ -1,62 +1,44 @@
 import Link from "next/link";
 import { Separator } from "@/components/ui/separator";
 
+/**
+ * 実在するページへのリンクだけを置く。
+ * 未実装のページはリンクにせず「準備中」と明記して、行き止まりを作らない。
+ */
 const footerLinks = [
   {
     heading: "ドメインを取得する",
     links: [
-      { label: "ドメイン取得", href: "/service/domainregist/" },
-      { label: "ドメイン移管", href: "/transfer/" },
-      { label: "ドメイン更新", href: "/renewal/" },
-      { label: "空きドメイン検索", href: "/advanced/" },
-      { label: "RDAP検索", href: "/service/whois/" },
+      { label: "ドメインを検索する", href: "/search" },
+      { label: "カートを見る", href: "/cart" },
+      { label: "マイドメイン", href: "/dashboard" },
     ],
   },
   {
-    heading: "オプションサービス",
+    heading: "ドメインを学ぶ",
     links: [
-      { label: "レンタルサーバー", href: "/server/rs/" },
-      { label: "お名前メール", href: "/service/mail/" },
-      { label: "AIホームページパック", href: "/campaign/aihppack/" },
-      { label: "SSL証明書", href: "/service/ssl/" },
-    ],
-  },
-  {
-    heading: "サポート",
-    links: [
-      { label: "よくある質問", href: "/support/faq/" },
-      { label: "お問い合わせ", href: "/support/contact/" },
-      { label: "ご利用ガイド", href: "/guide/" },
-      { label: "障害・メンテナンス情報", href: "/support/maintenance/" },
-    ],
-  },
-  {
-    heading: "お名前.comについて",
-    links: [
-      { label: "会社概要", href: "/info/company/" },
-      { label: "プライバシーポリシー", href: "/info/privacy/" },
-      { label: "利用規約", href: "/info/agreement/" },
-      { label: "特定商取引法", href: "/info/commercial/" },
+      { label: "TLD（.com など）の選び方", href: "/learn" },
+      { label: "取得の流れ", href: "/#flow" },
+      { label: "よくある質問", href: "/#faq" },
     ],
   },
 ];
+
+const preparingLinks = ["ドメイン移管", "レンタルサーバー", "SSL証明書", "お問い合わせ"];
 
 export function SiteFooter() {
   return (
     <footer className="border-t border-border bg-gray-900 text-gray-300">
       <div className="mx-auto max-w-7xl px-4 py-10">
         {/* Link grid */}
-        <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
           {footerLinks.map((col) => (
             <div key={col.heading}>
               <h3 className="mb-3 text-sm font-semibold text-white">{col.heading}</h3>
               <ul className="space-y-2">
                 {col.links.map((link) => (
                   <li key={link.href}>
-                    <Link
-                      href={link.href}
-                      className="text-sm text-gray-400 hover:text-white"
-                    >
+                    <Link href={link.href} className="text-sm text-gray-400 hover:text-white">
                       {link.label}
                     </Link>
                   </li>
@@ -64,6 +46,20 @@ export function SiteFooter() {
               </ul>
             </div>
           ))}
+
+          <div>
+            <h3 className="mb-3 text-sm font-semibold text-white">準備中の機能</h3>
+            <ul className="space-y-2">
+              {preparingLinks.map((label) => (
+                <li key={label} className="text-sm text-gray-500">
+                  {label}
+                  <span className="ml-2 rounded bg-gray-800 px-1.5 py-0.5 text-xs text-gray-400">
+                    準備中
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
         </div>
 
         <Separator className="my-8 bg-gray-700" />
@@ -75,10 +71,10 @@ export function SiteFooter() {
               className="rounded px-2 py-0.5 text-sm font-bold text-white"
               style={{ background: "var(--brand)" }}
             >
-              お名前.com
+              まなびドメイン
             </span>
           </Link>
-          <p>© 2026 GMO Internet, Inc. All Rights Reserved.</p>
+          <p>© 2026 まなびドメイン（学習用のデモサイトです）</p>
         </div>
       </div>
     </footer>

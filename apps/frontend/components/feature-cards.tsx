@@ -1,30 +1,31 @@
-import { Tag, Users, Settings, Zap } from "lucide-react";
+import { Globe, CalendarClock, UserRoundSearch, Ruler } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 
+/** ドメインを決める前に知っておきたいこと。学習の入口として一等地に置く */
 const features = [
   {
-    icon: Tag,
-    title: "最安値のドメイン",
+    icon: Globe,
+    title: "末尾（TLD）で条件が変わる",
     description:
-      "いつでもどこよりも安く提供するため、価格の毎日更新とセールを行っております。",
+      ".com は誰でも、.jp は日本に住所がある人、.co.jp は日本の法人だけ。価格より先に「自分が取れるか」を確認します。",
   },
   {
-    icon: Users,
-    title: "国内シェア No.1",
+    icon: CalendarClock,
+    title: "ドメインは毎年の更新制",
     description:
-      "24時間365日安心サポートやドメインに必要な機能の充実により国内シェア1位を獲得しました。",
+      "買い切りではなく1年ごとの使用権です。初年度0円でも2年目から更新料がかかります。払い忘れると使えなくなります。",
   },
   {
-    icon: Settings,
-    title: "管理がかんたん",
+    icon: UserRoundSearch,
+    title: "登録者の情報は公開される",
     description:
-      "お名前.comのサーバーやメールサービスなどの連携ができて管理がかんたんです。",
+      "氏名・住所・電話番号が Whois で公開されます。個人の方は無料の「公開代行」を使えば、あなたの情報は表示されません。",
   },
   {
-    icon: Zap,
-    title: "すぐに使える",
+    icon: Ruler,
+    title: "名前は短く・打ちやすく",
     description:
-      "ドメインと一緒にサーバーやメールサービスなども最短当日からすぐにお使いいただけます。",
+      "口頭で伝えられて、打ち間違えにくい長さが目安です。ハイフンや数字を多く使うと説明しづらくなります。",
   },
 ];
 
@@ -33,7 +34,7 @@ export function FeatureCards() {
     <section className="bg-white py-12">
       <div className="mx-auto max-w-5xl px-4">
         <h2 className="mb-8 text-center text-2xl font-bold text-gray-900">
-          お名前.comが選ばれる理由
+          ドメインを決める前に知っておきたい4つのこと
         </h2>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {features.map((f) => {

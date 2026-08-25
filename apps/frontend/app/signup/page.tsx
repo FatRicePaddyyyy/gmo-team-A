@@ -7,11 +7,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
-import { usePasswordLogin } from "./_hooks/use-password-login.hook";
+import { usePasswordSignup } from "./_hooks/use-password-signup.hook";
 
-export default function LoginPage() {
-  const { register, handleSubmit, errors, onSubmit, isLoading, error } = usePasswordLogin();
+export default function SignupPage() {
+  const { register, handleSubmit, errors, onSubmit, isLoading, error } = usePasswordSignup();
   const [showPassword, setShowPassword] = useState(false);
+  const nameErrorId = useId();
   const emailErrorId = useId();
   const passwordErrorId = useId();
 
@@ -22,12 +23,33 @@ export default function LoginPage() {
       <main className="flex flex-1 items-center justify-center px-4 py-12">
         <div className="w-full max-w-md">
           <div className="rounded-lg border border-border bg-white p-8 shadow-sm">
-            <h1 className="mb-1 text-2xl font-bold text-gray-900">ログイン</h1>
-            <p className="mb-6 text-sm text-gray-600">
-              マイドメインで、取得したドメインの状態を確認できます。
+            <h1 className="mb-1 text-2xl font-bold text-gray-900">アカウントを作る</h1>
+            <p className="mb-6 text-sm leading-relaxed text-gray-600">
+              メールアドレスとパスワードだけで作れます。この時点では料金はかかりません。
             </p>
 
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-4" noValidate>
+              <div>
+                <label htmlFor="name" className="mb-1 block text-sm font-semibold text-gray-900">
+                  お名前
+                </label>
+                <Input
+                  {...register("name")}
+                  id="name"
+                  autoComplete="name"
+                  placeholder="学び 太郎"
+                  disabled={isLoading}
+                  aria-invalid={errors.name ? true : undefined}
+                  aria-describedby={errors.name ? nameErrorId : undefined}
+                  className="h-11"
+                />
+                {errors.name && (
+                  <p id={nameErrorId} role="alert" className="mt-1 text-sm text-red-700">
+                    {errors.name.message}
+                  </p>
+                )}
+              </div>
+
               <div>
                 <label htmlFor="email" className="mb-1 block text-sm font-semibold text-gray-900">
                   メールアドレス
@@ -62,7 +84,7 @@ export default function LoginPage() {
                     {...register("password")}
                     type={showPassword ? "text" : "password"}
                     id="password"
-                    autoComplete="current-password"
+                    autoComplete="new-password"
                     disabled={isLoading}
                     aria-invalid={errors.password ? true : undefined}
                     aria-describedby={errors.password ? passwordErrorId : undefined}
@@ -82,6 +104,7 @@ export default function LoginPage() {
                     )}
                   </button>
                 </div>
+                <p className="mt-1 text-xs text-gray-600">8文字以上で設定してください。</p>
                 {errors.password && (
                   <p id={passwordErrorId} role="alert" className="mt-1 text-sm text-red-700">
                     {errors.password.message}
@@ -104,21 +127,16 @@ export default function LoginPage() {
                 className="h-11 w-full text-white"
                 style={{ background: "var(--brand)" }}
               >
-                {isLoading ? "ログイン中..." : "ログインする"}
+                {isLoading ? "作成中..." : "アカウントを作成する"}
               </Button>
             </form>
 
-            <div className="mt-6 space-y-2 border-t border-border pt-6 text-sm">
-              <p className="text-gray-700">
-                アカウントをお持ちでない方は{" "}
-                <Link href="/signup" className="font-semibold underline text-[var(--brand)]">
-                  新規登録
-                </Link>
-              </p>
-              <p className="text-gray-600">
-                パスワードをお忘れの場合は、サポートまでご連絡ください（再設定機能は準備中です）。
-              </p>
-            </div>
+            <p className="mt-6 border-t border-border pt-6 text-sm text-gray-700">
+              すでにアカウントをお持ちの方は{" "}
+              <Link href="/login" className="font-semibold underline text-[var(--brand)]">
+                ログイン
+              </Link>
+            </p>
           </div>
         </div>
       </main>
