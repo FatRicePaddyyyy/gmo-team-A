@@ -34,9 +34,11 @@ export function NewsList({ heading = "NEWS", items, moreHref }: NewsListProps) {
           <Link
             key={i}
             href={item.href}
-            className="flex flex-col gap-1 px-4 py-3 transition-colors hover:bg-red-50 sm:flex-row sm:items-center sm:gap-4"
+            className="flex min-h-11 flex-col justify-center gap-1 px-4 py-3 transition-colors hover:bg-red-50 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-[var(--brand)] sm:flex-row sm:items-center sm:gap-4"
           >
-            <time className="shrink-0 text-sm text-gray-400">{item.date}</time>
+            <time dateTime={item.date.replaceAll("/", "-")} className="shrink-0 text-sm text-gray-600">
+              {item.date}
+            </time>
             <Badge
               variant="outline"
               className={`w-fit shrink-0 text-xs ${categoryColors[item.category] ?? "bg-gray-100 text-gray-600"}`}
@@ -53,10 +55,10 @@ export function NewsList({ heading = "NEWS", items, moreHref }: NewsListProps) {
         <div className="mt-3 text-right">
           <Link
             href={moreHref}
-            className="inline-flex items-center gap-1 text-sm font-medium hover:underline"
+            className="inline-flex min-h-11 items-center gap-1 text-sm font-medium hover:underline"
             style={{ color: "var(--brand)" }}
           >
-            もっと見る <ArrowRight className="size-3" />
+            もっと見る <ArrowRight className="size-3" aria-hidden="true" />
           </Link>
         </div>
       )}

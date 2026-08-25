@@ -22,7 +22,11 @@ export function ServiceCardGrid({ heading, items }: ServiceCardGridProps) {
         <h2 className="mb-8 text-2xl font-bold text-gray-900">{heading}</h2>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {items.map((item) => (
-            <Link key={item.href} href={item.href}>
+            <Link
+              key={item.href}
+              href={item.href}
+              className="rounded-xl focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)]"
+            >
               <Card className="h-full border-border transition-all hover:border-[var(--brand)] hover:shadow-md">
                 <CardContent className="flex h-full flex-col gap-3 p-5">
                   {item.icon && (
@@ -45,11 +49,11 @@ export function ServiceCardGrid({ heading, items }: ServiceCardGridProps) {
                         </span>
                       )}
                     </div>
-                    <p className="text-sm leading-relaxed text-gray-500">{item.description}</p>
+                    <p className="text-sm leading-relaxed text-gray-600">{item.description}</p>
                   </div>
                   <div className="flex items-center gap-1 text-sm font-medium" style={{ color: "var(--brand)" }}>
                     詳しく見る
-                    <ArrowRight className="size-3" />
+                    <ArrowRight className="size-3" aria-hidden="true" />
                   </div>
                 </CardContent>
               </Card>
