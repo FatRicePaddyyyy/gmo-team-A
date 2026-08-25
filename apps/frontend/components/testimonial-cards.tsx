@@ -29,13 +29,13 @@ export function TestimonialCards({
           {items.map((item, i) => (
             <Card key={i} className="border-border bg-white">
               <CardContent className="flex flex-col gap-3 p-5">
-                <Quote className="size-6" style={{ color: "var(--brand)" }} />
+                <Quote className="size-6" style={{ color: "var(--brand)" }} aria-hidden="true" />
                 <p className="flex-1 text-sm leading-relaxed text-gray-700">{item.text}</p>
                 {item.author && (
                   <div className="border-t border-border pt-3">
                     <p className="text-xs font-medium text-gray-900">{item.author}</p>
                     {item.role && (
-                      <p className="text-xs text-gray-400">{item.role}</p>
+                      <p className="text-xs text-gray-600">{item.role}</p>
                     )}
                   </div>
                 )}

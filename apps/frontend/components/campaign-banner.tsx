@@ -40,7 +40,10 @@ export function CampaignBanner({
 }: CampaignBannerProps) {
   const s = variantStyles[variant];
   return (
-    <Link href={href}>
+    <Link
+      href={href}
+      className="block rounded-xl focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)]"
+    >
       <div
         className={`group relative overflow-hidden rounded-xl p-6 transition-opacity hover:opacity-95 ${s.wrapper}`}
         style={{ [s.bg.split(":")[0]]: s.bg.split(": ")[1] } as React.CSSProperties}
@@ -54,9 +57,9 @@ export function CampaignBanner({
           </Badge>
         )}
         <h3 className="mb-1 text-lg font-bold">{title}</h3>
-        <p className="text-sm opacity-80">{description}</p>
+        <p className="text-sm opacity-90">{description}</p>
         <div className={`mt-4 flex items-center gap-1 text-sm font-medium ${s.arrowClass}`}>
-          詳しく見る <ArrowRight className="size-3" />
+          詳しく見る <ArrowRight className="size-3" aria-hidden="true" />
         </div>
       </div>
     </Link>

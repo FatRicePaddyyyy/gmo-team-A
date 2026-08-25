@@ -24,10 +24,10 @@
 		"zod": "4.2.1"
 	},
 	"devDependencies": {
-		"@playwright/test": "^1.48.0",
 		"@cloudflare/vite-plugin": "1.53.1",
 		"@eslint/eslintrc": "^3.3.6",
 		"@eslint/js": "^9.39.5",
+		"@playwright/test": "^1.48.0",
 		"@tailwindcss/postcss": "4.3.3",
 		"@types/node": "26.2.0",
 		"@types/react": "19.2.18",
@@ -42,7 +42,7 @@
 		"tailwindcss": "4.3.3",
 		"typescript": "5.9.2",
 		"vite": "8.2.2",
-		"wrangler": "4.115.0"
+		"wrangler": "^4.125.0"
 	},
 	"type": "module",
 	"scripts": {
