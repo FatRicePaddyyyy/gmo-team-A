@@ -262,6 +262,11 @@ export class CategoryMapper {
 src/lib/
 ├── db.ts
 ├── better-auth/
+├── bridge/                   # 外部 API (レジストリ) との通信レイヤ
+│   ├── client.ts             # openapi-fetch クライアント + 認証 middleware
+│   ├── index.ts              # RegistryBridge の各メソッド
+│   ├── types.ts              # 生成型の再エクスポートと narrowing
+│   └── generated/            # Swagger から生成した .d.ts (触らない)
 └── schema/
     ├── index.ts              # 全スキーマをまとめて export
     ├── auth-schema.ts
@@ -269,6 +274,137 @@ src/lib/
 ```
 
 外部サービス（認証・オブジェクトストレージなど）のクライアントはここにラッパを置く。Drizzle のテーブル定義は `schema/` のみ。
+
+### `src/lib/bridge/` — 外部 API 通信
+
+**方針: 外部 REST API を叩く場合は必ず openapi-typescript で型生成 + openapi-fetch でクライアント化する。生の `fetch()` は書かない。**
+
+理由:
+
+- Swagger からリクエスト/レスポンスの型が自動で入る。手書きの型定義や `as` キャストが不要になる
+- パス変更やフィールド追加が Swagger 更新 → 型生成のワンステップで検知できる
+- 認証ヘッダなどの共通処理を middleware で 1 箇所にまとめられる
+
+#### 型の生成
+
+`package.json` に生成コマンドを 1 本置き、Swagger YAML から `.d.ts` を出す。
+
+```json
+"openapi:gen": "openapi-typescript https://docs.example.com/v3/api-docs.yaml -o ./src/lib/bridge/generated/<name>.d.ts"
+```
+
+`src/lib/bridge/generated/` 配下は生成物。**直接編集しない**。Swagger が変わったら `pnpm openapi:gen` で再生成する。
+
+#### クライアントの組み立て (`bridge/client.ts`)
+
+`openapi-fetch` の `createClient` に生成型 `paths` を渡してクライアントを作る。認証ヘッダやトランザクション ID は `Middleware` で毎リクエスト自動注入する（呼び出し側で手書きしない）。
+
+```ts
+import createClient from "openapi-fetch";
+import type { Client, Middleware } from "openapi-fetch";
+import type { paths } from "./generated/registry-a";
+
+export function getClient(env: CloudflareBindings): Client<paths> {
+  const client = createClient<paths>({ baseUrl: env.REGISTRY_A_BASE_URL });
+  client.use({
+    onRequest({ request }) {
+      request.headers.set("Authorization", `Basic ${btoa(`${env.REGISTRY_A_USER}:${env.REGISTRY_A_PASS}`)}`);
+      request.headers.set("X-Api-Key", env.REGISTRY_A_API_KEY);
+      // リクエストごとに一意な ID (トレーシング用)
+      if (!request.headers.has("X-Cl-TRID")) {
+        request.headers.set("X-Cl-TRID", `CLI-${crypto.randomUUID()}`);
+      }
+      return request;
+    },
+  } satisfies Middleware);
+  return client;
+}
+```
+
+同じ Swagger の API が複数ある場合（本プロジェクトでは Kitaqsign / Kitaqnic のように "path はほぼ同じで一部だけ違う" 系）は、共通スキーマ側を代表として扱い、差異があるエンドポイントだけレジストリ別のクライアントを追加で作る。
+
+#### 呼び出しの書き方 (`bridge/index.ts`)
+
+各メソッドは `client.GET("/path")` / `client.POST("/path", { body, params })` の 1 行で叩き、返り値 `{ data, error, response }` を分解して業務層に返す。**戻り値の Result 契約は自前で持ち、data/error/response をそのまま外に出さない**（openapi-fetch の型に呼び出し側を結合させない）。
+
+```ts
+static async check({
+  name,
+  env,
+}: {
+  name: string;
+  env: CloudflareBindings;
+}): Promise<Result<DomainCheckResponse>> {
+  try {
+    const { data, error, response } = await getClient(env).POST("/api/v1/domains/check", {
+      body: { names: [name] },
+    });
+    // HTTP ステータスで分岐 (Swagger の 4xx を意味のあるエラーコードにマップ)
+    if (response.status === 422) {return { success: false, data: null, error: "invalid_tld" };}
+    if (error) {return { success: false, data: null, error: "invalid_registry_response" };}
+    // API 独自のエラーコードを判定
+    if (data.result.code !== 1000) {
+      return { success: false, data: null, error: data.result.message || "registry_error" };
+    }
+    if (!data.resData) {return { success: false, data: null, error: "invalid_registry_response" };}
+    return { success: true, data: data.resData, error: null };
+  } catch (e) {
+    console.error("RegistryBridge.check error:", e);
+    return { success: false, data: null, error: "network_error" };
+  }
+}
+```
+
+書き方の決まり:
+
+- **返り値は必ず `Result<T>`**。`data.result.code` や `response.status` などプロトコル固有の値を service 層に漏らさない
+- **HTTP ステータス → 意味のあるエラーコード** に必ずマップする（`404` → `"domain_not_found"` など）。呼び出し側は「HTTP のことは知らない」で書ける
+- **API 独自の `result.code` も同じ層で判定する**（EPP の 2202 など）
+- **`try/catch` で `console.error` + `network_error`**。例外を外に出さない
+- **`res.json()` や手書きの JSON パースは絶対に書かない**。openapi-fetch の返り値をそのまま使う
+
+#### 型の narrowing (`bridge/types.ts`)
+
+生成型は Swagger の契約そのまま（optional が緩い）。呼び出し側で毎回 `if (data.exDate)` を書きたくないので、bridge 内で「必ず存在する」ことを検証してから、**narrowing した型**で返す。
+
+```ts
+import type { components } from "./generated/registry-a";
+
+type Schemas = components["schemas"];
+
+// Swagger 上 exDate は optional だが、成功レスポンスでは必ず返る。
+// bridge 側で欠落を invalid_registry_response として弾くので、返り値型は string に絞る。
+type WithRequiredExDate<T extends { exDate?: string }> = Omit<T, "exDate"> & { exDate: string };
+
+export type DomainResponse = WithRequiredExDate<Schemas["DomainResponse"]>;
+
+// 逆に、Swagger は required でも実装によって欠落しうるフィールドは optional に緩める。
+// マッパー側で `?? []` などフォールバックを書けるようにする。
+type WithOptionalFields<T> = Omit<T, "contacts" | "nameservers"> & {
+  contacts?: Record<string, string>;
+  nameservers?: string[];
+};
+```
+
+生成型は「仕様の契約」、bridge の再エクスポート型は「ランタイムの現実」。この 2 段で守る。
+
+#### やっていいこと・いけないこと
+
+**やっていいこと:**
+
+- `getClient(env).GET/POST/PUT/DELETE(...)` で叩く
+- `response.status` で HTTP レベルの分岐
+- `data.result.code` で API 独自コードの分岐
+- Middleware で認証ヘッダ・トレース ID 注入
+- 生成型を `WithRequired* / WithOptional*` で narrow / widen
+
+**書いてはいけないこと:**
+
+- 生の `fetch(url, { headers: { Authorization: ... } })`
+- `await res.json() as SomeType`（キャスト前提のパース）
+- 認証ヘッダを毎メソッドで書く（Middleware にまとめる）
+- 生成物 `bridge/generated/*.d.ts` を手で書き換える
+- `data.result.code` や `response.status` を service 層に露出させる
 
 ### `src/middlewares/`
 
