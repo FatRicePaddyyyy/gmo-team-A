@@ -16,11 +16,6 @@
   "author": "",
   "license": "ISC",
   "packageManager": "pnpm@10.26.0",
-  "pnpm": {
-    "overrides": {
-      "typescript": "5.9.2"
-    }
-  },
   "volta": {
     "node": "24.13.0"
   }
