@@ -197,4 +197,100 @@ describe("RegistryBridge.delete: restore と同じく 409 + 2304", () => {
 
     expect(res.error).toBe("domain_not_found");
   });
+
+  // sponsoring registrar 以外の呼び出し。restore と同じ扱いに揃える。
+  test("[異常系] 403 は forbidden にマップされる", async () => {
+    stubRegistry(403, errEnvelope(2201, "Authorization error"));
+
+    const res = await RegistryBridge.delete({ name: "example.com", registry: "kitaqsign", env: mockEnv });
+
+    expect(res.error).toBe("forbidden");
+  });
+});
+
+// ─── update ──────────────────────────────────────────────────────────────────
+
+describe("RegistryBridge.update: 403/404 の権限系吸収", () => {
+  // sponsoring registrar 以外の呼び出し。Swagger には 200/404 のみだが、
+  // 実運用では 403 が返り得るので bridge で forbidden にマップして routes 側で 403 応答にする。
+  test("[異常系] 403 は forbidden にマップされる", async () => {
+    stubRegistry(403, errEnvelope(2201, "Authorization error"));
+
+    const res = await RegistryBridge.update({
+      name: "example.com",
+      chg: { registrant: "C-0001" },
+      registry: "kitaqsign",
+      env: mockEnv,
+    });
+
+    expect(res.error).toBe("forbidden");
+  });
+
+  test("[異常系] 404 は domain_not_found にマップされる", async () => {
+    stubRegistry(404, errEnvelope(2303, "Object does not exist"));
+
+    const res = await RegistryBridge.update({
+      name: "nope.com",
+      chg: { registrant: "C-0001" },
+      registry: "kitaqsign",
+      env: mockEnv,
+    });
+
+    expect(res.error).toBe("domain_not_found");
+  });
+});
+
+// ─── resolveRegistry ─────────────────────────────────────────────────────────
+
+describe("RegistryBridge.resolveRegistry: 片側 hello 失敗時の判定", () => {
+  test("[異常系] kitaqsign 疎通 OK・kitaqnic 疎通 NG で kitaqnic 管轄 TLD → network_error", async () => {
+    // hello を直接 spy で差し替える (fetch stub 二重管理を避けるため)。
+    vi.spyOn(RegistryBridge, "hello").mockImplementation(async ({ registry }) => {
+      if (registry === "kitaqsign") {
+        return { success: true, data: { registryCode: "KQSGN", tlds: ["com", "net"] }, error: null };
+      }
+      return { success: false, data: null, error: "network_error" };
+    });
+
+    const res = await RegistryBridge.resolveRegistry({ name: "example.xyz", env: mockEnv });
+
+    // 修正前は unsupported_tld を返していた (kitaqnic が実は対応してるかもしれないのに誤情報)
+    expect(res.success).toBe(false);
+    expect(res.error).toBe("network_error");
+  });
+
+  test("[異常系] 両方 hello が失敗 → network_error", async () => {
+    vi.spyOn(RegistryBridge, "hello").mockResolvedValue({ success: false, data: null, error: "network_error" });
+
+    const res = await RegistryBridge.resolveRegistry({ name: "example.com", env: mockEnv });
+
+    expect(res.error).toBe("network_error");
+  });
+
+  test("[正常系] 両方 hello 成功・kitaqsign 管轄 TLD → kitaqsign", async () => {
+    vi.spyOn(RegistryBridge, "hello").mockImplementation(async ({ registry }) => {
+      if (registry === "kitaqsign") {
+        return { success: true, data: { registryCode: "KQSGN", tlds: ["com"] }, error: null };
+      }
+      return { success: true, data: { registryCode: "KQNIC", tlds: ["xyz"] }, error: null };
+    });
+
+    const res = await RegistryBridge.resolveRegistry({ name: "example.com", env: mockEnv });
+
+    expect(res.success).toBe(true);
+    expect(res.data).toBe("kitaqsign");
+  });
+
+  test("[異常系] 両方 hello 成功・どちらの tld にも該当しない → unsupported_tld", async () => {
+    vi.spyOn(RegistryBridge, "hello").mockImplementation(async ({ registry }) => {
+      if (registry === "kitaqsign") {
+        return { success: true, data: { registryCode: "KQSGN", tlds: ["com"] }, error: null };
+      }
+      return { success: true, data: { registryCode: "KQNIC", tlds: ["xyz"] }, error: null };
+    });
+
+    const res = await RegistryBridge.resolveRegistry({ name: "example.foo", env: mockEnv });
+
+    expect(res.error).toBe("unsupported_tld");
+  });
 });

@@ -168,8 +168,11 @@ export class RegistryBridge {
     if (kn.success && kn.data.tlds.some(t => normalize(t) === tld)) {
       return { success: true, data: "kitaqnic", error: null };
     }
-    // 両方失敗した場合は疎通エラー、そうでなければ非対応TLD
-    if (!ks.success && !kn.success) {
+    // 片方でも hello に失敗している場合は、非対応 TLD ではなく疎通エラーの可能性を残す。
+    // 例: kitaqsign が疎通 OK で `.com` を返し、kitaqnic が疎通 NG のとき、
+    // ユーザーが `.xyz` を投げても "非対応" ではなく "レジストリに繋がらない" が実態。
+    // 両方 success + tld 該当なし の場合のみ unsupported_tld と断定する。
+    if (!ks.success || !kn.success) {
       return { success: false, data: null, error: "network_error" };
     }
     return { success: false, data: null, error: "unsupported_tld" };
@@ -281,6 +284,9 @@ export class RegistryBridge {
       });
       if (response.status === 409) {return { success: false, data: null, error: "domain_exists" };}
       if (response.status === 422) {return { success: false, data: null, error: "invalid_tld" };}
+      // 404 は Swagger 定義には含まれないが、実測ではリクエストで指定した registrant / contacts の
+      // contactId がレジストリに存在しないと 404 を返す実装がある。ユーザー起因の不整合を
+      // "レジストリ疎通異常" に丸めず、contact_not_found として routes 側で意味付けできるようにする。
       if (response.status === 404) {return { success: false, data: null, error: "contact_not_found" };}
       if (error) {return { success: false, data: null, error: "invalid_registry_response" };}
       const extracted = extractResData(data);
@@ -391,6 +397,9 @@ export class RegistryBridge {
         // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
         body: body as never,
       });
+      // Swagger 上 update は 200/404 のみだが、実運用では sponsoring registrar 以外の呼び出しで
+      // 403 が返り得る (restore / delete と同じ扱い)。routes 側で 403 に落とせるように forbidden にマップ。
+      if (response.status === 403) {return { success: false, data: null, error: "forbidden" };}
       if (response.status === 404) {return { success: false, data: null, error: "domain_not_found" };}
       if (error) {return { success: false, data: null, error: "invalid_registry_response" };}
       if (data.result.code === 2303) {
@@ -430,6 +439,8 @@ export class RegistryBridge {
       const { data, error, response } = await getClient(registry, env).DELETE("/api/v1/epp/domains/{name}", {
         params: { path: { name } },
       });
+      // sponsoring registrar 以外の呼び出し等 (restore と同じ扱い)
+      if (response.status === 403) {return { success: false, data: null, error: "forbidden" };}
       if (response.status === 404) {return { success: false, data: null, error: "domain_not_found" };}
       // すでに pendingDelete のドメインを再度廃止しようとした場合など
       if (isOperationProhibited(response, error ?? data)) {
@@ -490,11 +501,13 @@ export class RegistryBridge {
         "/api/v1/epp/domains/{name}/transfer/request",
         { params: { path: { name } }, body: { op: "request", authInfo } },
       );
-      // Kitaqnic: authInfo不一致は HTTP 401
+      // authInfo 不一致の伝え方がレジストリで違う (bridge で共通コードに集約する):
+      //   Kitaqnic  … Swagger 定義通り HTTP 401
+      //   Kitaqsign … Swagger 定義通り HTTP 202 + result.code 2202 (下の分岐で処理)
       if (response.status === 401) {return { success: false, data: null, error: "authInfo_mismatch" };}
+      // ドメイン不在 (両レジストリ Swagger 定義)
       if (response.status === 404) {return { success: false, data: null, error: "domain_not_found" };}
       if (error) {return { success: false, data: null, error: "invalid_registry_response" };}
-      // Kitaqsign: authInfo不一致は result.code 2202
       if (data.result.code === 2202) {return { success: false, data: null, error: "authInfo_mismatch" };}
       // 成功: 1000（同期完了）または 1001（非同期受付）
       // B5: Swagger 上 resData? は optional。空の resData でも result.code が成功値なら受付として扱う。

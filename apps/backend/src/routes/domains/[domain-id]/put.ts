@@ -72,6 +72,7 @@ const route = createRoute({
   responses: {
     200: { content: { "application/json": { schema: SuccessSchema } }, description: "更新成功" },
     400: { content: { "application/json": { schema: ErrorSchema } }, description: "参照先オブジェクト（ネームサーバー等）が不在" },
+    403: { content: { "application/json": { schema: ErrorSchema } }, description: "権限なし (sponsoring registrar 以外の呼び出し)" },
     404: { content: { "application/json": { schema: ErrorSchema } }, description: "不在" },
     409: { content: { "application/json": { schema: ErrorSchema } }, description: "操作不可" },
     500: { content: { "application/json": { schema: ErrorSchema } }, description: "サーバーエラー" },
@@ -94,6 +95,9 @@ export const updateDomainRouteHandler = app.openapi(route, async (ctx) => {
     }
     if (result.error === "referenced_object_not_found") {
       return ctx.json({ success: false as const, data: null, error: toUserMessage(result.error) }, 400);
+    }
+    if (result.error === "forbidden") {
+      return ctx.json({ success: false as const, data: null, error: toUserMessage(result.error) }, 403);
     }
     return ctx.json({ success: false as const, data: null, error: toUserMessage(result.error) }, 500);
   }
