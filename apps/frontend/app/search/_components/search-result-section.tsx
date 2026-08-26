@@ -1,14 +1,22 @@
 "use client";
 
-import { AlertCircle } from "lucide-react";
+import Link from "next/link";
+import { AlertCircle, ArrowRight } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
 import { DomainSearchResult, type DomainResult } from "@/components/domain-search-result";
+import { PurposePicker } from "@/components/purpose-picker";
+import { useCart } from "@/shared/hooks/use-cart.hook";
+import { useProgress } from "@/shared/hooks/use-progress.hook";
+import { DecisionAxes } from "./decision-axes";
 
 interface SearchResultSectionProps {
   query: string | null;
   results: DomainResult[];
   loading: boolean;
   error: string | null;
+  /** 診断（/plan-finder）が勧めた末尾。結果の中で目印を付けるために使う */
+  recommendedTld?: string | null;
 }
 
 function ResultSkeleton() {
@@ -34,8 +42,16 @@ function ResultSkeleton() {
  * 検索結果まわりの表示。
  * 読み上げの取りこぼしを防ぐため、ライブリージョンは常に DOM に置いたままにする。
  */
-export function SearchResultSection({ query, results, loading, error }: SearchResultSectionProps) {
+export function SearchResultSection({
+  query,
+  results,
+  loading,
+  error,
+  recommendedTld = null,
+}: SearchResultSectionProps) {
   const hasSearched = query !== null;
+  const { add, has, count } = useCart();
+  const { state, setPurpose, update } = useProgress();
 
   return (
     <>
@@ -46,6 +62,17 @@ export function SearchResultSection({ query, results, loading, error }: SearchRe
             <AlertTitle>検索できませんでした</AlertTitle>
             <AlertDescription>{error}</AlertDescription>
           </Alert>
+        </div>
+      )}
+
+      {/*
+        用途は取得可否に直結するので検索直後に1回だけ聞く。
+        診断（/plan-finder）で決まっている場合は `PurposePicker` 側が
+        質問ではなく確認の1行になるため、同じことを2回聞かれることはない。
+      */}
+      {hasSearched && !loading && !error && (
+        <div className="mx-auto max-w-4xl px-4 pt-6">
+          <PurposePicker value={state.purpose} onChange={setPurpose} showQuizLink />
         </div>
       )}
 
@@ -64,9 +91,46 @@ export function SearchResultSection({ query, results, loading, error }: SearchRe
         {loading && <ResultSkeleton />}
 
         {!loading && !error && hasSearched && (
-          <DomainSearchResult query={query} results={results} />
+          <DomainSearchResult
+            query={query}
+            results={results}
+            purpose={state.purpose}
+            recommendedTld={recommendedTld}
+            onDeclarePurpose={setPurpose}
+            onAddCart={(domain) => {
+              add({ name: domain.name, tld: domain.tld });
+              // 覚えておくのは検索に戻るための名前だけ。進み具合はカートの中身が持つ
+              update({ searchedName: domain.name });
+            }}
+            isAdded={(domain) => has({ name: domain.name, tld: domain.tld })}
+          />
         )}
       </section>
+
+      {!loading && !error && hasSearched && (
+        <DecisionAxes query={query} results={results} purpose={state.purpose} />
+      )}
+
+      {/* カートに入れたら、次の一手を必ず画面上に出す */}
+      {count > 0 && (
+        <div className="mx-auto max-w-4xl px-4 pb-8">
+          <div className="flex flex-col items-center justify-between gap-3 rounded-lg border border-border bg-white px-4 py-4 shadow-sm sm:flex-row">
+            <p className="text-sm text-gray-800">
+              カートに<span className="font-bold">{count}件</span>のドメインが入っています。
+              次の画面で内容を確認できます（まだ課金されません）。
+            </p>
+            <Button
+              className="h-11 w-full shrink-0 px-5 text-white sm:w-auto"
+              style={{ background: "var(--brand)" }}
+              nativeButton={false}
+              render={<Link href="/cart" />}
+            >
+              内容を確認する
+              <ArrowRight className="ml-1 size-4" aria-hidden="true" />
+            </Button>
+          </div>
+        </div>
+      )}
     </>
   );
 }

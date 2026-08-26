@@ -1,6 +1,6 @@
-import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
+import { createRoute, z } from "@hono/zod-openapi";
 import { toUserMessage } from "../../../lib/error-messages";
-import type { Variables } from "../../../types";
+import { createOpenAPIHono } from "../../../lib/openapi-hono";
 import { DomainService } from "../service";
 
 const ParamsSchema = z.object({
@@ -13,7 +13,8 @@ const RequestSchema = z.object({
   remStatuses: z.array(z.string()).optional(),
   chg: z.object({
     registrant: z.string().optional(),
-    authInfo: z.string().optional(),
+    // B18: Swagger 上 authInfo は 1〜64 文字
+    authInfo: z.string().min(1).max(64).optional(),
   }).optional(),
   // Issue #24: 自動更新設定
   autoRenew: z.boolean().optional().openapi({
@@ -76,7 +77,7 @@ const route = createRoute({
   },
 });
 
-const app = new OpenAPIHono<{ Bindings: CloudflareBindings; Variables: Variables }>();
+const app = createOpenAPIHono();
 
 export const updateDomainRouteHandler = app.openapi(route, async (ctx) => {
   const { "domain-id": domainId } = ctx.req.valid("param");

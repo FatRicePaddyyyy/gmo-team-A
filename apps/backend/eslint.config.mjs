@@ -42,6 +42,11 @@ const eslintConfig = [
       '.wrangler/**',
       'eslint.config.mjs',
       'worker-configuration.d.ts',
+      // テストは lint 対象外。実行時挙動 (vitest) で品質を担保する。
+      '**/*.spec.ts',
+      '**/*.spec.tsx',
+      '**/*.test.ts',
+      '**/*.test.tsx',
     ],
   },
 ];

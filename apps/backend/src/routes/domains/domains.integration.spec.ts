@@ -1,15 +1,16 @@
 /// <reference types="../../../worker-configuration" />
 import { beforeEach, describe, expect, test, vi } from "vitest";
-import { checkDomainRouteHandler } from "./check/post";
-import { createDomainRouteHandler } from "./post";
-import { listDomainsRouteHandler } from "./get";
-import { getDomainRouteHandler } from "./[domain-id]/get";
-import { renewDomainRouteHandler } from "./[domain-id]/renew/post";
-import { updateDomainRouteHandler } from "./[domain-id]/put";
-import { deleteDomainRouteHandler } from "./[domain-id]/delete";
-import { restoreDomainRouteHandler } from "./[domain-id]/restore/post";
 import { RegistryBridge } from "../../lib/bridge";
+import { deleteDomainRouteHandler } from "./[domain-id]/delete";
+import { getDomainRouteHandler } from "./[domain-id]/get";
+import { updateDomainRouteHandler } from "./[domain-id]/put";
+import { renewDomainRouteHandler } from "./[domain-id]/renew/post";
+import { restoreDomainRouteHandler } from "./[domain-id]/restore/post";
+import { checkDomainRouteHandler } from "./check/post";
+import { listDomainsRouteHandler } from "./get";
+import { createDomainRouteHandler } from "./post";
 import { DomainRepository } from "./repository";
+import { DomainUserRepository } from "./user-repository";
 
 // ハンドラー→Service→Repository まで通す結合テスト。
 // RegistryBridge と DomainRepository をモックして
@@ -31,15 +32,19 @@ const mockDomainRow = {
   autoRenew: false,
 };
 
-const mockDomainResponse = {
-  id: "dom-001",
-  name: "example.com",
-  registry: "kitaqsign",
-  status: "ok",
-  expiresAt: "2027-08-25T00:00:00.000Z",
-  createdAt: "2026-08-25T00:00:00.000Z",
-  ownerUserId: "user-001",
-  autoRenew: false,
+// レジストリの Swagger 制約に沿ったダミーユーザー (許可名 + @example.com)
+const mockContactUser = {
+  id: "user-001",
+  name: "Taro Test",
+  email: "taro.test@example.com",
+  emailVerified: true,
+  image: null,
+  createdAt: new Date("2026-08-25T00:00:00.000Z"),
+  updatedAt: new Date("2026-08-25T00:00:00.000Z"),
+  role: null,
+  banned: false,
+  banReason: null,
+  banExpires: null,
 };
 
 beforeEach(() => vi.restoreAllMocks());
@@ -48,51 +53,55 @@ beforeEach(() => vi.restoreAllMocks());
 
 describe("結合: POST /api/v1/public/domains/check", () => {
   test("[正常系] avail:true → 200", async () => {
+    vi.spyOn(RegistryBridge, "resolveRegistry").mockResolvedValue({ success: true, data: "kitaqsign", error: null });
     vi.spyOn(RegistryBridge, "check").mockResolvedValue({
       success: true, data: { results: [{ name: "example.com", avail: true }] }, error: null,
     });
     const res = await checkDomainRouteHandler.request(
       "/api/v1/public/domains/check",
-      { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: "example.com", registry: "kitaqsign" }) },
+      { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: "example.com" }) },
       mockEnv,
     );
     expect(res.status).toBe(200);
-    const json = await res.json() as { data: { avail: boolean } };
+    const json = await res.json() as any;
     expect(json.data.avail).toBe(true);
   });
 
   test("[正常系] avail:false → 200", async () => {
+    vi.spyOn(RegistryBridge, "resolveRegistry").mockResolvedValue({ success: true, data: "kitaqsign", error: null });
     vi.spyOn(RegistryBridge, "check").mockResolvedValue({
       success: true, data: { results: [{ name: "taken.com", avail: false }] }, error: null,
     });
     const res = await checkDomainRouteHandler.request(
       "/api/v1/public/domains/check",
-      { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: "taken.com", registry: "kitaqsign" }) },
+      { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: "taken.com" }) },
       mockEnv,
     );
     expect(res.status).toBe(200);
-    const json = await res.json() as { data: { avail: boolean } };
+    const json = await res.json() as any;
     expect(json.data.avail).toBe(false);
   });
 
-  test("[異常系] registry 不正 → 400", async () => {
+  test("[異常系] 非対応TLD → 400", async () => {
+    vi.spyOn(RegistryBridge, "resolveRegistry").mockResolvedValue({ success: false, data: null, error: "unsupported_tld" });
     const res = await checkDomainRouteHandler.request(
       "/api/v1/public/domains/check",
-      { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: "example.com", registry: "invalid" }) },
+      { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: "example.zzz" }) },
       mockEnv,
     );
     expect(res.status).toBe(400);
   });
 
   test("[異常系] Bridge エラー → 500 + ユーザー向けメッセージ", async () => {
+    vi.spyOn(RegistryBridge, "resolveRegistry").mockResolvedValue({ success: true, data: "kitaqsign", error: null });
     vi.spyOn(RegistryBridge, "check").mockResolvedValue({ success: false, data: null, error: "network_error" });
     const res = await checkDomainRouteHandler.request(
       "/api/v1/public/domains/check",
-      { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: "example.com", registry: "kitaqsign" }) },
+      { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: "example.com" }) },
       mockEnv,
     );
     expect(res.status).toBe(500);
-    const json = await res.json() as { error: string };
+    const json = await res.json() as any;
     expect(json.error).not.toBe("network_error"); // エラーコードがそのまま出ていない
     expect(json.error).toContain("再試行");
   });
@@ -102,6 +111,8 @@ describe("結合: POST /api/v1/public/domains/check", () => {
 
 describe("結合: POST /api/v1/secure/domains", () => {
   test("[正常系] 登録成功 → 201 + Domain レスポンス", async () => {
+    vi.spyOn(RegistryBridge, "hello").mockResolvedValue({ success: true, data: { registryCode: "kitaqsign", message: "hello", tlds: ["com"] }, error: null });
+    vi.spyOn(DomainUserRepository, "findById").mockResolvedValue({ success: true, data: mockContactUser, error: null });
     vi.spyOn(RegistryBridge, "createContact").mockResolvedValue({ success: true, data: { contactId: "c-001" }, error: null });
     vi.spyOn(RegistryBridge, "create").mockResolvedValue({
       success: true, data: { domain: "example.com", crDate: "2026-08-25T00:00:00.000Z", exDate: "2027-08-25T00:00:00.000Z" }, error: null,
@@ -114,12 +125,14 @@ describe("結合: POST /api/v1/secure/domains", () => {
       mockEnv,
     );
     expect(res.status).toBe(201);
-    const json = await res.json() as { success: boolean; data: { name: string } };
+    const json = await res.json() as any;
     expect(json.success).toBe(true);
     expect(json.data.name).toBe("example.com");
   });
 
   test("[異常系] domain_exists → 409 + ユーザー向けメッセージ", async () => {
+    vi.spyOn(RegistryBridge, "hello").mockResolvedValue({ success: true, data: { registryCode: "kitaqsign", message: "hello", tlds: ["com"] }, error: null });
+    vi.spyOn(DomainUserRepository, "findById").mockResolvedValue({ success: true, data: mockContactUser, error: null });
     vi.spyOn(RegistryBridge, "createContact").mockResolvedValue({ success: true, data: { contactId: "c-001" }, error: null });
     vi.spyOn(RegistryBridge, "create").mockResolvedValue({ success: false, data: null, error: "domain_exists" });
 
@@ -129,11 +142,14 @@ describe("結合: POST /api/v1/secure/domains", () => {
       mockEnv,
     );
     expect(res.status).toBe(409);
-    const json = await res.json() as { error: string };
+    const json = await res.json() as any;
     expect(json.error).toContain("すでに登録");
   });
 
   test("[異常系] invalid_tld → 422 + ユーザー向けメッセージ", async () => {
+    // レジストリの hello は成功するが、hello.tlds に "xyz" を返さない → service 側で unsupported_tld として弾かれ 422 になる。
+    vi.spyOn(RegistryBridge, "hello").mockResolvedValue({ success: true, data: { registryCode: "kitaqsign", message: "hello", tlds: ["com"] }, error: null });
+    vi.spyOn(DomainUserRepository, "findById").mockResolvedValue({ success: true, data: mockContactUser, error: null });
     vi.spyOn(RegistryBridge, "createContact").mockResolvedValue({ success: true, data: { contactId: "c-001" }, error: null });
     vi.spyOn(RegistryBridge, "create").mockResolvedValue({ success: false, data: null, error: "invalid_tld" });
 
@@ -143,7 +159,7 @@ describe("結合: POST /api/v1/secure/domains", () => {
       mockEnv,
     );
     expect(res.status).toBe(422);
-    const json = await res.json() as { error: string };
+    const json = await res.json() as any;
     expect(json.error).toContain("対応していません");
   });
 
@@ -174,9 +190,9 @@ describe("結合: GET /api/v1/secure/domains", () => {
 
     const res = await listDomainsRouteHandler.request("/api/v1/secure/domains", { method: "GET" }, mockEnv);
     expect(res.status).toBe(200);
-    const json = await res.json() as { data: { name: string }[] };
+    const json = await res.json() as any;
     expect(json.data).toHaveLength(1);
-    expect(json.data[0]!.name).toBe("example.com");
+    expect(json.data[0].name).toBe("example.com");
   });
 
   test("[正常系] ゼロ件", async () => {
@@ -184,7 +200,7 @@ describe("結合: GET /api/v1/secure/domains", () => {
 
     const res = await listDomainsRouteHandler.request("/api/v1/secure/domains", { method: "GET" }, mockEnv);
     expect(res.status).toBe(200);
-    const json = await res.json() as { data: unknown[] };
+    const json = await res.json() as any;
     expect(json.data).toHaveLength(0);
   });
 });
@@ -207,7 +223,7 @@ describe("結合: GET /api/v1/secure/domains/{id}", () => {
       mockEnv,
     );
     expect(res.status).toBe(200);
-    const json = await res.json() as { data: { expiresAt: string } };
+    const json = await res.json() as any;
     expect(json.data.expiresAt).toBe("2028-08-25T00:00:00.000Z"); // Bridge の最新値
   });
 
@@ -224,7 +240,7 @@ describe("結合: GET /api/v1/secure/domains/{id}", () => {
       mockEnv,
     );
     expect(res.status).toBe(404);
-    const json = await res.json() as { error: string };
+    const json = await res.json() as any;
     expect(json.error).toContain("見つかりません");
   });
 });
@@ -243,7 +259,7 @@ describe("結合: POST /api/v1/secure/domains/{id}/renew", () => {
       mockEnv,
     );
     expect(res.status).toBe(200);
-    const json = await res.json() as { data: { expiresAt: string } };
+    const json = await res.json() as any;
     expect(json.data.expiresAt).toBe("2028-08-25T00:00:00.000Z");
   });
 
@@ -258,7 +274,7 @@ describe("結合: POST /api/v1/secure/domains/{id}/renew", () => {
       mockEnv,
     );
     expect(res.status).toBe(409);
-    const json = await res.json() as { error: string };
+    const json = await res.json() as any;
     expect(json.error).toContain("移管手続き中");
   });
 
@@ -365,7 +381,7 @@ describe("結合: PUT /api/v1/secure/domains/{id}", () => {
       mockEnv,
     );
     expect(res.status).toBe(409);
-    const json = await res.json() as { error: string };
+    const json = await res.json() as any;
     expect(json.error).toContain("できません");
   });
 });
@@ -384,7 +400,7 @@ describe("結合: DELETE /api/v1/secure/domains/{id}", () => {
       mockEnv,
     );
     expect(res.status).toBe(200);
-    const json = await res.json() as { data: { status: string } };
+    const json = await res.json() as any;
     expect(json.data.status).toBe("pendingDelete");
   });
 
@@ -398,7 +414,7 @@ describe("結合: DELETE /api/v1/secure/domains/{id}", () => {
       mockEnv,
     );
     expect(res.status).toBe(409);
-    const json = await res.json() as { error: string };
+    const json = await res.json() as any;
     expect(json.error).toContain("できません");
   });
 
@@ -419,12 +435,39 @@ describe("結合: DELETE /api/v1/secure/domains/{id}", () => {
 // ─── restore ─────────────────────────────────────────────────────────────────
 
 describe("結合: POST /api/v1/secure/domains/{id}/restore", () => {
-  test("[正常系] 復旧成功 → 200 + status=ok", async () => {
+  // 復旧後の status はレジストリの info から決めるので、restore と対で必ずモックする。
+  // モックし忘れると本物のレジストリを叩きにいって失敗し、フォールバックの "ok" で
+  // たまたま通ってしまい、status の決まり方を検証できなくなる。
+  const mockInfo = (statuses: string[]) =>
+    vi.spyOn(RegistryBridge, "info").mockResolvedValue({
+      success: true,
+      data: {
+        domain: mockDomainRow.name,
+        status: statuses,
+        registrant: "C-0001",
+        contacts: {},
+        nameservers: [],
+        crDate: "2026-08-25T00:00:00.000Z",
+        exDate: "2027-08-25T00:00:00.000Z",
+        rgpStatus: [],
+      },
+      error: null,
+    });
+
+  // 復旧の前提（pendingDelete のドメインが自分のもので、レジストリ側の復旧は成功する）を揃える。
+  // DB に何を書いたかを検証したいテストがあるので、updateStatus のスパイを返す。
+  const mockRestoreDeps = () => {
     vi.spyOn(DomainRepository, "findById").mockResolvedValue({
       success: true, data: { ...mockDomainRow, status: "pendingDelete" }, error: null,
     });
-    vi.spyOn(DomainRepository, "updateStatus").mockResolvedValue({ success: true, data: undefined, error: null });
     vi.spyOn(RegistryBridge, "restore").mockResolvedValue({ success: true, data: {}, error: null });
+    return vi.spyOn(DomainRepository, "updateStatus")
+      .mockResolvedValue({ success: true, data: undefined, error: null });
+  };
+
+  test("[正常系] 復旧成功 → 200 + status=ok", async () => {
+    const updateSpy = mockRestoreDeps();
+    const infoSpy = mockInfo(["ok"]);
 
     const res = await restoreDomainRouteHandler.request(
       "/api/v1/secure/domains/dom-001/restore",
@@ -432,14 +475,74 @@ describe("結合: POST /api/v1/secure/domains/{id}/restore", () => {
       mockEnv,
     );
     expect(res.status).toBe(200);
-    const json = await res.json() as { data: { status: string } };
+    const json = await res.json() as any;
     expect(json.data.status).toBe("ok");
+    expect(updateSpy).toHaveBeenCalledWith(expect.objectContaining({ status: "ok" }));
+    // 別のドメインやレジストリを問い合わせていないことも確かめる
+    expect(infoSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ name: mockDomainRow.name, registry: mockDomainRow.registry }),
+    );
   });
 
-  test("[異常系] Grace Period 終了 → 409 + ユーザー向けメッセージ", async () => {
-    vi.spyOn(DomainRepository, "findById").mockResolvedValue({
-      success: true, data: { ...mockDomainRow, status: "pendingDelete" }, error: null,
+  // "ok" 決め打ちにせず、レジストリが返した値をそのまま反映することの確認。
+  // pendingDelete から抜けていれば復旧は成功しているので、ok 以外でも 200 を返す。
+  test("[正常系] レジストリが inactive を返せばそのまま反映される", async () => {
+    const updateSpy = mockRestoreDeps();
+    mockInfo(["inactive"]);
+
+    const res = await restoreDomainRouteHandler.request(
+      "/api/v1/secure/domains/dom-001/restore",
+      { method: "POST" },
+      mockEnv,
+    );
+    expect(res.status).toBe(200);
+    const json = await res.json() as any;
+    expect(json.data.status).toBe("inactive");
+    expect(updateSpy).toHaveBeenCalledWith(expect.objectContaining({ status: "inactive" }));
+  });
+
+  // 復旧そのものは成功しているので、status を確認できなくても 200 を返す。
+  test("[異常系] info が失敗しても復旧は成功扱い（status は ok に倒す）", async () => {
+    const updateSpy = mockRestoreDeps();
+    vi.spyOn(RegistryBridge, "info").mockResolvedValue({
+      success: false, data: null, error: "network_error",
     });
+
+    const res = await restoreDomainRouteHandler.request(
+      "/api/v1/secure/domains/dom-001/restore",
+      { method: "POST" },
+      mockEnv,
+    );
+    expect(res.status).toBe(200);
+    const json = await res.json() as any;
+    expect(json.data.status).toBe("ok");
+    expect(updateSpy).toHaveBeenCalledWith(expect.objectContaining({ status: "ok" }));
+  });
+
+  // レジストリ側の反映が一瞬遅れて pendingDelete が返ることがある。
+  // ここで DB に書き戻すと「復旧したのに廃止中」になるので巻き戻さない。
+  test("[異常系] info がまだ pendingDelete を返しても巻き戻さない", async () => {
+    const updateSpy = mockRestoreDeps();
+    mockInfo(["pendingDelete"]);
+
+    const res = await restoreDomainRouteHandler.request(
+      "/api/v1/secure/domains/dom-001/restore",
+      { method: "POST" },
+      mockEnv,
+    );
+    expect(res.status).toBe(200);
+    const json = await res.json() as any;
+    expect(json.data.status).toBe("ok");
+    // 「pendingDelete を書かない」だけだと updateStatus 自体が消えても通ってしまうので、
+    // 「ok を書いた」ことを正面から確かめる。
+    expect(updateSpy).toHaveBeenCalledWith(expect.objectContaining({ status: "ok" }));
+  });
+
+  // レジストリが復旧を断るケース。実機で確認できたのは「pendingDelete でない」場合で、
+  // Grace Period 超過は猶予期間(kitaqnic は 45日)を待たないと再現できず未確認。
+  // どちらもレジストリからは同じ 2304 で返るため、bridge から先の扱いは共通。
+  test("[異常系] レジストリが復旧を断る（2304）→ 409 + ユーザー向けメッセージ", async () => {
+    mockRestoreDeps();
     vi.spyOn(RegistryBridge, "restore").mockResolvedValue({ success: false, data: null, error: "operation_prohibited" });
 
     const res = await restoreDomainRouteHandler.request(
@@ -448,14 +551,12 @@ describe("結合: POST /api/v1/secure/domains/{id}/restore", () => {
       mockEnv,
     );
     expect(res.status).toBe(409);
-    const json = await res.json() as { error: string };
+    const json = await res.json() as any;
     expect(json.error).toContain("できません");
   });
 
   test("[異常系] 権限なし → 403 + ユーザー向けメッセージ", async () => {
-    vi.spyOn(DomainRepository, "findById").mockResolvedValue({
-      success: true, data: { ...mockDomainRow, status: "pendingDelete" }, error: null,
-    });
+    mockRestoreDeps();
     vi.spyOn(RegistryBridge, "restore").mockResolvedValue({ success: false, data: null, error: "forbidden" });
 
     const res = await restoreDomainRouteHandler.request(
@@ -464,7 +565,7 @@ describe("結合: POST /api/v1/secure/domains/{id}/restore", () => {
       mockEnv,
     );
     expect(res.status).toBe(403);
-    const json = await res.json() as { error: string };
+    const json = await res.json() as any;
     expect(json.error).toContain("権限");
   });
 });

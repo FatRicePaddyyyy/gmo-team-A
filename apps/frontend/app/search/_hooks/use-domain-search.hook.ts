@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import type { DomainResult } from "@/components/domain-search-result";
 import { searchDomains } from "../client";
 
@@ -12,6 +13,7 @@ const SEARCH_ERROR_MESSAGE = "検索に失敗しました。時間をおいて�
  * 実APIへの差し替え時にこのフックを変更する必要はない。
  */
 export function useDomainSearch() {
+  const router = useRouter();
   const [query, setQuery] = useState<string | null>(null);
   const [results, setResults] = useState<DomainResult[]>([]);
   const [loading, setLoading] = useState(false);
@@ -20,29 +22,34 @@ export function useDomainSearch() {
   // 連打時に古いレスポンスが新しい結果を上書きしないよう、最新リクエストIDだけを採用する
   const latestRequestIdRef = useRef(0);
 
-  const search = useCallback(async (value: string) => {
-    const requestId = latestRequestIdRef.current + 1;
-    latestRequestIdRef.current = requestId;
+  const search = useCallback(
+    async (value: string) => {
+      const requestId = latestRequestIdRef.current + 1;
+      latestRequestIdRef.current = requestId;
 
-    setQuery(value);
-    setLoading(true);
-    setError(null);
+      setQuery(value);
+      // 学習は行き来する行為。リロード・戻る・共有で同じ結果に戻れるよう URL を合わせる
+      router.replace(`/search?q=${encodeURIComponent(value)}`, { scroll: false });
+      setLoading(true);
+      setError(null);
 
-    try {
-      const data = await searchDomains(value);
-      if (latestRequestIdRef.current !== requestId) return;
-      setResults(data);
-    } catch (caught) {
-      if (latestRequestIdRef.current !== requestId) return;
-      console.error("Domain search error:", caught);
-      setResults([]);
-      setError(SEARCH_ERROR_MESSAGE);
-    } finally {
-      if (latestRequestIdRef.current === requestId) {
-        setLoading(false);
+      try {
+        const data = await searchDomains(value);
+        if (latestRequestIdRef.current !== requestId) return;
+        setResults(data);
+      } catch (caught) {
+        if (latestRequestIdRef.current !== requestId) return;
+        console.error("Domain search error:", caught);
+        setResults([]);
+        setError(SEARCH_ERROR_MESSAGE);
+      } finally {
+        if (latestRequestIdRef.current === requestId) {
+          setLoading(false);
+        }
       }
-    }
-  }, []);
+    },
+    [router],
+  );
 
   return { query, results, loading, error, search };
 }

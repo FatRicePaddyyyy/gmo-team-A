@@ -1,18 +1,13 @@
-import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
+import { createRoute, z } from "@hono/zod-openapi";
 import { toUserMessage } from "../../../lib/error-messages";
-import { detectRegistry } from "../../../lib/registry-policy";
-import type { Variables } from "../../../types";
+import { createOpenAPIHono } from "../../../lib/openapi-hono";
 import { DomainService } from "../service";
 
-// Issue #26: 空き確認は認証不要の /api/v1/public/* に配置。
-// Issue #25: registry は省略可能。省略時は TLD から自動判定する。
+// 空き確認は認証不要の /api/v1/public/* に配置。
+// registry フィールドは廃止。バックエンドが両レジストリの hello を並列で叩いて自動解決する。
 
 const RequestSchema = z.object({
   name: z.string().trim().min(1).openapi({ example: "example.com" }),
-  registry: z.enum(["kitaqsign", "kitaqnic"]).optional().openapi({
-    example: "kitaqsign",
-    description: "省略時は TLD から自動判定（.com/.net/.org/.info は kitaqsign、それ以外は kitaqnic）",
-  }),
 }).openapi("DomainCheckRequest");
 
 const SuccessSchema = z.object({
@@ -36,22 +31,21 @@ const route = createRoute({
   request: { body: { content: { "application/json": { schema: RequestSchema } } } },
   responses: {
     200: { content: { "application/json": { schema: SuccessSchema } }, description: "空き確認成功" },
-    400: { content: { "application/json": { schema: ErrorSchema } }, description: "ドメイン名不正" },
+    400: { content: { "application/json": { schema: ErrorSchema } }, description: "ドメイン名不正 / 非対応TLD" },
     500: { content: { "application/json": { schema: ErrorSchema } }, description: "サーバーエラー" },
   },
 });
 
-const app = new OpenAPIHono<{ Bindings: CloudflareBindings; Variables: Variables }>();
+const app = createOpenAPIHono();
 
 export const checkDomainRouteHandler = app.openapi(route, async (ctx) => {
-  const { name, registry: explicitRegistry } = ctx.req.valid("json");
-  const registry = explicitRegistry ?? detectRegistry(name);
-  if (!registry) {
-    return ctx.json({ success: false as const, data: null, error: "ドメイン名の形式が正しくありません。TLD（.com など）を含めて入力してください。" }, 400);
-  }
-  const result = await DomainService.check({ name, registry, env: ctx.env });
+  const { name } = ctx.req.valid("json");
+  const result = await DomainService.check({ name, env: ctx.env });
   if (!result.success) {
+    if (result.error === "invalid_domain_name" || result.error === "unsupported_tld") {
+      return ctx.json({ success: false as const, data: null, error: toUserMessage(result.error) }, 400);
+    }
     return ctx.json({ success: false as const, data: null, error: toUserMessage(result.error) }, 500);
   }
-  return ctx.json({ success: true as const, data: { avail: result.data.avail, registry }, error: null }, 200);
+  return ctx.json({ success: true as const, data: result.data, error: null }, 200);
 });

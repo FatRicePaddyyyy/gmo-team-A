@@ -1,45 +1,151 @@
 import type { Result } from "../../types/result";
+import { getClient, getKitaqnicClient } from "./client";
 import type {
   DomainCheckResponse,
   DomainCreateResponse,
-  DomainResponse,
   DomainRenewResponse,
+  DomainResponse,
   DomainTransferResponse,
-  EmptyResData,
-  EppEnvelope,
+  GreetingResponse,
   PollMessage,
   Registry,
 } from "./types";
 
-// レジストリからのレスポンス body を安全にパース
-// JSON パース失敗や result フィールド欠落を検知するためのヘルパー
-async function safeParseEpp<T>(res: Response): Promise<EppEnvelope<T> | null> {
-  try {
-    const json = await res.json() as unknown;
-    if (!json || typeof json !== "object" || !("result" in json)) return null;
-    return json as EppEnvelope<T>;
-  } catch {
-    return null;
+type EmptyResData = Record<string, never>;
+
+// レジストリ側 EPP レスポンスの result コード判定と resData 取り出しの共通化。
+// - HTTP 非 200 系は上流で早期リターンしているので、ここでは result.code のみ見る。
+// - resData が undefined の場合は上位で個別に扱う（メソッドによって許容の可否が違うため）。
+// - 失敗時は必ず内部エラーコード "registry_error" に normalize して返す。
+//   result.message はレジストリ由来の生文字列 (英語 or 内部情報) なので、ユーザー応答に載せず
+//   console.error でログに残すのみ (toUserMessage の map miss で情報がドロップされるのを避ける)。
+function extractResData<T>(
+  body: { result: { code: number; message: string }; resData?: T } | undefined,
+  successCodes: readonly number[] = [1000],
+): Result<T | undefined> {
+  if (!body) {return { success: false, data: null, error: "invalid_registry_response" };}
+  if (!successCodes.includes(body.result.code)) {
+    console.error(
+      `Registry returned non-success code=${body.result.code}, message="${body.result.message}"`,
+    );
+    return { success: false, data: null, error: "registry_error" };
   }
+  return { success: true, data: body.resData, error: null };
+}
+
+// 「その状態ではその操作はできない」(EPP result.code 2304) を判定する。
+//
+// 実機は **HTTP 409 + result.code 2304** で返す（実測）。
+//   restore … `Domain xxx is not pending delete`
+//   delete  … `Domain xxx is pending delete`
+// ところが仕様書(issue #7)も Swagger も「HTTP 200 で 2304」と書いており、資料が実機と食い違う。
+//
+// openapi-fetch は HTTP が非 2xx だと body を error 側に入れるため、
+// `if (error)` で打ち切る前にここで拾わないと invalid_registry_response になり、
+// ハンドラが 500 を返してしまう（実際 restore と delete がそうなっていた）。
+// 資料どおり 200 + 2304 に戻っても拾えるよう、HTTP と result.code の両方を見る。
+// body には成功時の data と失敗時の error のどちらが来てもよい（HTTP により入る側が変わるため）。
+function isOperationProhibited(response: Response, body: unknown): boolean {
+  if (response.status === 409) {return true;}
+  if (typeof body !== "object" || body === null || !("result" in body)) {return false;}
+  const result = body.result;
+  if (typeof result !== "object" || result === null || !("code" in result)) {return false;}
+  return result.code === 2304;
+}
+
+// result.reason（EPP result.code 2303 "Object does not exist" のとき、何が存在しないかを
+// 自由文字列で載せてくる未ドキュメント化フィールド）を安全に取り出す。
+// Swagger の Result スキーマには reason が定義されていないため、生成型に無いフィールドを
+// 盲目にキャストせず、`in` で存在を確かめながら読む。
+function readResultReason(result: unknown): string | undefined {
+  if (typeof result !== "object" || result === null || !("reason" in result)) {return undefined;}
+  const reason = result.reason;
+  return typeof reason === "string" ? reason : undefined;
+}
+
+// hello の resData から対応 TLD を取り出す。
+// レジストリごとに入れ物が違う（kitaqsign は resData.tlds、kitaqnic は resData.info.supportedTlds）。
+// 生成型は kitaqsign 側を代表にしているため kitaqnic の形は型に出てこない。
+// キャストで押し込むと実際の形と食い違ったときに気づけないので、`in` で存在を確かめながら降りる。
+function readSupportedTlds(resData: unknown): string[] | null {
+  const asStringArray = (value: unknown): string[] | null =>
+    Array.isArray(value) && value.every(v => typeof v === "string") ? value : null;
+
+  if (typeof resData !== "object" || resData === null) {return null;}
+
+  if ("tlds" in resData) {
+    const tlds = asStringArray(resData.tlds);
+    if (tlds) {return tlds;}
+  }
+  if ("info" in resData && typeof resData.info === "object" && resData.info !== null) {
+    if ("supportedTlds" in resData.info) {
+      return asStringArray(resData.info.supportedTlds);
+    }
+  }
+  return null;
 }
 
 export class RegistryBridge {
-  private static baseUrl(registry: Registry, env: CloudflareBindings): string {
-    return registry === "kitaqsign" ? env.KITAQSIGN_BASE_URL : env.KITAQNIC_BASE_URL;
+  // レジストリの疎通確認と対応TLD取得（認証不要のヘルスチェック）
+  static async hello({
+    registry,
+    env,
+  }: {
+    registry: Registry;
+    env: CloudflareBindings;
+  }): Promise<Result<GreetingResponse>> {
+    try {
+      const { data, response } = await getClient(registry, env).GET("/api/v1/epp/sessions/hello");
+      if (!response.ok || !data) {return { success: false, data: null, error: "invalid_registry_response" };}
+      const extracted = extractResData(data);
+      if (!extracted.success) {return extracted;}
+      if (!extracted.data) {return { success: false, data: null, error: "invalid_registry_response" };}
+
+      // 対応 TLD の入れ物はレジストリごとに違う（readSupportedTlds を参照）。
+      // ここで吸収して、呼び出し側は常に tlds を見ればよい状態にする。
+      const tlds = readSupportedTlds(extracted.data);
+      if (!tlds) {return { success: false, data: null, error: "invalid_registry_response" };}
+
+      return { success: true, data: { ...extracted.data, tlds }, error: null };
+    } catch (e) {
+      console.error("RegistryBridge.hello error:", e);
+      return { success: false, data: null, error: "network_error" };
+    }
   }
 
-  private static authHeaders(registry: Registry, env: CloudflareBindings): HeadersInit {
-    const user = registry === "kitaqsign" ? env.KITAQSIGN_BASIC_USER : env.KITAQNIC_BASIC_USER;
-    const pass = registry === "kitaqsign" ? env.KITAQSIGN_BASIC_PASS : env.KITAQNIC_BASIC_PASS;
-    const registrarId = registry === "kitaqsign" ? env.KITAQSIGN_REGISTRAR_ID : env.KITAQNIC_REGISTRAR_ID;
-    const apiKey = registry === "kitaqsign" ? env.KITAQSIGN_API_KEY : env.KITAQNIC_API_KEY;
-    return {
-      "Authorization": `Basic ${btoa(`${user}:${pass}`)}`,
-      "X-Registrar-Id": registrarId,
-      "X-Api-Key": apiKey,
-      "X-Cl-TRID": `CLI-${crypto.randomUUID()}`,
-      "Content-Type": "application/json",
-    };
+  // ドメイン名の TLD から対応レジストリを解決する。
+  // 両レジストリの hello を並列で叩き、supportedTlds に含まれる方を返す。
+  static async resolveRegistry({
+    name,
+    env,
+  }: {
+    name: string;
+    env: CloudflareBindings;
+  }): Promise<Result<Registry>> {
+    const lastDot = name.trim().toLowerCase().lastIndexOf(".");
+    if (lastDot < 0 || lastDot === name.length - 1) {
+      return { success: false, data: null, error: "invalid_domain_name" };
+    }
+    const tld = name.trim().toLowerCase().slice(lastDot + 1);
+
+    const [ks, kn] = await Promise.all([
+      RegistryBridge.hello({ registry: "kitaqsign", env }),
+      RegistryBridge.hello({ registry: "kitaqnic", env }),
+    ]);
+
+    // レジストリの tlds は先頭ドット付き（".com"）かドットなし（"com"）か仕様上不明。両方に対応
+    const normalize = (t: string) => t.toLowerCase().replace(/^\./, "");
+    if (ks.success && ks.data.tlds.some(t => normalize(t) === tld)) {
+      return { success: true, data: "kitaqsign", error: null };
+    }
+    if (kn.success && kn.data.tlds.some(t => normalize(t) === tld)) {
+      return { success: true, data: "kitaqnic", error: null };
+    }
+    // 両方失敗した場合は疎通エラー、そうでなければ非対応TLD
+    if (!ks.success && !kn.success) {
+      return { success: false, data: null, error: "network_error" };
+    }
+    return { success: false, data: null, error: "unsupported_tld" };
   }
 
   static async check({
@@ -52,18 +158,15 @@ export class RegistryBridge {
     env: CloudflareBindings;
   }): Promise<Result<DomainCheckResponse>> {
     try {
-      const res = await fetch(`${RegistryBridge.baseUrl(registry, env)}/api/v1/epp/domains/check`, {
-        method: "POST",
-        headers: RegistryBridge.authHeaders(registry, env),
-        body: JSON.stringify({ names: [name] }),
+      const { data, error, response } = await getClient(registry, env).POST("/api/v1/epp/domains/check", {
+        body: { names: [name] },
       });
-      if (res.status === 422) return { success: false, data: null, error: "invalid_tld" };
-      const json = await safeParseEpp<DomainCheckResponse>(res);
-      if (!json) return { success: false, data: null, error: "invalid_registry_response" };
-      if (!res.ok || json.result.code !== 1000) {
-        return { success: false, data: null, error: json.result.message || "registry_error" };
-      }
-      return { success: true, data: json.resData, error: null };
+      if (response.status === 422) {return { success: false, data: null, error: "invalid_tld" };}
+      if (error) {return { success: false, data: null, error: "invalid_registry_response" };}
+      const extracted = extractResData(data);
+      if (!extracted.success) {return extracted;}
+      if (!extracted.data) {return { success: false, data: null, error: "invalid_registry_response" };}
+      return { success: true, data: extracted.data, error: null };
     } catch (e) {
       console.error("RegistryBridge.check error:", e);
       return { success: false, data: null, error: "network_error" };
@@ -71,9 +174,16 @@ export class RegistryBridge {
   }
 
   static async createContact({
+    name,
+    email,
     registry,
     env,
   }: {
+    // レジストリの postalInfo.name / email に流し込む。
+    // 呼び出し側で「許可された架空ダミー氏名 (例: Taro Test)」「@example.(com|net|org) メール」に
+    // なっていることを担保しておくこと (レジストリが Swagger 制約で弾く)。
+    name: string;
+    email: string;
     registry: Registry;
     env: CloudflareBindings;
   }): Promise<Result<{ contactId: string }>> {
@@ -87,33 +197,22 @@ export class RegistryBridge {
       //   - authInfo: 1〜64文字
       // ID はドメインごとにユニークにする必要があるため crypto.randomUUID を短縮して使う
       const contactId = `C-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
-      const body = {
-        id: contactId,
-        postalInfo: {
-          name: "Taro Test",
-          addr: { street: "N/A", city: "N/A", cc: "JP" },
+      const { data, error, response } = await getClient(registry, env).POST("/api/v1/epp/contacts", {
+        body: {
+          id: contactId,
+          postalInfo: {
+            name,
+            addr: { street: "N/A", city: "N/A", cc: "JP" },
+          },
+          email,
+          authInfo: crypto.randomUUID().slice(0, 16),
         },
-        email: `${contactId.toLowerCase()}@example.com`,
-        authInfo: crypto.randomUUID().slice(0, 16),
-      };
-      const res = await fetch(`${RegistryBridge.baseUrl(registry, env)}/api/v1/epp/contacts`, {
-        method: "POST",
-        headers: RegistryBridge.authHeaders(registry, env),
-        body: JSON.stringify(body),
       });
       // 409 = コンタクトID既存（UUID衝突。極めて稀）
-      if (res.status === 409) return { success: false, data: null, error: "contact_id_conflict" };
-      // 成功は HTTP 201（Kitaqsign / Kitaqnic 共通）
-      if (res.status !== 200 && res.status !== 201) {
-        return { success: false, data: null, error: "contact_create_failed" };
-      }
-      // レスポンスは EppResponseContactResponse: resData.id にコンタクトIDが入る
-      const json = await safeParseEpp<{ id?: string }>(res);
-      if (!json) return { success: false, data: null, error: "invalid_registry_response" };
-      if (json.result.code !== 1000) {
-        return { success: false, data: null, error: "contact_create_failed" };
-      }
-      const returnedId = json.resData?.id ?? contactId;
+      if (response.status === 409) {return { success: false, data: null, error: "contact_id_conflict" };}
+      if (error) {return { success: false, data: null, error: "contact_create_failed" };}
+      if (data.result.code !== 1000) {return { success: false, data: null, error: "contact_create_failed" };}
+      const returnedId = data.resData?.id ?? contactId;
       return { success: true, data: { contactId: returnedId }, error: null };
     } catch (e) {
       console.error("RegistryBridge.createContact error:", e);
@@ -125,6 +224,7 @@ export class RegistryBridge {
     domain,
     period,
     registrant,
+    contacts,
     authInfo,
     nameservers,
     registry,
@@ -133,29 +233,33 @@ export class RegistryBridge {
     domain: string;
     period: { unit: string; value: number };
     registrant: string;
+    // ロール別コンタクト ID (admin/tech/billing)。Swagger 上 optional だが、
+    // Kitaqsign/Kitaqnic の推奨手順では ADMIN/TECH を指定する。
+    contacts?: Record<string, string>;
     authInfo: string;
     nameservers?: string[];
     registry: Registry;
     env: CloudflareBindings;
   }): Promise<Result<DomainCreateResponse>> {
     try {
-      const res = await fetch(`${RegistryBridge.baseUrl(registry, env)}/api/v1/epp/domains`, {
-        method: "POST",
-        headers: RegistryBridge.authHeaders(registry, env),
-        body: JSON.stringify({ domain, period, registrant, authInfo, ...(nameservers ? { nameservers } : {}) }),
+      const { data, error, response } = await getClient(registry, env).POST("/api/v1/epp/domains", {
+        body: {
+          domain,
+          period,
+          registrant,
+          authInfo,
+          ...(contacts ? { contacts } : {}),
+          ...(nameservers ? { nameservers } : {}),
+        },
       });
-      if (res.status === 409) { await res.body?.cancel(); return { success: false, data: null, error: "domain_exists" }; }
-      if (res.status === 422) { await res.body?.cancel(); return { success: false, data: null, error: "invalid_tld" }; }
-      if (res.status === 404) { await res.body?.cancel(); return { success: false, data: null, error: "contact_not_found" }; }
-      const json = await safeParseEpp<DomainCreateResponse>(res);
-      if (!json) return { success: false, data: null, error: "invalid_registry_response" };
-      if (json.result.code !== 1000) {
-        return { success: false, data: null, error: json.result.message || "registry_error" };
-      }
-      if (!json.resData || !json.resData.exDate) {
-        return { success: false, data: null, error: "invalid_registry_response" };
-      }
-      return { success: true, data: json.resData, error: null };
+      if (response.status === 409) {return { success: false, data: null, error: "domain_exists" };}
+      if (response.status === 422) {return { success: false, data: null, error: "invalid_tld" };}
+      if (response.status === 404) {return { success: false, data: null, error: "contact_not_found" };}
+      if (error) {return { success: false, data: null, error: "invalid_registry_response" };}
+      const extracted = extractResData(data);
+      if (!extracted.success) {return extracted;}
+      if (!extracted.data?.exDate) {return { success: false, data: null, error: "invalid_registry_response" };}
+      return { success: true, data: extracted.data, error: null };
     } catch (e) {
       console.error("RegistryBridge.create error:", e);
       return { success: false, data: null, error: "network_error" };
@@ -172,20 +276,15 @@ export class RegistryBridge {
     env: CloudflareBindings;
   }): Promise<Result<DomainResponse>> {
     try {
-      const res = await fetch(`${RegistryBridge.baseUrl(registry, env)}/api/v1/epp/domains/${encodeURIComponent(name)}`, {
-        method: "GET",
-        headers: RegistryBridge.authHeaders(registry, env),
+      const { data, error, response } = await getClient(registry, env).GET("/api/v1/epp/domains/{name}", {
+        params: { path: { name } },
       });
-      if (res.status === 404) { await res.body?.cancel(); return { success: false, data: null, error: "domain_not_found" }; }
-      const json = await safeParseEpp<DomainResponse>(res);
-      if (!json) return { success: false, data: null, error: "invalid_registry_response" };
-      if (json.result.code !== 1000) {
-        return { success: false, data: null, error: json.result.message || "registry_error" };
-      }
-      if (!json.resData) {
-        return { success: false, data: null, error: "invalid_registry_response" };
-      }
-      return { success: true, data: json.resData, error: null };
+      if (response.status === 404) {return { success: false, data: null, error: "domain_not_found" };}
+      if (error) {return { success: false, data: null, error: "invalid_registry_response" };}
+      const extracted = extractResData(data);
+      if (!extracted.success) {return extracted;}
+      if (!extracted.data?.exDate) {return { success: false, data: null, error: "invalid_registry_response" };}
+      return { success: true, data: { ...extracted.data, exDate: extracted.data.exDate }, error: null };
     } catch (e) {
       console.error("RegistryBridge.info error:", e);
       return { success: false, data: null, error: "network_error" };
@@ -206,22 +305,17 @@ export class RegistryBridge {
     env: CloudflareBindings;
   }): Promise<Result<DomainRenewResponse>> {
     try {
-      const res = await fetch(`${RegistryBridge.baseUrl(registry, env)}/api/v1/epp/domains/${encodeURIComponent(name)}/renew`, {
-        method: "POST",
-        headers: RegistryBridge.authHeaders(registry, env),
-        body: JSON.stringify({ curExpDate, period }),
+      const { data, error, response } = await getClient(registry, env).POST("/api/v1/epp/domains/{name}/renew", {
+        params: { path: { name } },
+        body: { curExpDate, period },
       });
-      if (res.status === 404) { await res.body?.cancel(); return { success: false, data: null, error: "domain_not_found" }; }
-      if (res.status === 400) { await res.body?.cancel(); return { success: false, data: null, error: "invalid_period" }; }
-      const json = await safeParseEpp<DomainRenewResponse>(res);
-      if (!json) return { success: false, data: null, error: "invalid_registry_response" };
-      if (json.result.code !== 1000) {
-        return { success: false, data: null, error: json.result.message || "registry_error" };
-      }
-      if (!json.resData || !json.resData.exDate) {
-        return { success: false, data: null, error: "invalid_registry_response" };
-      }
-      return { success: true, data: json.resData, error: null };
+      if (response.status === 404) {return { success: false, data: null, error: "domain_not_found" };}
+      if (response.status === 400) {return { success: false, data: null, error: "invalid_period" };}
+      if (error) {return { success: false, data: null, error: "invalid_registry_response" };}
+      const extracted = extractResData(data);
+      if (!extracted.success) {return extracted;}
+      if (!extracted.data?.exDate) {return { success: false, data: null, error: "invalid_registry_response" };}
+      return { success: true, data: extracted.data, error: null };
     } catch (e) {
       console.error("RegistryBridge.renew error:", e);
       return { success: false, data: null, error: "network_error" };
@@ -251,26 +345,34 @@ export class RegistryBridge {
       if (chg?.authInfo && !chg.registrant) {
         const infoResult = await RegistryBridge.info({ name, registry, env });
         if (!infoResult.success) return infoResult;
+        if (!infoResult.data.registrant) {
+          return { success: false, data: null, error: "invalid_registry_response" };
+        }
         effectiveChg = { ...chg, registrant: infoResult.data.registrant };
       }
 
-      const res = await fetch(`${RegistryBridge.baseUrl(registry, env)}/api/v1/epp/domains/${encodeURIComponent(name)}`, {
-        method: "PUT",
-        headers: RegistryBridge.authHeaders(registry, env),
-        body: JSON.stringify({ ...(add ? { add } : {}), ...(rem ? { rem } : {}), ...(effectiveChg ? { chg: effectiveChg } : {}) }),
+      // 生成型の DomainChangeSet.statuses は @enum {array} 指定なのに単一 union として出力される
+      // openapi-typescript のバグ相当のため、動的な string[] を通せるように body の型付けだけ緩める。
+      // JSON 化する実行時挙動には影響しない。
+      const body = {
+        ...(add ? { add } : {}),
+        ...(rem ? { rem } : {}),
+        ...(effectiveChg ? { chg: effectiveChg } : {}),
+      };
+      const { data, error, response } = await getClient(registry, env).PUT("/api/v1/epp/domains/{name}", {
+        params: { path: { name } },
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
+        body: body as never,
       });
-      // update レスポンスは EppResponseDomainResponse（Kitaqsign）または EppResponseUnit（Kitaqnic）。
-      // どちらも result.code で成否を判定できるため、HTTP ステータスだけで判定しない。
-      const json = await safeParseEpp<Partial<DomainResponse>>(res);
-      if (!json) {
-        if (res.status === 404) return { success: false, data: null, error: "domain_not_found" };
-        return { success: false, data: null, error: "invalid_registry_response" };
-      }
-      if (json.result.code === 2303) {
+      if (response.status === 404) {return { success: false, data: null, error: "domain_not_found" };}
+      if (error) {return { success: false, data: null, error: "invalid_registry_response" };}
+      if (data.result.code === 2303) {
         // "Object does not exist" はドメイン自体だけでなく、add/rem で指定した
         // ネームサーバーやコンタクトが未登録の場合にも同じコードで返ってくる。
         // reason にドメイン名が含まれるかで区別する（含まれなければ参照先オブジェクトの不在）。
-        const reason = json.result.reason ?? "";
+        // reason は Swagger の Result スキーマに定義が無い未ドキュメント化フィールドのため、
+        // 盲目キャストせず readResultReason で存在確認したうえで読む。
+        const reason = readResultReason(data.result);
         const isDomainItself = !reason || reason.includes(name);
         return {
           success: false,
@@ -278,11 +380,10 @@ export class RegistryBridge {
           error: isDomainItself ? "domain_not_found" : "referenced_object_not_found",
         };
       }
-      if (json.result.code !== 1000) {
-        return { success: false, data: null, error: json.result.message || "registry_error" };
-      }
-      // Kitaqnic は resData を返さない（Unit）。ドメインの最新状態は呼び出し側が info で取得する。
-      return { success: true, data: json.resData ?? {}, error: null };
+      const extracted = extractResData(data);
+      if (!extracted.success) {return extracted;}
+      // Kitaqnic は update 成功時に resData を返さない（Unit）。呼び出し側は info で最新状態を取り直すこと。
+      return { success: true, data: extracted.data ?? {}, error: null };
     } catch (e) {
       console.error("RegistryBridge.update error:", e);
       return { success: false, data: null, error: "network_error" };
@@ -299,18 +400,18 @@ export class RegistryBridge {
     env: CloudflareBindings;
   }): Promise<Result<EmptyResData>> {
     try {
-      const res = await fetch(`${RegistryBridge.baseUrl(registry, env)}/api/v1/epp/domains/${encodeURIComponent(name)}`, {
-        method: "DELETE",
-        headers: RegistryBridge.authHeaders(registry, env),
+      const { data, error, response } = await getClient(registry, env).DELETE("/api/v1/epp/domains/{name}", {
+        params: { path: { name } },
       });
-      if (res.status === 404) { await res.body?.cancel(); return { success: false, data: null, error: "domain_not_found" }; }
-      const json = await safeParseEpp<EmptyResData>(res);
-      if (!json) return { success: false, data: null, error: "invalid_registry_response" };
-      if (json.result.code === 2304) return { success: false, data: null, error: "operation_prohibited" };
-      if (json.result.code !== 1000) {
-        return { success: false, data: null, error: json.result.message || "registry_error" };
+      if (response.status === 404) {return { success: false, data: null, error: "domain_not_found" };}
+      // すでに pendingDelete のドメインを再度廃止しようとした場合など
+      if (isOperationProhibited(response, error ?? data)) {
+        return { success: false, data: null, error: "operation_prohibited" };
       }
-      return { success: true, data: json.resData ?? {} as EmptyResData, error: null };
+      if (error) {return { success: false, data: null, error: "invalid_registry_response" };}
+      const extracted = extractResData(data);
+      if (!extracted.success) {return extracted;}
+      return { success: true, data: {}, error: null };
     } catch (e) {
       console.error("RegistryBridge.delete error:", e);
       return { success: false, data: null, error: "network_error" };
@@ -327,19 +428,19 @@ export class RegistryBridge {
     env: CloudflareBindings;
   }): Promise<Result<EmptyResData>> {
     try {
-      const res = await fetch(`${RegistryBridge.baseUrl(registry, env)}/api/v1/epp/domains/${encodeURIComponent(name)}/restore`, {
-        method: "POST",
-        headers: RegistryBridge.authHeaders(registry, env),
+      const { data, error, response } = await getClient(registry, env).POST("/api/v1/epp/domains/{name}/restore", {
+        params: { path: { name } },
       });
-      if (res.status === 403) { await res.body?.cancel(); return { success: false, data: null, error: "forbidden" }; }
-      if (res.status === 404) { await res.body?.cancel(); return { success: false, data: null, error: "domain_not_found" }; }
-      const json = await safeParseEpp<EmptyResData>(res);
-      if (!json) return { success: false, data: null, error: "invalid_registry_response" };
-      if (json.result.code === 2304) return { success: false, data: null, error: "operation_prohibited" };
-      if (json.result.code !== 1000) {
-        return { success: false, data: null, error: json.result.message || "registry_error" };
+      if (response.status === 403) {return { success: false, data: null, error: "forbidden" };}
+      if (response.status === 404) {return { success: false, data: null, error: "domain_not_found" };}
+      // pendingDelete でないドメインを復旧しようとした場合など
+      if (isOperationProhibited(response, error ?? data)) {
+        return { success: false, data: null, error: "operation_prohibited" };
       }
-      return { success: true, data: json.resData ?? {} as EmptyResData, error: null };
+      if (error) {return { success: false, data: null, error: "invalid_registry_response" };}
+      const extracted = extractResData(data);
+      if (!extracted.success) {return extracted;}
+      return { success: true, data: {}, error: null };
     } catch (e) {
       console.error("RegistryBridge.restore error:", e);
       return { success: false, data: null, error: "network_error" };
@@ -356,28 +457,23 @@ export class RegistryBridge {
     authInfo: string;
     registry: Registry;
     env: CloudflareBindings;
-  }): Promise<Result<DomainTransferResponse>> {
+  }): Promise<Result<DomainTransferResponse | undefined>> {
     try {
-      const res = await fetch(`${RegistryBridge.baseUrl(registry, env)}/api/v1/epp/domains/${encodeURIComponent(name)}/transfer/request`, {
-        method: "POST",
-        headers: RegistryBridge.authHeaders(registry, env),
-        body: JSON.stringify({ op: "request", authInfo }),
-      });
+      const { data, error, response } = await getClient(registry, env).POST(
+        "/api/v1/epp/domains/{name}/transfer/request",
+        { params: { path: { name } }, body: { op: "request", authInfo } },
+      );
       // Kitaqnic: authInfo不一致は HTTP 401
-      if (res.status === 401) { await res.body?.cancel(); return { success: false, data: null, error: "authInfo_mismatch" }; }
-      if (res.status === 404) { await res.body?.cancel(); return { success: false, data: null, error: "domain_not_found" }; }
-      const json = await safeParseEpp<DomainTransferResponse>(res);
-      if (!json) return { success: false, data: null, error: "invalid_registry_response" };
+      if (response.status === 401) {return { success: false, data: null, error: "authInfo_mismatch" };}
+      if (response.status === 404) {return { success: false, data: null, error: "domain_not_found" };}
+      if (error) {return { success: false, data: null, error: "invalid_registry_response" };}
       // Kitaqsign: authInfo不一致は result.code 2202
-      if (json.result.code === 2202) return { success: false, data: null, error: "authInfo_mismatch" };
+      if (data.result.code === 2202) {return { success: false, data: null, error: "authInfo_mismatch" };}
       // 成功: 1000（同期完了）または 1001（非同期受付）
-      if (json.result.code !== 1000 && json.result.code !== 1001) {
-        return { success: false, data: null, error: json.result.message || "registry_error" };
-      }
-      if (!json.resData) {
-        return { success: false, data: null, error: "invalid_registry_response" };
-      }
-      return { success: true, data: json.resData, error: null };
+      // B5: Swagger 上 resData? は optional。空の resData でも result.code が成功値なら受付として扱う。
+      const extracted = extractResData(data, [1000, 1001]);
+      if (!extracted.success) {return extracted;}
+      return { success: true, data: extracted.data, error: null };
     } catch (e) {
       console.error("RegistryBridge.transferRequest error:", e);
       return { success: false, data: null, error: "network_error" };
@@ -394,25 +490,32 @@ export class RegistryBridge {
     action: "approve" | "reject" | "cancel";
     registry: Registry;
     env: CloudflareBindings;
-  }): Promise<Result<DomainTransferResponse>> {
+  }): Promise<Result<DomainTransferResponse | undefined>> {
     try {
-      const res = await fetch(
-        `${RegistryBridge.baseUrl(registry, env)}/api/v1/epp/domains/${encodeURIComponent(name)}/transfer/${action}`,
-        {
-          method: "POST",
-          headers: RegistryBridge.authHeaders(registry, env),
-        },
-      );
-      if (res.status === 403) { await res.body?.cancel(); return { success: false, data: null, error: "forbidden" }; }
-      if (res.status === 409) { await res.body?.cancel(); return { success: false, data: null, error: "transfer_not_found" }; }
-      const json = await safeParseEpp<DomainTransferResponse>(res);
-      if (!json) return { success: false, data: null, error: "invalid_registry_response" };
-      if (json.result.code !== 1000) {
-        return { success: false, data: null, error: json.result.message || "registry_error" };
-      }
-      // Swagger 上 DomainTransferResponse を返すが、レジストリ実装によっては空の可能性もある
-      // resData が無くても操作自体は成功なので、空オブジェクトで代替
-      return { success: true, data: json.resData ?? ({} as DomainTransferResponse), error: null };
+      const client = getClient(registry, env);
+      // 3 種類のエンドポイントは path 以外シグネチャが同じ。openapi-fetch は path をリテラル型で管理するので分岐する。
+      const { data, error, response } =
+        action === "approve"
+          ? await client.POST("/api/v1/epp/domains/{name}/transfer/approve", { params: { path: { name } } })
+          : action === "reject"
+          ? await client.POST("/api/v1/epp/domains/{name}/transfer/reject", { params: { path: { name } } })
+          : await client.POST("/api/v1/epp/domains/{name}/transfer/cancel", { params: { path: { name } } });
+      // R5: approve/reject/cancel は authInfo を送らないので、401 は authInfo 不一致ではなく
+      // 「レジストリ認証失敗 = 権限不備」として forbidden にマップする。
+      if (response.status === 401) {return { success: false, data: null, error: "forbidden" };}
+      if (response.status === 403) {return { success: false, data: null, error: "forbidden" };}
+      if (response.status === 404) {return { success: false, data: null, error: "transfer_not_found" };}
+      if (response.status === 409) {return { success: false, data: null, error: "transfer_not_found" };}
+      if (error) {return { success: false, data: null, error: "invalid_registry_response" };}
+      // B8: レジストリ実装によっては HTTP 200 でも result.code に失敗コード (例: 2303 "object does not exist")
+      // を返すことがある。extractResData で 1000 のみを success とする既存契約を維持し、
+      // 2303 のような "存在しない対象" は transfer_not_found にマッピングする。
+      if (data.result.code === 2303) {return { success: false, data: null, error: "transfer_not_found" };}
+      const extracted = extractResData(data);
+      if (!extracted.success) {return extracted;}
+      // Swagger 上 DomainTransferResponse を返すが、レジストリ実装によっては空の可能性もある。
+      // 呼び出し側は data を参照しないので、resData が無ければ undefined のまま返す。
+      return { success: true, data: extracted.data, error: null };
     } catch (e) {
       console.error(`RegistryBridge.transfer${action} error:`, e);
       return { success: false, data: null, error: "network_error" };
@@ -433,6 +536,7 @@ export class RegistryBridge {
 
   // Poll のみ（ack は呼ばない）。DB 更新に成功してから ack することで、
   // DB 更新失敗時にレジストリ側メッセージが失われるのを防ぐ。
+  // Kitaqsign と Kitaqnic でエンドポイントが異なる（Kitaqsign: GET /messages/poll, Kitaqnic: GET /messages）。
   static async poll({
     registry,
     env,
@@ -441,23 +545,32 @@ export class RegistryBridge {
     env: CloudflareBindings;
   }): Promise<Result<PollMessage | null>> {
     try {
-      const pollRes = await fetch(`${RegistryBridge.baseUrl(registry, env)}/api/v1/epp/messages/poll`, {
-        method: "GET",
-        headers: RegistryBridge.authHeaders(registry, env),
-      });
+      const { data, response } =
+        registry === "kitaqsign"
+          ? await getClient("kitaqsign", env).GET("/api/v1/epp/messages/poll")
+          : await getKitaqnicClient(env).GET("/api/v1/epp/messages");
 
-      if (pollRes.status === 204) return { success: true, data: null, error: null };
+      if (response.status === 204 || !data) {return { success: true, data: null, error: null };}
 
-      const json = await safeParseEpp<{ count: number; message?: PollMessage }>(pollRes);
-      if (!json) return { success: false, data: null, error: "invalid_registry_response" };
-
-      if (json.result.code !== 1000) {
-        return { success: false, data: null, error: json.result.message || "poll_failed" };
+      if (data.result.code !== 1000) {
+        // S-6: レジストリ生 message はユーザー応答に載せず、normalized code に固定。
+        // 詳細は console.error でログに残す。
+        console.error(
+          `RegistryBridge.poll: non-success code=${data.result.code}, message="${data.result.message}"`,
+        );
+        return { success: false, data: null, error: "poll_failed" };
       }
 
-      const message = json.resData?.message;
+      const message = data.resData?.message;
       if (!message || typeof message.id !== "number") {
         return { success: true, data: null, error: null };
+      }
+
+      // B9: id は int64 だが JS number は 2^53-1 までしか安全に扱えない。
+      // 精度が落ちた場合は ack が失敗する可能性があるので、明示的にエラーで返して監視できるようにする。
+      if (!Number.isSafeInteger(message.id)) {
+        console.error(`RegistryBridge.poll: message id=${message.id} is outside safe integer range`);
+        return { success: false, data: null, error: "invalid_registry_response" };
       }
 
       return { success: true, data: message, error: null };
@@ -468,6 +581,7 @@ export class RegistryBridge {
   }
 
   // メッセージを ack（消し込み）
+  // Kitaqsign: POST /messages/{id}/ack, Kitaqnic: DELETE /messages/{id}
   static async ackMessage({
     messageId,
     registry,
@@ -478,17 +592,16 @@ export class RegistryBridge {
     env: CloudflareBindings;
   }): Promise<Result<void>> {
     try {
-      const ackRes = await fetch(`${RegistryBridge.baseUrl(registry, env)}/api/v1/epp/messages/${messageId}/ack`, {
-        method: "POST",
-        headers: RegistryBridge.authHeaders(registry, env),
-      });
-      if (!ackRes.ok) {
-        return { success: false, data: null, error: "ack_failed" };
-      }
-      const ackJson = await safeParseEpp<EmptyResData>(ackRes);
-      if (!ackJson || ackJson.result.code !== 1000) {
-        return { success: false, data: null, error: "ack_failed" };
-      }
+      const { data, error, response } =
+        registry === "kitaqsign"
+          ? await getClient("kitaqsign", env).POST("/api/v1/epp/messages/{id}/ack", {
+              params: { path: { id: messageId } },
+            })
+          : await getKitaqnicClient(env).DELETE("/api/v1/epp/messages/{id}", {
+              params: { path: { id: messageId } },
+            });
+      if (!response.ok || error) {return { success: false, data: null, error: "ack_failed" };}
+      if (data.result.code !== 1000) {return { success: false, data: null, error: "ack_failed" };}
       return { success: true, data: undefined, error: null };
     } catch (e) {
       console.error("RegistryBridge.ackMessage error:", e);

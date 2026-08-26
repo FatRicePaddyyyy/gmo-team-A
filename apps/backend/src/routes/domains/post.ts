@@ -1,7 +1,7 @@
-import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
+import { createRoute, z } from "@hono/zod-openapi";
 import { toUserMessage } from "../../lib/error-messages";
+import { createOpenAPIHono } from "../../lib/openapi-hono";
 import { detectRegistry } from "../../lib/registry-policy";
-import type { Variables } from "../../types";
 import { DomainService } from "./service";
 
 // Issue #25: registry は省略可能。省略時は TLD から自動判定する。
@@ -54,7 +54,7 @@ const route = createRoute({
   },
 });
 
-const app = new OpenAPIHono<{ Bindings: CloudflareBindings; Variables: Variables }>();
+const app = createOpenAPIHono();
 
 export const createDomainRouteHandler = app.openapi(route, async (ctx) => {
   const payload = ctx.req.valid("json");
@@ -68,7 +68,7 @@ export const createDomainRouteHandler = app.openapi(route, async (ctx) => {
     if (result.error === "domain_exists") {
       return ctx.json({ success: false as const, data: null, error: toUserMessage(result.error) }, 409);
     }
-    if (result.error === "invalid_tld") {
+    if (result.error === "invalid_tld" || result.error === "unsupported_tld") {
       return ctx.json({ success: false as const, data: null, error: toUserMessage(result.error) }, 422);
     }
     return ctx.json({ success: false as const, data: null, error: toUserMessage(result.error) }, 500);

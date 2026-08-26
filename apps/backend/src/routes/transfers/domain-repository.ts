@@ -1,5 +1,6 @@
 import { eq } from "drizzle-orm";
 import { createDBClient } from "../../lib/db";
+import { classifyDbError } from "../../lib/db-error";
 import { domains } from "../../lib/schema/general-schema";
 import type { Result } from "../../types/result";
 
@@ -21,7 +22,7 @@ export class TransferDomainRepository {
       return { success: true, data: rows[0] ?? null, error: null };
     } catch (error) {
       console.error("TransferDomainRepository.findById error:", error);
-      return { success: false, data: null, error: error instanceof Error ? error.message : "予期しないエラー" };
+      return { success: false, data: null, error: classifyDbError(error) };
     }
   }
 
@@ -38,7 +39,7 @@ export class TransferDomainRepository {
       return { success: true, data: rows[0] ?? null, error: null };
     } catch (error) {
       console.error("TransferDomainRepository.findByName error:", error);
-      return { success: false, data: null, error: error instanceof Error ? error.message : "予期しないエラー" };
+      return { success: false, data: null, error: classifyDbError(error) };
     }
   }
 
@@ -57,7 +58,7 @@ export class TransferDomainRepository {
       return { success: true, data: undefined, error: null };
     } catch (error) {
       console.error("TransferDomainRepository.updateStatus error:", error);
-      return { success: false, data: null, error: error instanceof Error ? error.message : "予期しないエラー" };
+      return { success: false, data: null, error: classifyDbError(error) };
     }
   }
 }

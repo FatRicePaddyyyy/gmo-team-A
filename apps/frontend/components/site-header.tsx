@@ -2,20 +2,23 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { Menu, X, Search } from "lucide-react";
+import { Menu, X, ShoppingCart } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useCart } from "@/shared/hooks/use-cart.hook";
 
+/**
+ * 実在するページだけをナビに載せる。
+ * 行き止まり（404）を作らないため、未実装の項目はナビに置かない。
+ */
 const navItems = [
-  { label: "ドメイン取得", href: "/domain" },
-  { label: "ドメイン移管", href: "/transfer" },
-  { label: "ドメイン更新", href: "/renewal" },
-  { label: "レンタルサーバー", href: "/server" },
-  { label: "メール", href: "/mail" },
-  { label: "サポート", href: "/support" },
+  { label: "ドメインを探す", href: "/search" },
+  { label: "ドメインを学ぶ", href: "/learn" },
+  { label: "マイドメイン", href: "/dashboard" },
 ];
 
 export function SiteHeader() {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const { count } = useCart();
 
   return (
     <header className="sticky top-0 z-50 w-full border-b border-border bg-white shadow-sm">
@@ -26,7 +29,7 @@ export function SiteHeader() {
             className="rounded px-2 py-0.5 text-lg font-bold text-white"
             style={{ background: "var(--brand)" }}
           >
-            お名前.com
+            まなびドメイン
           </span>
         </Link>
 
@@ -45,12 +48,27 @@ export function SiteHeader() {
 
         {/* Actions */}
         <div className="flex items-center gap-2">
-          <Button variant="ghost" size="icon" aria-label="検索">
-            <Search className="size-4" />
-          </Button>
+          {/* カートは主要導線なのでモバイルでもヘッダーに残す */}
+          <Link
+            href="/cart"
+            className="relative inline-flex h-11 min-w-11 items-center justify-center rounded-lg px-3 text-gray-700 transition-colors hover:bg-red-50 hover:text-[var(--brand)]"
+          >
+            <ShoppingCart className="size-5" aria-hidden="true" />
+            <span className="sr-only">カートを見る（{count}件）</span>
+            {count > 0 && (
+              <span
+                aria-hidden="true"
+                className="absolute right-1 top-1 flex size-4 items-center justify-center rounded-full text-[10px] font-bold text-white"
+                style={{ background: "var(--brand)" }}
+              >
+                {count}
+              </span>
+            )}
+          </Link>
           <Button
-            className="hidden text-white sm:inline-flex"
+            className="h-11 text-white"
             style={{ background: "var(--brand)" }}
+            nativeButton={false}
             render={<Link href="/login" />}
           >
             ログイン
@@ -58,8 +76,9 @@ export function SiteHeader() {
           <Button
             variant="ghost"
             size="icon"
-            className="md:hidden"
-            aria-label="メニュー"
+            className="size-11 md:hidden"
+            aria-label={mobileOpen ? "メニューを閉じる" : "メニューを開く"}
+            aria-expanded={mobileOpen}
             onClick={() => setMobileOpen((v) => !v)}
           >
             {mobileOpen ? <X className="size-5" /> : <Menu className="size-5" />}
@@ -80,15 +99,6 @@ export function SiteHeader() {
               {item.label}
             </Link>
           ))}
-          <div className="border-t border-border p-4">
-            <Button
-              className="w-full text-white"
-              style={{ background: "var(--brand)" }}
-              render={<Link href="/login" />}
-            >
-              ログイン
-            </Button>
-          </div>
         </nav>
       )}
     </header>

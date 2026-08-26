@@ -1,5 +1,5 @@
-import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
-import type { Variables } from "../../types";
+import { createRoute, z } from "@hono/zod-openapi";
+import { createOpenAPIHono } from "../../lib/openapi-hono";
 import { ProductRepository } from "./repository";
 
 const DeleteCategoryParamsSchema = z
@@ -47,14 +47,6 @@ const deleteCategoryRouteSchema = createRoute({
       },
       description: "カテゴリの削除に成功しました",
     },
-    404: {
-      content: {
-        "application/json": {
-          schema: DeleteProductErrorResponseSchema,
-        },
-      },
-      description: "削除対象のカテゴリが見つかりません",
-    },
     500: {
       content: {
         "application/json": {
@@ -66,10 +58,7 @@ const deleteCategoryRouteSchema = createRoute({
   },
 });
 
-const app = new OpenAPIHono<{
-  Bindings: CloudflareBindings;
-  Variables: Variables;
-}>();
+const app = createOpenAPIHono();
 
 export const deleteCategoryRouteHandler = app.openapi(
   deleteCategoryRouteSchema,

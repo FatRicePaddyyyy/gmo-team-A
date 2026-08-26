@@ -1,23 +1,12 @@
 import type { DomainResult } from "@/components/domain-search-result";
-
-/**
- * 検索候補として引くTLDと価格。
- * バックエンドの検索APIが入ったら、価格はAPIレスポンス側に持たせる。
- */
-const CANDIDATE_TLDS: Array<{
-  tld: string;
-  newPrice: string;
-  renewalPrice: string;
-  popular?: boolean;
-  sale?: boolean;
-}> = [
-  { tld: ".com", newPrice: "0円", renewalPrice: "1,408円", popular: true, sale: true },
-  { tld: ".net", newPrice: "0円", renewalPrice: "1,628円", popular: true, sale: true },
-  { tld: ".jp", newPrice: "0円", renewalPrice: "3,124円", popular: true },
-  { tld: ".co.jp", newPrice: "2,970円", renewalPrice: "2,970円" },
-  { tld: ".xyz", newPrice: "0円", renewalPrice: "2,013円", sale: true },
-  { tld: ".org", newPrice: "1,628円", renewalPrice: "1,628円" },
-];
+import {
+  TLD_CATALOG,
+  formatYen,
+  renewalWarningOf,
+  stripKnownTld,
+  twoYearTotalOf,
+  type TldInfo,
+} from "@/shared/lib/tld-catalog";
 
 /** 同じクエリなら毎回同じ空き状況を返すための簡易ハッシュ */
 function hashString(value: string): number {
@@ -29,39 +18,30 @@ function hashString(value: string): number {
   return Math.abs(hash);
 }
 
-function mockSearchDomains(query: string): DomainResult[] {
-  const seed = hashString(query.toLowerCase());
-  return CANDIDATE_TLDS.map((candidate, index) => {
-    const available = (seed + index) % 5 !== 0;
-    return {
-      tld: candidate.tld,
-      name: query,
-      available,
-      price: available ? candidate.newPrice : candidate.renewalPrice,
-      renewalPrice: available ? candidate.renewalPrice : undefined,
-      popular: candidate.popular,
-      sale: available ? candidate.sale : undefined,
-    };
-  });
+/** TLD辞書の1件を、検索結果1行の表示データに変換する */
+function toDomainResult(info: TldInfo, name: string, available: boolean): DomainResult {
+  return {
+    tld: info.tld,
+    name,
+    available,
+    price: formatYen(info.firstYearPrice),
+    renewalPrice: formatYen(info.renewalPrice),
+    popular: info.popular,
+    summary: info.summary,
+    detail: info.detail,
+    eligibility: info.eligibility,
+    restricted: info.restricted,
+    renewalWarning: renewalWarningOf(info),
+    twoYearTotal: twoYearTotalOf(info),
+    limitedOffer: info.limitedOffer,
+  };
 }
 
-/**
- * 検索語の末尾に TLD が付いていたら取り除く。
- * 「onamae.co.jp」で検索したときに「onamae.co.jp.com」のような候補が出るのを防ぐ。
- * 長い TLD から先に判定する（.co.jp を .jp より先に消す）。
- */
-const KNOWN_TLDS = CANDIDATE_TLDS.map((candidate) => candidate.tld).sort(
-  (a, b) => b.length - a.length,
-);
-
-function stripKnownTld(value: string): string {
-  const lower = value.toLowerCase();
-  for (const tld of KNOWN_TLDS) {
-    if (lower.endsWith(tld) && lower.length > tld.length) {
-      return value.slice(0, -tld.length);
-    }
-  }
-  return value;
+function mockSearchDomains(query: string): DomainResult[] {
+  const seed = hashString(query.toLowerCase());
+  return TLD_CATALOG.map((info, index) =>
+    toDomainResult(info, query, (seed + index) % 5 !== 0),
+  );
 }
 
 /**

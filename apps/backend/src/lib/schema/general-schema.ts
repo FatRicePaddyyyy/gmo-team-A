@@ -1,5 +1,5 @@
 import { relations, sql } from "drizzle-orm";
-import { sqliteTable, text, integer, index } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, index, uniqueIndex } from "drizzle-orm/sqlite-core";
 import { user } from "./auth-schema";
 
 // 親：カテゴリ（id, name のみ）
@@ -63,7 +63,13 @@ export const transfers = sqliteTable("transfers", {
   // restrict: pendingTransfer 中のドメインは削除不可（cascade だと Queue consumer が参照できなくなる）
   registry: text("registry", { enum: ["kitaqsign", "kitaqnic"] }).notNull(),
   status: text("status").notNull().default("pendingTransfer"),
-  // pendingTransfer / clientApproved / clientRejected / clientCancelled / serverApproved
+  // 取り得る値:
+  //   - pendingTransfer: 申請直後・poll 待ち
+  //   - clientApproved:  losing 側が承認 (approve エンドポイント経由)
+  //   - clientRejected:  losing 側が拒否 (reject エンドポイント経由)
+  //   - clientCancelled: gaining 側が取消 (cancel エンドポイント経由)
+  //   - serverApproved:  レジストリが自動承認
+  //   - expired:         poll 試行が上限超過して backend が諦めた (NB-10 対応)
   gainingUserId: text("gaining_user_id").notNull()
     .references(() => user.id),
   // losingUserId は持たない。domains.ownerUserId が losing 相当
@@ -73,6 +79,11 @@ export const transfers = sqliteTable("transfers", {
 }, (table) => [
   index("transfers_domain_id_idx").on(table.domainId),
   index("transfers_gaining_user_id_idx").on(table.gainingUserId),
+  // 同一ドメインに対して pendingTransfer が同時に 2 つ以上存在しないよう部分 UNIQUE 制約を張る。
+  // SQLite の partial index で status='pendingTransfer' の行だけを対象にする。
+  uniqueIndex("transfers_pending_domain_unique_idx")
+    .on(table.domainId)
+    .where(sql`${table.status} = 'pendingTransfer'`),
 ]);
 
 export const domainsRelations = relations(domains, ({ one, many }) => ({

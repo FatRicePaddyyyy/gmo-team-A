@@ -91,7 +91,8 @@ test.describe("/sample — コンポーネントカタログ", () => {
     // stepper は nav 内にある
     const stepper = page.getByRole("navigation", { name: "申込みステップ" });
     await expect(stepper).toBeVisible();
-    await expect(stepper.getByText("お申込み内容の確認")).toBeVisible();
+    // 既定のステップは shared/lib/progress-store.ts の FLOW_STEPS が唯一の定義
+    await expect(stepper.getByText("内容を確認", { exact: true }).first()).toBeVisible();
   });
 
   test("OptionSection が表示される", async ({ page }) => {

@@ -1,5 +1,5 @@
-import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
-import type { Variables } from "../../types";
+import { createRoute, z } from "@hono/zod-openapi";
+import { createOpenAPIHono } from "../../lib/openapi-hono";
 
 const HelloRequestSchema = z
   .object({
@@ -60,10 +60,7 @@ const echoRouteSchema = createRoute({
   },
 });
 
-const app = new OpenAPIHono<{
-  Bindings: CloudflareBindings;
-  Variables: Variables;
-}>();
+const app = createOpenAPIHono();
 
 export const helloRouteHandler = app.openapi(echoRouteSchema, (ctx) => {
   try {

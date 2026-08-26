@@ -1,22 +1,13 @@
 /// <reference types="../../../worker-configuration" />
 import { beforeEach, describe, expect, test, vi } from "vitest";
-import { requestTransferRouteHandler } from "./post";
-import { cancelTransferRouteHandler } from "./[transfer-id]/cancel/post";
 import { approveTransferRouteHandler } from "../domains/[domain-id]/transfer/approve/post";
 import { rejectTransferRouteHandler } from "../domains/[domain-id]/transfer/reject/post";
 import { DomainService } from "../domains/service";
+import { cancelTransferRouteHandler } from "./[transfer-id]/cancel/post";
+import { requestTransferRouteHandler } from "./post";
 import { TransferService } from "./service";
 
 const mockEnv = {} as CloudflareBindings;
-
-const mockTransfer = {
-  id: "tr-001",
-  domainId: "dom-001",
-  registry: "kitaqsign",
-  status: "pendingTransfer",
-  gainingUserId: "user-002",
-  createdAt: "2026-08-25T00:00:00.000Z",
-};
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -54,7 +45,7 @@ describe("POST /api/v1/secure/transfers（移管申請フロー）", () => {
     );
 
     expect(res.status).toBe(202);
-    const json = await res.json();
+    const json = await res.json() as any;
     expect(json).toMatchObject({
       success: true,
       data: { status: "pendingTransfer" },
@@ -163,7 +154,7 @@ describe("POST /api/v1/secure/domains/{domain-id}/transfer/approve（移管承�
     );
 
     expect(res.status).toBe(200);
-    const json = await res.json();
+    const json = await res.json() as any;
     expect(json).toMatchObject({ success: true });
   });
 
@@ -340,7 +331,7 @@ describe("移管フロー統合テスト（check → create → transfer request
       mockEnv,
     );
     expect(requestRes.status).toBe(202);
-    const requestJson = await requestRes.json() as { data: { status: string } };
+    const requestJson = await requestRes.json() as any;
     expect(requestJson.data.status).toBe("pendingTransfer");
 
     // 2. losing: 移管承認（DB更新はQueue consumerが担当）
