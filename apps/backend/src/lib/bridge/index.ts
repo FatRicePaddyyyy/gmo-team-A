@@ -61,6 +61,17 @@ function isObject(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null;
 }
 
+// result.reason（EPP result.code 2303 "Object does not exist" のとき、何が存在しないかを
+// 自由文字列で載せてくる未ドキュメント化フィールド）を安全に取り出す。
+// Swagger の Result スキーマには reason が定義されていないため、生成型に無いフィールドを
+// 盲目にキャストせず、`in` で存在を確かめながら読む。
+// update で「不在なのはドメイン本体か、指定した NS/コンタクトか」を区別するために使う。
+function readResultReason(result: unknown): string | undefined {
+  if (typeof result !== "object" || result === null || !("reason" in result)) {return undefined;}
+  const reason = result.reason;
+  return typeof reason === "string" ? reason : undefined;
+}
+
 function normalizeGreeting(
   registry: Registry,
   resData: unknown,
@@ -352,15 +363,28 @@ export class RegistryBridge {
     chg?: { registrant?: string; authInfo?: string };
     registry: Registry;
     env: CloudflareBindings;
-  }): Promise<Result<DomainResponse>> {
+  }): Promise<Result<Partial<DomainResponse>>> {
     try {
+      // レジストリ実装は Swagger 上 registrant/authInfo とも任意にもかかわらず、
+      // chg を送る際は registrant を必須で要求してくる（authInfo だけの変更が 2003 で拒否される）。
+      // authInfo だけの変更を通すため、指定が無ければ現在の registrant を info で補って送る。
+      let effectiveChg = chg;
+      if (chg?.authInfo && !chg.registrant) {
+        const infoResult = await RegistryBridge.info({ name, registry, env });
+        if (!infoResult.success) return infoResult;
+        if (!infoResult.data.registrant) {
+          return { success: false, data: null, error: "invalid_registry_response" };
+        }
+        effectiveChg = { ...chg, registrant: infoResult.data.registrant };
+      }
+
       // 生成型の DomainChangeSet.statuses は @enum {array} 指定なのに単一 union として出力される
       // openapi-typescript のバグ相当のため、動的な string[] を通せるように body の型付けだけ緩める。
       // JSON 化する実行時挙動には影響しない。
       const body = {
         ...(add ? { add } : {}),
         ...(rem ? { rem } : {}),
-        ...(chg ? { chg } : {}),
+        ...(effectiveChg ? { chg: effectiveChg } : {}),
       };
       const { data, error, response } = await getClient(registry, env).PUT("/api/v1/epp/domains/{name}", {
         params: { path: { name } },
@@ -369,13 +393,24 @@ export class RegistryBridge {
       });
       if (response.status === 404) {return { success: false, data: null, error: "domain_not_found" };}
       if (error) {return { success: false, data: null, error: "invalid_registry_response" };}
+      if (data.result.code === 2303) {
+        // "Object does not exist" はドメイン自体だけでなく、add/rem で指定した
+        // ネームサーバーやコンタクトが未登録の場合にも同じコードで返ってくる。
+        // reason にドメイン名が含まれるかで区別する（含まれなければ参照先オブジェクトの不在）。
+        // reason は Swagger の Result スキーマに定義が無い未ドキュメント化フィールドのため、
+        // 盲目キャストせず readResultReason で存在確認したうえで読む。
+        const reason = readResultReason(data.result);
+        const isDomainItself = !reason || reason.includes(name);
+        return {
+          success: false,
+          data: null,
+          error: isDomainItself ? "domain_not_found" : "referenced_object_not_found",
+        };
+      }
       const extracted = extractResData(data);
       if (!extracted.success) {return extracted;}
-      if (!extracted.data?.exDate) {
-        // レジストリが DomainResponse を返さなかった場合（一部レジストリで発生しうる）
-        return { success: false, data: null, error: "invalid_registry_response" };
-      }
-      return { success: true, data: { ...extracted.data, exDate: extracted.data.exDate }, error: null };
+      // Kitaqnic は update 成功時に resData を返さない（Unit）。呼び出し側は info で最新状態を取り直すこと。
+      return { success: true, data: extracted.data ?? {}, error: null };
     } catch (e) {
       console.error("RegistryBridge.update error:", e);
       return { success: false, data: null, error: "network_error" };
