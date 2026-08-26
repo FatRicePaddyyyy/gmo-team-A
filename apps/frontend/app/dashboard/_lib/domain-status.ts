@@ -95,3 +95,12 @@ export function redemptionDaysLeft(params: {
   // 期限を過ぎていても負数は出さない。レジストリ側の反映待ちのことがある。
   return left > 0 ? left : 0;
 }
+
+/**
+ * 更新（延長）で選べる年数。
+ *
+ * レジストリの制約は 1〜10 年だが、UI では刻みを絞って出す。
+ * 一覧（domain-row）と詳細（renew-card）の両方から使うので、ここに一本化する。
+ * 片方だけ変えると、同じ操作なのに選べる年数が食い違う。
+ */
+export const RENEW_YEARS = [1, 2, 3, 5, 10] as const;

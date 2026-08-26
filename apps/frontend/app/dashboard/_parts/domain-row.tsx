@@ -12,11 +12,13 @@ import type {
 } from "../_hooks/use-my-domains.hook";
 import { formatDate } from "@/shared/lib/format-date";
 import { ConfirmAction } from "@/components/confirm-action";
-import { canDelete, canRenew, canRestore } from "../_lib/domain-status";
+import {
+  RENEW_YEARS,
+  canDelete,
+  canRenew,
+  canRestore,
+} from "../_lib/domain-status";
 import { StatusBadge } from "./status-badge";
-
-/** レジストリの制約に合わせて 1〜10 年。UI ではよく使う年数だけ出す */
-const RENEW_YEARS = [1, 2, 3, 5, 10];
 
 interface DomainRowProps {
   domain: MyDomain;

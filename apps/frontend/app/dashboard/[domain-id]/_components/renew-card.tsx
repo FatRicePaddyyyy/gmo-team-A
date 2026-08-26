@@ -6,10 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { FeedbackBanner } from "@/components/feedback-banner";
 import { formatDate } from "@/shared/lib/format-date";
+import { RENEW_YEARS } from "../../_lib/domain-status";
 import type { DetailFeedback } from "../_hooks/use-domain-detail.hook";
-
-/** レジストリの制約に合わせて 1〜10 年。UI ではよく使う年数だけ出す */
-const RENEW_YEARS = [1, 2, 3, 5, 10];
 
 interface RenewCardProps {
   expiresAt: string;

@@ -114,7 +114,10 @@ export function useTransferRequests(enabled: boolean) {
           unauthorized: result.unauthorized,
         });
       } else {
-        setFeedback({ tone: "success", message: "移管申請を取り消しました。" });
+        setFeedback({
+          tone: "success",
+          message: `${transfer.domainName} の移管申請を取り消しました。`,
+        });
         await refresh();
       }
       setCancellingId(null);
