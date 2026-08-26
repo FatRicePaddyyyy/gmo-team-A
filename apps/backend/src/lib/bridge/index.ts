@@ -386,7 +386,7 @@ export class RegistryBridge {
       let effectiveChg = chg;
       if (chg?.authInfo && !chg.registrant) {
         const infoResult = await RegistryBridge.info({ name, registry, env });
-        if (!infoResult.success) return infoResult;
+        if (!infoResult.success) {return infoResult;}
         if (!infoResult.data.registrant) {
           return { success: false, data: null, error: "invalid_registry_response" };
         }

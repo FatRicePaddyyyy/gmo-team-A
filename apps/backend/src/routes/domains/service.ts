@@ -279,8 +279,8 @@ export class DomainService {
 
     // update のレスポンス形はレジストリによって異なる（Kitaqnic は空）ため、
     // 最新の DomainResponse は改めて info で取得して DB に同期する
-    const infoResult = await RegistryBridge.info({ name: domain.name, registry: domain.registry as Registry, env });
-    if (!infoResult.success) return infoResult;
+    const infoResult = await RegistryBridge.info({ name: domain.name, registry: domain.registry, env });
+    if (!infoResult.success) {return infoResult;}
     const registryData = infoResult.data;
     const expiresAt = new Date(registryData.exDate);
     if (Number.isNaN(expiresAt.getTime())) {
