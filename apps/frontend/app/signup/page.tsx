@@ -124,8 +124,8 @@ export default function SignupPage() {
               <Button
                 type="submit"
                 disabled={isLoading}
-                className="h-11 w-full text-white"
-                style={{ background: "var(--brand)" }}
+                className="h-11 w-full"
+                variant="brand"
               >
                 {isLoading ? "作成中..." : "アカウントを作成する"}
               </Button>
