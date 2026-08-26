@@ -32,6 +32,7 @@ const errorMessages: Record<string, string> = {
   contact_create_failed: "レジストリへの接続中に問題が発生しました。しばらく待ってから再試行してください。",
   contact_not_found: "コンタクト情報が見つかりませんでした。しばらく待ってから再試行してください。",
   contact_id_conflict: "登録処理が競合しました。もう一度お試しください。",
+  invalid_contact_payload: "コンタクト情報がレジストリの制約に違反しています。氏名やメールを確認してください。",
 
   // ユーザー / 認証
   user_not_found: "ユーザー情報が見つかりませんでした。ログインし直してから再試行してください。",

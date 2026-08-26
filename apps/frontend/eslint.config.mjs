@@ -82,6 +82,7 @@ const eslintConfig = [
       "postcss.config.mjs", // PostCSS の設定ファイル
       "tailwind.config.ts", // Tailwind CSS の設定ファイル
       "**/global-error.tsx",
+      "**/not-found.tsx", // Next.js の予約ファイル (default export 必須)
       "vite.config.ts",
     ],
     rules: {

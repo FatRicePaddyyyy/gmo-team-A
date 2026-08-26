@@ -149,11 +149,15 @@ export class RegistryBridge {
     name: string;
     env: CloudflareBindings;
   }): Promise<Result<Registry>> {
-    const lastDot = name.trim().toLowerCase().lastIndexOf(".");
-    if (lastDot < 0 || lastDot === name.length - 1) {
+    // trim + lowercase 後の同じ文字列に対して index/length を取る。
+    // 前は元の `name.length` と trim 後の lastIndexOf を混ぜていて、
+    // 末尾スペースなどのケースで判定が微妙にズレていた。
+    const normalizedName = name.trim().toLowerCase();
+    const lastDot = normalizedName.lastIndexOf(".");
+    if (lastDot < 0 || lastDot === normalizedName.length - 1) {
       return { success: false, data: null, error: "invalid_domain_name" };
     }
-    const tld = name.trim().toLowerCase().slice(lastDot + 1);
+    const tld = normalizedName.slice(lastDot + 1);
 
     const [ks, kn] = await Promise.all([
       RegistryBridge.hello({ registry: "kitaqsign", env }),
@@ -168,8 +172,11 @@ export class RegistryBridge {
     if (kn.success && kn.data.tlds.some(t => normalize(t) === tld)) {
       return { success: true, data: "kitaqnic", error: null };
     }
-    // 両方失敗した場合は疎通エラー、そうでなければ非対応TLD
-    if (!ks.success && !kn.success) {
+    // 片方でも hello に失敗している場合は、非対応 TLD ではなく疎通エラーの可能性を残す。
+    // 例: kitaqsign が疎通 OK で `.com` を返し、kitaqnic が疎通 NG のとき、
+    // ユーザーが `.xyz` を投げても "非対応" ではなく "レジストリに繋がらない" が実態。
+    // 両方 success + tld 該当なし の場合のみ unsupported_tld と断定する。
+    if (!ks.success || !kn.success) {
       return { success: false, data: null, error: "network_error" };
     }
     return { success: false, data: null, error: "unsupported_tld" };
@@ -237,6 +244,11 @@ export class RegistryBridge {
       });
       // 409 = コンタクトID既存（UUID衝突。極めて稀）
       if (response.status === 409) {return { success: false, data: null, error: "contact_id_conflict" };}
+      // 400 = postalInfo バリデーション違反 (実測: name/email/addr の許可値外)。
+      // レジストリは HTTP 400 + result.code 2003 "Required parameter missing" を返す。
+      // Swagger 定義には無いが、backend の user 情報が制約に合っていないケース (許可名以外の氏名や
+      // @example 以外のメール等) はここに落ちる。routes 側で 400 に落として原因を伝えられるようにする。
+      if (response.status === 400) {return { success: false, data: null, error: "invalid_contact_payload" };}
       if (error) {return { success: false, data: null, error: "contact_create_failed" };}
       if (data.result.code !== 1000) {return { success: false, data: null, error: "contact_create_failed" };}
       const returnedId = data.resData?.id ?? contactId;
@@ -281,6 +293,9 @@ export class RegistryBridge {
       });
       if (response.status === 409) {return { success: false, data: null, error: "domain_exists" };}
       if (response.status === 422) {return { success: false, data: null, error: "invalid_tld" };}
+      // 404 は Swagger 定義には含まれないが、実測ではリクエストで指定した registrant / contacts の
+      // contactId がレジストリに存在しないと 404 を返す実装がある。ユーザー起因の不整合を
+      // "レジストリ疎通異常" に丸めず、contact_not_found として routes 側で意味付けできるようにする。
       if (response.status === 404) {return { success: false, data: null, error: "contact_not_found" };}
       if (error) {return { success: false, data: null, error: "invalid_registry_response" };}
       const extracted = extractResData(data);
@@ -371,7 +386,7 @@ export class RegistryBridge {
       let effectiveChg = chg;
       if (chg?.authInfo && !chg.registrant) {
         const infoResult = await RegistryBridge.info({ name, registry, env });
-        if (!infoResult.success) return infoResult;
+        if (!infoResult.success) {return infoResult;}
         if (!infoResult.data.registrant) {
           return { success: false, data: null, error: "invalid_registry_response" };
         }
@@ -391,6 +406,9 @@ export class RegistryBridge {
         // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
         body: body as never,
       });
+      // Swagger 上 update は 200/404 のみだが、実運用では sponsoring registrar 以外の呼び出しで
+      // 403 が返り得る (restore / delete と同じ扱い)。routes 側で 403 に落とせるように forbidden にマップ。
+      if (response.status === 403) {return { success: false, data: null, error: "forbidden" };}
       if (response.status === 404) {return { success: false, data: null, error: "domain_not_found" };}
       if (error) {return { success: false, data: null, error: "invalid_registry_response" };}
       if (data.result.code === 2303) {
@@ -430,6 +448,8 @@ export class RegistryBridge {
       const { data, error, response } = await getClient(registry, env).DELETE("/api/v1/epp/domains/{name}", {
         params: { path: { name } },
       });
+      // sponsoring registrar 以外の呼び出し等 (restore と同じ扱い)
+      if (response.status === 403) {return { success: false, data: null, error: "forbidden" };}
       if (response.status === 404) {return { success: false, data: null, error: "domain_not_found" };}
       // すでに pendingDelete のドメインを再度廃止しようとした場合など
       if (isOperationProhibited(response, error ?? data)) {
@@ -490,11 +510,15 @@ export class RegistryBridge {
         "/api/v1/epp/domains/{name}/transfer/request",
         { params: { path: { name } }, body: { op: "request", authInfo } },
       );
-      // Kitaqnic: authInfo不一致は HTTP 401
+      // authInfo 不一致の伝え方がレジストリで違う (bridge で共通コードに集約する):
+      //   Kitaqnic  … Swagger 定義通り HTTP 401
+      //   Kitaqsign … 実測は HTTP 403 + result.code 2202 (Swagger は 202/404 のみ定義)、
+      //               または HTTP 202/200 + result.code 2202 (下の分岐で処理)
       if (response.status === 401) {return { success: false, data: null, error: "authInfo_mismatch" };}
+      if (response.status === 403) {return { success: false, data: null, error: "authInfo_mismatch" };}
+      // ドメイン不在 (両レジストリ Swagger 定義)
       if (response.status === 404) {return { success: false, data: null, error: "domain_not_found" };}
       if (error) {return { success: false, data: null, error: "invalid_registry_response" };}
-      // Kitaqsign: authInfo不一致は result.code 2202
       if (data.result.code === 2202) {return { success: false, data: null, error: "authInfo_mismatch" };}
       // 成功: 1000（同期完了）または 1001（非同期受付）
       // B5: Swagger 上 resData? は optional。空の resData でも result.code が成功値なら受付として扱う。
@@ -527,10 +551,16 @@ export class RegistryBridge {
           : action === "reject"
           ? await client.POST("/api/v1/epp/domains/{name}/transfer/reject", { params: { path: { name } } })
           : await client.POST("/api/v1/epp/domains/{name}/transfer/cancel", { params: { path: { name } } });
-      // R5: approve/reject/cancel は authInfo を送らないので、401 は authInfo 不一致ではなく
-      // 「レジストリ認証失敗 = 権限不備」として forbidden にマップする。
-      if (response.status === 401) {return { success: false, data: null, error: "forbidden" };}
+      // approve/reject/cancel は authInfo を送らないので、実測でも 401 は
+      // 「API キー / レジストラ ID が無効」= backend 設定不備 = 運用エラー。
+      // ユーザーに "権限がない" と誤って伝えず、invalid_registry_response で 500 化して
+      // 運用チームがログで気付けるようにする (実測 401 の body: result.code 2200 "Authentication error")。
+      if (response.status === 401) {return { success: false, data: null, error: "invalid_registry_response" };}
+      // 403 は sponsoring registrar 以外の呼び出し (Kitaqsign Swagger 定義)。
       if (response.status === 403) {return { success: false, data: null, error: "forbidden" };}
+      // 404 は "対象ドメイン不在" (実測: result.code 2303 "Object does not exist")。
+      // 409 は "ドメインは存在するが pendingTransfer でない" (実測: result.code 2301 "Object not pending transfer")。
+      // どちらもユーザー視点では「その移管申請は無い」ので transfer_not_found に集約する。
       if (response.status === 404) {return { success: false, data: null, error: "transfer_not_found" };}
       if (response.status === 409) {return { success: false, data: null, error: "transfer_not_found" };}
       if (error) {return { success: false, data: null, error: "invalid_registry_response" };}

@@ -2,7 +2,6 @@ import { TransferStatusRepository } from "../../domains/transfer/repository";
 import { UserRepository } from "../../domains/user/repository";
 import { RegistryBridge } from "../../lib/bridge";
 import type { PollMessage, Registry } from "../../lib/bridge/types";
-import type { Result } from "../../types/result";
 import { TransferCronPollRepository } from "./repository";
 
 // 対応レジストリ。Cron のたびに全レジストリを順に drain する。
@@ -249,7 +248,7 @@ async function handleMessage({
 
   await tryAck({ messageId: msg.id, registry, env });
   console.info(
-    `TransferCronPoll.handleMessage: settled domain=${domain.name} status=${status ?? "unknown"} registry=${registry}`,
+    `TransferCronPoll.handleMessage: settled domain=${domain.name} status=${status} registry=${registry}`,
   );
 }
 

@@ -42,6 +42,9 @@ const eslintConfig = [
       '.wrangler/**',
       'eslint.config.mjs',
       'worker-configuration.d.ts',
+      // openapi-typescript が Swagger から生成する型定義。
+      // 生成器の出力スタイル (index signature 等) を lint で強制するのは意味が無いので除外。
+      'src/lib/bridge/generated/**',
       // テストは lint 対象外。実行時挙動 (vitest) で品質を担保する。
       '**/*.spec.ts',
       '**/*.spec.tsx',

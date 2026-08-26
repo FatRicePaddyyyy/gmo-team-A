@@ -71,6 +71,11 @@ export const createDomainRouteHandler = app.openapi(route, async (ctx) => {
     if (result.error === "invalid_tld" || result.error === "unsupported_tld") {
       return ctx.json({ success: false as const, data: null, error: toUserMessage(result.error) }, 422);
     }
+    if (result.error === "invalid_contact_payload") {
+      // createContact が レジストリの postalInfo 制約 (許可名 / 予約ドメインメール / cc: JP US 等) で
+      // 弾かれたケース。ユーザーの氏名やメールに起因するので 400 で意図を伝える。
+      return ctx.json({ success: false as const, data: null, error: toUserMessage(result.error) }, 400);
+    }
     return ctx.json({ success: false as const, data: null, error: toUserMessage(result.error) }, 500);
   }
   return ctx.json({ success: true as const, data: result.data, error: null }, 201);

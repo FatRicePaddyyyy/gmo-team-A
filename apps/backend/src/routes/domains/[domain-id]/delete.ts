@@ -36,6 +36,7 @@ const route = createRoute({
   request: { params: ParamsSchema },
   responses: {
     200: { content: { "application/json": { schema: SuccessSchema } }, description: "廃止成功" },
+    403: { content: { "application/json": { schema: ErrorSchema } }, description: "権限なし (sponsoring registrar 以外の呼び出し)" },
     404: { content: { "application/json": { schema: ErrorSchema } }, description: "不在" },
     409: { content: { "application/json": { schema: ErrorSchema } }, description: "操作不可" },
     500: { content: { "application/json": { schema: ErrorSchema } }, description: "サーバーエラー" },
@@ -54,6 +55,9 @@ export const deleteDomainRouteHandler = app.openapi(route, async (ctx) => {
     }
     if (result.error === "operation_prohibited" || result.error === "domain_pending_transfer") {
       return ctx.json({ success: false as const, data: null, error: toUserMessage(result.error) }, 409);
+    }
+    if (result.error === "forbidden") {
+      return ctx.json({ success: false as const, data: null, error: toUserMessage(result.error) }, 403);
     }
     return ctx.json({ success: false as const, data: null, error: toUserMessage(result.error) }, 500);
   }

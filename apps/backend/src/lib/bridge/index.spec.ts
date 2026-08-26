@@ -197,6 +197,256 @@ describe("RegistryBridge.delete: restore と同じく 409 + 2304", () => {
 
     expect(res.error).toBe("domain_not_found");
   });
+
+  // sponsoring registrar 以外の呼び出し。restore と同じ扱いに揃える。
+  test("[異常系] 403 は forbidden にマップされる", async () => {
+    stubRegistry(403, errEnvelope(2201, "Authorization error"));
+
+    const res = await RegistryBridge.delete({ name: "example.com", registry: "kitaqsign", env: mockEnv });
+
+    expect(res.error).toBe("forbidden");
+  });
+});
+
+// ─── update ──────────────────────────────────────────────────────────────────
+
+describe("RegistryBridge.update: 403/404 の権限系吸収", () => {
+  // sponsoring registrar 以外の呼び出し。Swagger には 200/404 のみだが、
+  // 実運用では 403 が返り得るので bridge で forbidden にマップして routes 側で 403 応答にする。
+  test("[異常系] 403 は forbidden にマップされる", async () => {
+    stubRegistry(403, errEnvelope(2201, "Authorization error"));
+
+    const res = await RegistryBridge.update({
+      name: "example.com",
+      chg: { registrant: "C-0001" },
+      registry: "kitaqsign",
+      env: mockEnv,
+    });
+
+    expect(res.error).toBe("forbidden");
+  });
+
+  test("[異常系] 404 は domain_not_found にマップされる", async () => {
+    stubRegistry(404, errEnvelope(2303, "Object does not exist"));
+
+    const res = await RegistryBridge.update({
+      name: "nope.com",
+      chg: { registrant: "C-0001" },
+      registry: "kitaqsign",
+      env: mockEnv,
+    });
+
+    expect(res.error).toBe("domain_not_found");
+  });
+});
+
+// ─── resolveRegistry ─────────────────────────────────────────────────────────
+
+describe("RegistryBridge.resolveRegistry: 片側 hello 失敗時の判定", () => {
+  test("[異常系] kitaqsign 疎通 OK・kitaqnic 疎通 NG で kitaqnic 管轄 TLD → network_error", async () => {
+    // hello を直接 spy で差し替える (fetch stub 二重管理を避けるため)。
+    vi.spyOn(RegistryBridge, "hello").mockImplementation(async ({ registry }) => {
+      if (registry === "kitaqsign") {
+        return { success: true, data: { registryCode: "KQSGN", tlds: ["com", "net"] }, error: null };
+      }
+      return { success: false, data: null, error: "network_error" };
+    });
+
+    const res = await RegistryBridge.resolveRegistry({ name: "example.xyz", env: mockEnv });
+
+    // 修正前は unsupported_tld を返していた (kitaqnic が実は対応してるかもしれないのに誤情報)
+    expect(res.success).toBe(false);
+    expect(res.error).toBe("network_error");
+  });
+
+  test("[異常系] 両方 hello が失敗 → network_error", async () => {
+    vi.spyOn(RegistryBridge, "hello").mockResolvedValue({ success: false, data: null, error: "network_error" });
+
+    const res = await RegistryBridge.resolveRegistry({ name: "example.com", env: mockEnv });
+
+    expect(res.error).toBe("network_error");
+  });
+
+  test("[正常系] 両方 hello 成功・kitaqsign 管轄 TLD → kitaqsign", async () => {
+    vi.spyOn(RegistryBridge, "hello").mockImplementation(async ({ registry }) => {
+      if (registry === "kitaqsign") {
+        return { success: true, data: { registryCode: "KQSGN", tlds: ["com"] }, error: null };
+      }
+      return { success: true, data: { registryCode: "KQNIC", tlds: ["xyz"] }, error: null };
+    });
+
+    const res = await RegistryBridge.resolveRegistry({ name: "example.com", env: mockEnv });
+
+    expect(res.success).toBe(true);
+    expect(res.data).toBe("kitaqsign");
+  });
+
+  test("[異常系] 両方 hello 成功・どちらの tld にも該当しない → unsupported_tld", async () => {
+    vi.spyOn(RegistryBridge, "hello").mockImplementation(async ({ registry }) => {
+      if (registry === "kitaqsign") {
+        return { success: true, data: { registryCode: "KQSGN", tlds: ["com"] }, error: null };
+      }
+      return { success: true, data: { registryCode: "KQNIC", tlds: ["xyz"] }, error: null };
+    });
+
+    const res = await RegistryBridge.resolveRegistry({ name: "example.foo", env: mockEnv });
+
+    expect(res.error).toBe("unsupported_tld");
+  });
+});
+
+// ─── createContact ───────────────────────────────────────────────────────────
+
+describe("RegistryBridge.createContact: postalInfo 制約違反の吸収", () => {
+  // 実測: 許可名以外の氏名 / @example 以外のメール / cc: JP US 以外は
+  // HTTP 400 + result.code 2003 で返る。routes 側で 400 (入力不備) として扱えるように
+  // invalid_contact_payload コードにマップする。
+  test("[異常系] 400 + 2003 は invalid_contact_payload にマップされる", async () => {
+    stubRegistry(400, errEnvelope(2003, "Required parameter missing"));
+
+    const res = await RegistryBridge.createContact({
+      name: "Real Person",
+      email: "user@real.com",
+      registry: "kitaqsign",
+      env: mockEnv,
+    });
+
+    expect(res.success).toBe(false);
+    expect(res.error).toBe("invalid_contact_payload");
+  });
+
+  test("[異常系] 409 はコンタクトID既存 (contact_id_conflict) のまま", async () => {
+    stubRegistry(409, errEnvelope(2302, "Object exists"));
+
+    const res = await RegistryBridge.createContact({
+      name: "Taro Test",
+      email: "taro.test@example.com",
+      registry: "kitaqsign",
+      env: mockEnv,
+    });
+
+    expect(res.error).toBe("contact_id_conflict");
+  });
+});
+
+// ─── transferAction (approve/reject/cancel) ──────────────────────────────────
+
+describe("RegistryBridge.transferApprove: 401/403/404/409 の意味分け", () => {
+  // 実測: API キー無効 → 401 + result.code 2200 "Authentication error"。
+  // これは backend 設定不備 = 運用エラー。ユーザーに "権限なし" と誤って伝えないよう
+  // invalid_registry_response に落とす (500 化して運用チームに気付かせる)。
+  test("[異常系] 401 は invalid_registry_response にマップされる (backend 設定不備扱い)", async () => {
+    stubRegistry(401, errEnvelope(2200, "Authentication error"));
+
+    const res = await RegistryBridge.transferApprove({
+      name: "example.com",
+      registry: "kitaqsign",
+      env: mockEnv,
+    });
+
+    expect(res.success).toBe(false);
+    expect(res.error).toBe("invalid_registry_response");
+  });
+
+  // 実測: ドメイン不在 → 404 + 2303 "Object does not exist"。
+  // ドメインは存在するが transfer 中でない → 409 + 2301 "Object not pending transfer"。
+  // ユーザー視点はどちらも「その移管申請は無い」なので transfer_not_found に集約する。
+  test("[異常系] 404 (ドメイン不在) → transfer_not_found", async () => {
+    stubRegistry(404, errEnvelope(2303, "Object does not exist"));
+
+    const res = await RegistryBridge.transferApprove({
+      name: "nope.com",
+      registry: "kitaqsign",
+      env: mockEnv,
+    });
+
+    expect(res.error).toBe("transfer_not_found");
+  });
+
+  test("[異常系] 409 (pending でない) → transfer_not_found", async () => {
+    stubRegistry(409, errEnvelope(2301, "Object not pending transfer"));
+
+    const res = await RegistryBridge.transferApprove({
+      name: "example.com",
+      registry: "kitaqsign",
+      env: mockEnv,
+    });
+
+    expect(res.error).toBe("transfer_not_found");
+  });
+
+  test("[異常系] 403 (sponsoring registrar 以外) → forbidden", async () => {
+    stubRegistry(403, errEnvelope(2201, "Authorization error"));
+
+    const res = await RegistryBridge.transferApprove({
+      name: "example.com",
+      registry: "kitaqsign",
+      env: mockEnv,
+    });
+
+    expect(res.error).toBe("forbidden");
+  });
+});
+
+// ─── transferRequest ─────────────────────────────────────────────────────────
+
+describe("RegistryBridge.transferRequest: authInfo 不一致の吸収", () => {
+  // e2e 実測 (teama-2 が違う authInfo で request): Kitaqsign は HTTP 403 + result.code 2202 を返す。
+  // Swagger 定義には無いが、bridge で authInfo_mismatch に集約して routes 側で 409 応答にする。
+  test("[異常系] 403 + result.code 2202 → authInfo_mismatch", async () => {
+    stubRegistry(403, errEnvelope(2202, "Invalid authorization information"));
+
+    const res = await RegistryBridge.transferRequest({
+      name: "example.com",
+      authInfo: "WRONG-authInfo",
+      registry: "kitaqsign",
+      env: mockEnv,
+    });
+
+    expect(res.success).toBe(false);
+    expect(res.error).toBe("authInfo_mismatch");
+  });
+
+  // Kitaqnic 側 (Swagger 定義通り HTTP 401)
+  test("[異常系] 401 → authInfo_mismatch (Kitaqnic 相当)", async () => {
+    stubRegistry(401, errEnvelope(2202, "Invalid authorization information"));
+
+    const res = await RegistryBridge.transferRequest({
+      name: "example.xyz",
+      authInfo: "WRONG-authInfo",
+      registry: "kitaqnic",
+      env: mockEnv,
+    });
+
+    expect(res.error).toBe("authInfo_mismatch");
+  });
+
+  // 202 + result.code 2202 (Kitaqsign が仕様通り返した場合)
+  test("[異常系] 202 + result.code 2202 → authInfo_mismatch", async () => {
+    stubRegistry(202, errEnvelope(2202, "Invalid authorization information"));
+
+    const res = await RegistryBridge.transferRequest({
+      name: "example.com",
+      authInfo: "WRONG-authInfo",
+      registry: "kitaqsign",
+      env: mockEnv,
+    });
+
+    expect(res.error).toBe("authInfo_mismatch");
+  });
+
+  test("[異常系] 404 → domain_not_found", async () => {
+    stubRegistry(404, errEnvelope(2303, "Object does not exist"));
+
+    const res = await RegistryBridge.transferRequest({
+      name: "nope.com",
+      authInfo: "any",
+      registry: "kitaqsign",
+      env: mockEnv,
+    });
+
+    expect(res.error).toBe("domain_not_found");
+  });
 });
 
 // ─── renew ───────────────────────────────────────────────────────────────────
