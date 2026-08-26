@@ -8,7 +8,8 @@ interface ConfirmActionProps {
   detail: string;
   confirmLabel: string;
   running: boolean;
-  onConfirm: () => void;
+  /** 非同期でよい。完了を待ってから閉じられるよう Promise を返せる */
+  onConfirm: () => void | Promise<void>;
   onCancel: () => void;
 }
 
@@ -39,7 +40,7 @@ export function ConfirmAction({
               size="sm"
               variant="destructive"
               disabled={running}
-              onClick={onConfirm}
+              onClick={() => void onConfirm()}
             >
               {running ? "処理中..." : confirmLabel}
             </Button>

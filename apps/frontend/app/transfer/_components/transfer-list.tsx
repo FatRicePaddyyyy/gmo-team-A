@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { ConfirmAction } from "@/components/confirm-action";
+import { FeedbackBanner } from "@/components/feedback-banner";
 import { formatDate } from "@/shared/lib/format-date";
 import type { useTransferRequests } from "../_hooks/use-transfer-requests.hook";
 import {
@@ -40,11 +41,7 @@ export function TransferList({ state }: TransferListProps) {
         </Button>
       </div>
 
-      {loadError && (
-        <p className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">
-          {loadError}
-        </p>
-      )}
+      {loadError && <FeedbackBanner tone="error" message={loadError} />}
 
       {loading && transfers.length === 0 && (
         <p className="text-sm text-gray-600">申請を読み込んでいます...</p>
@@ -90,8 +87,9 @@ export function TransferList({ state }: TransferListProps) {
                   detail="取り消すと手続きは最初からやり直しになります。認証コードも取り直しが必要な場合があります。"
                   confirmLabel="取り消す"
                   running={cancellingId === transfer.id}
-                  onConfirm={() => {
-                    void state.cancel(transfer);
+                  onConfirm={async () => {
+                    // 閉じるのは完了後。先に閉じると「処理中...」が一度も出ない
+                    await state.cancel(transfer);
                     setConfirmingId(null);
                   }}
                   onCancel={() => setConfirmingId(null)}

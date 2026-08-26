@@ -72,9 +72,13 @@ export function InboundTransferList({ state }: InboundTransferListProps) {
                 question={`${transfer.domainName} の移管を却下しますか？`}
                 detail="却下すると申請者へ引き渡されません。あなたが移管を依頼した相手からの申請だった場合は、もう一度申請してもらう必要があります。"
                 confirmLabel="却下する"
-                running={running?.kind === "reject"}
-                onConfirm={() => {
-                  void state.reject(transfer);
+                running={
+                  running?.domainId === transfer.domainId &&
+                  running.kind === "reject"
+                }
+                onConfirm={async () => {
+                  // 閉じるのは完了後。先に閉じると「処理中...」が一度も出ない
+                  await state.reject(transfer);
                   setRejecting(null);
                 }}
                 onCancel={() => setRejecting(null)}

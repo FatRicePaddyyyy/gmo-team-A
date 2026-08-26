@@ -74,8 +74,9 @@ export function DomainRow({
             detail="廃止するとサイトやメールがすぐ使えなくなります。しばらくの間は復旧できますが、猶予期間を過ぎると他の人が取得できるようになります。"
             confirmLabel="廃止する"
             running={runningHere === "delete"}
-            onConfirm={() => {
-              void onDelete(domain);
+            onConfirm={async () => {
+              // 閉じるのは完了後。先に閉じると「処理中...」が一度も出ない
+              await onDelete(domain);
               setConfirmingDelete(false);
             }}
             onCancel={() => setConfirmingDelete(false)}
