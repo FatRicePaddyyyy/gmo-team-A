@@ -4,4 +4,3 @@ docs/githubに共有できないコマンド集.md
 apps/frontend/playwright-report
 apps/frontend/test-results
 apps/frontend/tsconfig.tsbuildinfo
-apps/backend/scripts
