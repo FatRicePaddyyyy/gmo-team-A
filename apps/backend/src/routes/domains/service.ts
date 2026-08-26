@@ -522,10 +522,28 @@ export class DomainService {
     });
     if (!restoreResult.success) {return restoreResult;}
 
-    const updateResult = await DomainRepository.updateStatus({ id: domainId, status: "ok", env });
+    // 復旧後の status を "ok" 決め打ちにしない。
+    // restore のレスポンスは resData が空で status を返さないため、info で取り直す。
+    // 決め打ちだと、レジストリが "ok" 以外（inactive / serverHold 等）を返したときに
+    // DB とレジストリがズレたままになる（次に info を叩くまで直らない）。
+    // info と同じくレジストリの返り値から決め、取れなければ "ok" に倒す。
+    // 実測(kitaqsign): NS 未設定のドメインでも復旧後は ["ok"] / rgpStatus ["addPeriod"] だった。
+    const infoResult = await RegistryBridge.info({
+      name: domain.name,
+      registry: domain.registry,
+      env,
+    });
+    const raw = infoResult.success
+      ? pickPrimaryStatus(infoResult.data.status ?? [], "ok")
+      : "ok";
+    // レジストリ側の反映が一瞬遅れて pendingDelete が返ることがある。
+    // ここで書き戻すと「復旧したのに廃止中」になってしまうので、そのときだけ ok に倒す。
+    const status = raw === "pendingDelete" ? "ok" : raw;
+
+    const updateResult = await DomainRepository.updateStatus({ id: domainId, status, env });
     if (!updateResult.success) {return updateResult;}
 
-    const updated = { ...domain, status: "ok" };
+    const updated = { ...domain, status };
     return { success: true, data: DomainMapper.toResponse(updated), error: null };
   }
 }

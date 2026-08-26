@@ -350,6 +350,17 @@ export class RegistryBridge {
       });
       if (response.status === 403) {return { success: false, data: null, error: "forbidden" };}
       if (response.status === 404) {return { success: false, data: null, error: "domain_not_found" };}
+
+      // pendingDelete でないドメインの復旧は 2304。
+      // Swagger の Responses は 200/403/404 しか載っていないが、実機は **HTTP 409 + 2304** で返す
+      // (実測: `Domain xxx is not pending delete`)。HTTP が非 2xx だと openapi-fetch は body を
+      // error 側に入れるので、下の `if (error)` より前に拾わないと invalid_registry_response になり
+      // ハンドラが 500 を返してしまう。仕様変更で 200 に戻っても拾えるよう、両方を見る。
+      const conflictCode = (error as { result?: { code?: number } } | undefined)?.result?.code;
+      if (response.status === 409 || conflictCode === 2304) {
+        return { success: false, data: null, error: "operation_prohibited" };
+      }
+
       if (error) {return { success: false, data: null, error: "invalid_registry_response" };}
       if (data.result.code === 2304) {return { success: false, data: null, error: "operation_prohibited" };}
       const extracted = extractResData(data);
