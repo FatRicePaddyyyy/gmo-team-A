@@ -78,10 +78,18 @@ export const REDEMPTION_PERIOD_DAYS = 45;
 
 export function redemptionDaysLeft(params: {
   status: string;
+  /** レジストリが返す RGP の状態。DB の status より新しいことがある */
+  rgpStatus?: readonly string[];
   upDate: string | null;
   now?: Date;
 }): number | null {
   if (params.status !== "redemptionPeriod") return null;
+  // レジストリ側が既に猶予期間を抜けている場合、DB の status はまだ
+  // redemptionPeriod のことがある。そのまま日数を出すと嘘になるので、
+  // rgpStatus が渡されていて猶予期間を含まないなら出さない。
+  if (params.rgpStatus && !params.rgpStatus.includes("redemptionPeriod")) {
+    return null;
+  }
   if (!params.upDate) return null;
 
   const deletedAt = new Date(params.upDate);

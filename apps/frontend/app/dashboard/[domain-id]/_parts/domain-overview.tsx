@@ -23,6 +23,7 @@ interface DomainOverviewProps {
 export function DomainOverview({ domain }: DomainOverviewProps) {
   const daysLeft = redemptionDaysLeft({
     status: domain.status,
+    rgpStatus: domain.rgpStatus,
     upDate: domain.upDate,
   });
 
@@ -115,6 +116,23 @@ export function DomainOverview({ domain }: DomainOverviewProps) {
                 domain.statuses?.length ? (
                   <span className="flex flex-wrap gap-1">
                     {domain.statuses.map((s) => (
+                      <span
+                        key={s}
+                        className="rounded bg-gray-100 px-1.5 py-0.5 font-mono text-xs text-gray-700"
+                      >
+                        {s}
+                      </span>
+                    ))}
+                  </span>
+                ) : null
+              }
+            />
+            <Row
+              label="猶予期間（RGP）"
+              value={
+                domain.rgpStatus?.length ? (
+                  <span className="flex flex-wrap gap-1">
+                    {domain.rgpStatus.map((s) => (
                       <span
                         key={s}
                         className="rounded bg-gray-100 px-1.5 py-0.5 font-mono text-xs text-gray-700"
