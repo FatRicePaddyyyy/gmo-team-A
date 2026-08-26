@@ -18,57 +18,12 @@
     "KITAQSIGN_BASE_URL": "https://epp.kitaqsign.com",
     "KITAQNIC_BASE_URL": "https://epp.kitaqnic.com"
   },
-  "queues": {
-    "producers": [
-      { "binding": "TRANSFER_QUEUE", "queue": "transfer-poll" }
-      // DLQ (transfer-poll-dlq) は producer binding としては宣言しない。
-      // Cloudflare Queues が dead_letter_queue 設定から自動作成 + auto-route する。
-      // backend から DLQ に直接 send する用途は無いので binding も不要。
-    ],
-    "consumers": [
-      {
-        // 移管の poll 用。message.retry() で自然に再配信させる。
-        //
-        // レジストリ仕様: 「※ losing が放置した場合、申請から 20 分後にサーバが自動承認」
-        //                (ハッカソン用短縮、本来は 5 日)
-        //
-        // タイムライン:
-        //   T+0      request 受付 → TRANSFER_QUEUE.send({ delaySeconds: 1200 })
-        //   T+20分   初回 poll (レジストリで自動承認処理が既に走っているはず)
-        //   T+30分   1回目リトライ (レジストリ側の遅延を吸収)
-        //   T+40分   2回目リトライ
-        //   T+50分   3回目リトライで確定できなければ DLQ → expired
-        //
-        // max_retries=3 × retry_delay=600 = 30分のリトライ予算 + 初回20分 = 総50分。
-        // Cloudflare Queues の retention (Free: 24h, Paid default: 4日) に十分余裕がある。
-        "queue": "transfer-poll",
-        "max_retries": 3,
-        "max_batch_size": 10,
-        "max_batch_timeout": 30,
-        "retry_delay": 600,
-        "dead_letter_queue": "transfer-poll-dlq"
-      },
-      {
-        // DLQ consumer。ここに届いた時点で「上限超過 (総 50 分) で確定メッセージが来なかった」ため、
-        // まずレジストリの info を叩いて真実を確認する:
-        //   - レジストリでも pendingTransfer が残っている → transfer.status = "expired" に落として
-        //     domain.status = "ok" に戻す (排他解除)。
-        //   - レジストリでは既に serverApproved → DB を serverApproved + 所有権移転で反映する
-        //     (乖離を防ぐ)。
-        // Drop #4 対策: max_retries=10 で D1 の一過性障害を吸収する。
-        // それでも失敗する場合は cron 安全網 (1 時間ごとに STALE_THRESHOLD_HOURS=2h の pendingTransfer を
-        // queue に再投入) が拾う。
-        "queue": "transfer-poll-dlq",
-        "max_retries": 10,
-        "max_batch_size": 10
-      }
-    ]
-  },
   "triggers": {
-    // R1: TRANSFER_QUEUE.send そのものが失敗した orphan pendingTransfer を掃除する safety-net。
-    // 1 時間ごとに実行し、2 時間以上経過した pendingTransfer を検出して queue に再投入する。
-    // Queue の poll 予算 (初回 20 分 + 3×10 分 = 50 分) より十分長い間隔なので誤発火しない。
-    "crons": ["0 * * * *"]
+    // 移管ポーリングは 1 分ごとの cron で駆動する (scheduled/transfer-cron-poll)。
+    // 発火のたびに両レジストリを空になるまで poll drain して確定処理し、22 分以上経過した
+    // pendingTransfer は info で真実確認して serverApproved / expired に確定させる。
+    // Cloudflare Queues は一切使わず、Cron トリガーだけで移管の poll と reconcile を完結させる。
+    "crons": ["* * * * *"]
   },
   "env": {
     "production": {
@@ -95,7 +50,13 @@
           "database_id": "2ba676de-7422-4e9e-971f-f084f812c5fb",
           "migrations_dir": "drizzle"
         }
-      ]
+      ],
+      // B-C 対策: Wrangler の env override はトップレベル設定を継承しない項目もあるので、
+      // 本番でも同じ cron 構成を明示的に再宣言する。
+      // トップレベルと同じ値なので、変更時は両方を同期させること。
+      "triggers": {
+        "crons": ["* * * * *"]
+      }
     }
   }
   // "compatibility_flags": [

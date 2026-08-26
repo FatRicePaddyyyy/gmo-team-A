@@ -53,40 +53,69 @@ function isOperationProhibited(response: Response, body: unknown): boolean {
   return result.code === 2304;
 }
 
+// hello の resData shape 差を吸収して共通形 GreetingResponse に normalize する。
+// resData はレジストリごとに shape が違ううえ、Kitaqnic の Swagger は中身を定義していない
+// ので、`unknown` として受け、実データを見てフィールドを取り出す。
+// どちらのフィールドも欠落したら null を返し、呼び出し側で invalid_registry_response とする。
+function isObject(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null;
+}
+
 // result.reason（EPP result.code 2303 "Object does not exist" のとき、何が存在しないかを
 // 自由文字列で載せてくる未ドキュメント化フィールド）を安全に取り出す。
 // Swagger の Result スキーマには reason が定義されていないため、生成型に無いフィールドを
 // 盲目にキャストせず、`in` で存在を確かめながら読む。
+// update で「不在なのはドメイン本体か、指定した NS/コンタクトか」を区別するために使う。
 function readResultReason(result: unknown): string | undefined {
   if (typeof result !== "object" || result === null || !("reason" in result)) {return undefined;}
   const reason = result.reason;
   return typeof reason === "string" ? reason : undefined;
 }
 
-// hello の resData から対応 TLD を取り出す。
-// レジストリごとに入れ物が違う（kitaqsign は resData.tlds、kitaqnic は resData.info.supportedTlds）。
-// 生成型は kitaqsign 側を代表にしているため kitaqnic の形は型に出てこない。
-// キャストで押し込むと実際の形と食い違ったときに気づけないので、`in` で存在を確かめながら降りる。
-function readSupportedTlds(resData: unknown): string[] | null {
-  const asStringArray = (value: unknown): string[] | null =>
-    Array.isArray(value) && value.every(v => typeof v === "string") ? value : null;
+function normalizeGreeting(
+  registry: Registry,
+  resData: unknown,
+): GreetingResponse | null {
+  if (!isObject(resData)) {return null;}
 
-  if (typeof resData !== "object" || resData === null) {return null;}
-
-  if ("tlds" in resData) {
-    const tlds = asStringArray(resData.tlds);
-    if (tlds) {return tlds;}
-  }
-  if ("info" in resData && typeof resData.info === "object" && resData.info !== null) {
-    if ("supportedTlds" in resData.info) {
-      return asStringArray(resData.info.supportedTlds);
+  if (registry === "kitaqsign") {
+    // Kitaqsign shape: { registryCode, tlds, message }
+    const registryCode = resData.registryCode;
+    const tlds = resData.tlds;
+    if (
+      typeof registryCode !== "string" ||
+      !Array.isArray(tlds) ||
+      !tlds.every((t): t is string => typeof t === "string")
+    ) {
+      return null;
     }
+    return { registryCode, tlds };
   }
-  return null;
+
+  // Kitaqnic shape: resData.info.{registryCode, supportedTlds}
+  // registryCode が info に無ければ svID (トップレベル) にフォールバックする。
+  const info = isObject(resData.info) ? resData.info : undefined;
+  const tlds = info?.supportedTlds;
+  const rawCode = info?.registryCode ?? resData.svID;
+  if (
+    typeof rawCode !== "string" ||
+    !Array.isArray(tlds) ||
+    !tlds.every((t): t is string => typeof t === "string")
+  ) {
+    return null;
+  }
+  return { registryCode: rawCode, tlds };
 }
 
 export class RegistryBridge {
   // レジストリの疎通確認と対応TLD取得（認証不要のヘルスチェック）
+  //
+  // Kitaqsign と Kitaqnic で hello の resData shape が違うため、registry ごとに
+  // 内部の narrow 型を切り替えたうえで、外向きは共通形 GreetingResponse に normalize する。
+  //   - Kitaqsign: resData.tlds: string[]
+  //   - Kitaqnic : resData.info.supportedTlds: string[]
+  // どちらも取れなければ invalid_registry_response とする (shape 不一致 = レジストリ側の
+  // 契約破棄なので、呼び出し側にプロトコル差分を漏らさず一律の内部コードに落とす)。
   static async hello({
     registry,
     env,
@@ -99,14 +128,12 @@ export class RegistryBridge {
       if (!response.ok || !data) {return { success: false, data: null, error: "invalid_registry_response" };}
       const extracted = extractResData(data);
       if (!extracted.success) {return extracted;}
-      if (!extracted.data) {return { success: false, data: null, error: "invalid_registry_response" };}
+      const resData = extracted.data;
+      if (!resData) {return { success: false, data: null, error: "invalid_registry_response" };}
 
-      // 対応 TLD の入れ物はレジストリごとに違う（readSupportedTlds を参照）。
-      // ここで吸収して、呼び出し側は常に tlds を見ればよい状態にする。
-      const tlds = readSupportedTlds(extracted.data);
-      if (!tlds) {return { success: false, data: null, error: "invalid_registry_response" };}
-
-      return { success: true, data: { ...extracted.data, tlds }, error: null };
+      const normalized = normalizeGreeting(registry, resData);
+      if (!normalized) {return { success: false, data: null, error: "invalid_registry_response" };}
+      return { success: true, data: normalized, error: null };
     } catch (e) {
       console.error("RegistryBridge.hello error:", e);
       return { success: false, data: null, error: "network_error" };

@@ -9,10 +9,6 @@ import { TransferRepository } from "./repository";
 
 type Transfer = typeof transfers.$inferSelect;
 
-// 移管の poll 用 Queue の初回投入待ち時間 (秒)。
-// レジストリが自動承認するまでの下限を待つ (Kitaqsign / Kitaqnic はハッカソン用に 20 分)。
-const POLL_INITIAL_DELAY_SECONDS = 1200;
-
 export class TransferService {
   static async request({
     name,
@@ -128,45 +124,10 @@ export class TransferService {
       return statusUpdateResult;
     }
 
-    // Drop #1/#2 対策: queue send は必須。失敗すると transfer が pending のまま
-    // polling されずに永遠に stuck するため、失敗した場合は compensating cancel で
-    // レジストリ・DB とも完全にロールバックし、ユーザーには失敗を返す。
-    if (!env.TRANSFER_QUEUE) {
-      console.error(
-        "TransferService.request: TRANSFER_QUEUE binding is missing. Rolling back to avoid orphan pendingTransfer.",
-      );
-      await compensateAndReconcile({
-        transferId: transferResult.data.id,
-        domain: { id: domain.id, name: normalizedName, currentOwnerUserId: domain.ownerUserId },
-        gainingUserId,
-        registry,
-        env,
-      });
-      return { success: false, data: null, error: "queue_unavailable" };
-    }
-    try {
-      // Queue の retry_delay は wrangler.jsonc で 1200 秒に設定済み。
-      // 初回投入時のみ明示的に delaySeconds を指定して初回 poll までの間隔を揃える。
-      await env.TRANSFER_QUEUE.send(
-        { transferId: transferResult.data.id },
-        { delaySeconds: POLL_INITIAL_DELAY_SECONDS },
-      );
-    } catch (e) {
-      console.error(
-        "TransferService.request: TRANSFER_QUEUE.send failed for transferId:",
-        transferResult.data.id,
-        e,
-      );
-      await compensateAndReconcile({
-        transferId: transferResult.data.id,
-        domain: { id: domain.id, name: normalizedName, currentOwnerUserId: domain.ownerUserId },
-        gainingUserId,
-        registry,
-        env,
-      });
-      return { success: false, data: null, error: "queue_unavailable" };
-    }
-
+    // ここに到達した時点で DB は pendingTransfer、レジストリも request が通っている。
+    // 以降の確定処理は 1 分ごとの cron (scheduled/transfer-cron-poll) が両レジストリを
+    // drain して行う。加えて 22 分経過しても pending のままなら同 cron の Phase 2 が
+    // info で真実確認して serverApproved / expired に確定させる。
     return { success: true, data: transferResult.data, error: null };
   }
 
@@ -238,9 +199,10 @@ export class TransferService {
 //
 // 遷移保証: このメソッドを終える時点で、transfer は必ず以下のいずれかの状態:
 //   (a) DB 上 clientCancelled (レジストリでも取り消し成功) → 終了
-//   (b) DB 上 pendingTransfer + queue に message あり → poll 経路で最終的に決着
+//   (b) DB 上 pendingTransfer → 次回 cron が poll / info で最終的に決着
 //   (c) DB 上 serverApproved / clientApproved (レジストリ確定済み) → 終了
-// つまり "pending なのに queue に何もない" 状態を絶対に作らない。
+// (b) の状態を残すだけでよい理由: 1 分ごとの cron が両レジストリを drain するので、
+// 20 分の自動承認 or losing の approve/reject/cancel いずれかで必ず決着する。
 async function compensateAndReconcile({
   transferId,
   domain,
@@ -282,75 +244,44 @@ async function compensateAndReconcile({
     if (info.success) {
       const isStillPending = (info.data.status ?? []).includes("pendingTransfer");
       if (isStillPending) {
-        // (b) レジストリでもまだ pending。DB を pendingTransfer に合わせて poll に任せる。
-        // Drop #3: 必ず queue に投入し、poll で最終的な決着を保証する。
-        console.warn(`TransferService: registry still pending; deferring to poll.`);
+        // (b) レジストリでもまだ pending。DB を pendingTransfer に合わせて cron に任せる。
+        console.warn(`TransferService: registry still pending; deferring to cron.`);
         const rDom = await TransferDomainRepository.updateStatus({ id: domain.id, status: "pendingTransfer", env });
         if (!rDom.success) {console.error("compensateAndReconcile: sync domain pendingTransfer failed", rDom.error);}
-        await enqueuePollBestEffort({ transferId, env });
       } else {
         // (c) レジストリでは確定済み。gaining ユーザーがオーナーになった前提で DB を反映する。
         // 従来は status だけ変えて owner は据え置いていたが、それだと DB とレジストリで
-        // ownership が乖離するので commitServerApproved で 1 トランザクションで整合させる。
+        // ownership が乖離するので commitApproved で 1 トランザクションで整合させる。
         console.warn(
           `TransferService: registry transfer already settled; committing serverApproved and reassigning ownership to gainingUserId=${gainingUserId}.`,
         );
-        const commit = await TransferStatusRepository.commitServerApproved({
+        const commit = await TransferStatusRepository.commitApproved({
           transferId,
           domainId: domain.id,
+          transferStatus: "serverApproved",
           newOwnerUserId: gainingUserId,
           env,
         });
         if (!commit.success) {
           console.error(
-            `compensateAndReconcile: commitServerApproved failed for transferId=${transferId}. Manual reconciliation required.`,
+            `compensateAndReconcile: commitApproved (serverApproved) failed for transferId=${transferId}. Manual reconciliation required.`,
             commit.error,
           );
         }
       }
       return;
     }
-    // Drop #3: info も失敗。レジストリの真実が分からないので、
-    // 最終的に poll で解決するよう queue に投入する。max_retries で最終的に DLQ 経由 expired に落ちる。
+    // info も失敗。レジストリの真実は次回 cron の Phase 2 (22 分経過 pending の info reconcile) に委ねる。
     console.error(
-      "compensateAndReconcile: info call failed after transfer_not_found. Deferring to poll.",
+      "compensateAndReconcile: info call failed after transfer_not_found. Deferring to next cron.",
       info.error,
     );
-    await enqueuePollBestEffort({ transferId, env });
     return;
   }
 
   // その他の cancel 失敗 (network_error など)。
-  // Drop #3: レジストリ側の状態が不明なので、poll で決着させる。
+  // レジストリ側の状態は不明。DB は pendingTransfer のまま残し、次回 cron に委ねる。
   console.error(
-    `TransferService: compensating cancel failed with error=${compensate.error}. Deferring to poll.`,
+    `TransferService: compensating cancel failed with error=${compensate.error}. Deferring to next cron.`,
   );
-  await enqueuePollBestEffort({ transferId, env });
-}
-
-// enqueuePollBestEffort: reconciliation 経路から queue に投入する。
-// この関数の失敗はログのみ。呼び出し元は既に "request 全体を失敗として返す" と決めているので、
-// queue send が失敗しても DB は不整合状態のままロールバックできない (transferCancel も既に失敗している)。
-// ユーザーには 503 で失敗を返して手動介入を促す設計。
-async function enqueuePollBestEffort({
-  transferId,
-  env,
-}: {
-  transferId: string;
-  env: CloudflareBindings;
-}): Promise<void> {
-  if (!env.TRANSFER_QUEUE) {
-    console.error(
-      `enqueuePollBestEffort: TRANSFER_QUEUE binding missing; cannot enqueue transferId=${transferId}.`,
-    );
-    return;
-  }
-  try {
-    await env.TRANSFER_QUEUE.send(
-      { transferId },
-      { delaySeconds: POLL_INITIAL_DELAY_SECONDS },
-    );
-  } catch (e) {
-    console.error(`enqueuePollBestEffort: queue send failed for transferId=${transferId}`, e);
-  }
 }

@@ -27,7 +27,11 @@ describe("helloRouteHandler", () => {
     expect(res.status).toBe(200);
     const json = await res.json();
     expect(json).toEqual({
-      message: "あなたはこんにちはと言いましたよ。\n ユーザーID: undefined",
+      success: true,
+      data: {
+        message: "あなたはこんにちはと言いましたよ。\n ユーザーID: undefined",
+      },
+      error: null,
     });
   });
 

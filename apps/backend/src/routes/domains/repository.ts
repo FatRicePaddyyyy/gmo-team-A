@@ -55,7 +55,7 @@ export class DomainRepository {
       // Drizzle の returning() 型上は必ず 1 行返る前提だが、D1 の異常系で 0 件のケースを保険で検知する
       // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
       if (!created) {
-        return { success: false, data: null, error: "ドメインの作成に失敗しました" };
+        return { success: false, data: null, error: "domain_create_failed" };
       }
       return { success: true, data: created, error: null };
     } catch (error) {
@@ -161,24 +161,6 @@ export class DomainRepository {
     }
   }
 
-  static async updateOwner({
-    id,
-    newOwnerUserId,
-    env,
-  }: {
-    id: string;
-    newOwnerUserId: string;
-    env: CloudflareBindings;
-  }): Promise<Result<void>> {
-    try {
-      const db = createDBClient(env);
-      await db.update(domains).set({ ownerUserId: newOwnerUserId }).where(eq(domains.id, id));
-      return { success: true, data: undefined, error: null };
-    } catch (error) {
-      console.error("DomainRepository.updateOwner error:", error);
-      return { success: false, data: null, error: classifyDbError(error) };
-    }
-  }
 
   static async listByUserId({
     userId,

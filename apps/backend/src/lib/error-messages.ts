@@ -46,6 +46,7 @@ const errorMessages: Record<string, string> = {
   unique_violation: "同じデータが既に存在するため、この操作は行えません。",
   fk_violation: "関連するデータが見つからないため、この操作は行えません。",
   transfer_create_failed: "移管レコードの作成に失敗しました。しばらく待ってから再試行してください。",
+  domain_create_failed: "ドメインの作成に失敗しました。しばらく待ってから再試行してください。",
 
   // 通信 / レジストリ
   network_error: "レジストリとの通信に失敗しました。しばらく待ってから再試行してください。",

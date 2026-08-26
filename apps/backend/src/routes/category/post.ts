@@ -1,4 +1,5 @@
 import { createRoute, z } from "@hono/zod-openapi";
+import { toUserMessage } from "../../lib/error-messages";
 import { createOpenAPIHono } from "../../lib/openapi-hono";
 import { ProductRepository } from "./repository";
 
@@ -162,7 +163,7 @@ export const createCategoryRouteHandler = app.openapi(
           {
             success: false as const,
             data: null,
-            error: result.error,
+            error: toUserMessage(result.error),
           },
           500,
         );

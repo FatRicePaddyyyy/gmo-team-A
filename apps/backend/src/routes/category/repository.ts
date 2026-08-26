@@ -1,5 +1,6 @@
 import { eq } from "drizzle-orm";
 import { createDBClient } from "../../lib/db";
+import { classifyDbError } from "../../lib/db-error";
 import { products, categories } from "../../lib/schema/general-schema";
 
 export interface CreateCategoryAndProductInput {
@@ -115,7 +116,7 @@ export class ProductRepository {
       return {
         success: false,
         data: null,
-        error: error instanceof Error ? error.message : "不明なエラー",
+        error: classifyDbError(error),
       };
     }
   }
@@ -166,7 +167,7 @@ export class ProductRepository {
       return {
         success: false,
         data: null,
-        error: error instanceof Error ? error.message : "不明なエラー",
+        error: classifyDbError(error),
       };
     }
   }
