@@ -1,7 +1,6 @@
 import { eq } from "drizzle-orm";
 import { createDBClient } from "../../lib/db";
 import { classifyDbError } from "../../lib/db-error";
-import { user } from "../../lib/schema/auth-schema";
 import { domains, transfers } from "../../lib/schema/general-schema";
 import type { Result } from "../../types/result";
 
@@ -44,21 +43,5 @@ export class TransferPollDlqRepository {
     }
   }
 
-  // R6 と同じ: gaining user 存在チェック。
-  static async userExists({
-    id,
-    env,
-  }: {
-    id: string;
-    env: CloudflareBindings;
-  }): Promise<Result<boolean>> {
-    try {
-      const db = createDBClient(env);
-      const rows = await db.select({ id: user.id }).from(user).where(eq(user.id, id));
-      return { success: true, data: rows.length > 0, error: null };
-    } catch (error) {
-      console.error("TransferPollDlqRepository.userExists error:", error);
-      return { success: false, data: null, error: classifyDbError(error) };
-    }
-  }
+  // S-H: userExists は src/domains/user/repository.ts (UserRepository.exists) に集約。
 }

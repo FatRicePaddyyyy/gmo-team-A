@@ -1,4 +1,5 @@
 import { TransferStatusRepository } from "../../domains/transfer/repository";
+import { UserRepository } from "../../domains/user/repository";
 import { RegistryBridge } from "../../lib/bridge";
 import type { PollMessage, Registry } from "../../lib/bridge/types";
 import type { Result } from "../../types/result";
@@ -133,7 +134,7 @@ async function handleOwnMessage({
       status === "serverApproved" ? "serverApproved" : "clientApproved";
     // R6: gaining user が消えている場合は FK 制約違反で commitApproval が永遠に失敗し、
     // Cloudflare Queue が無限 retry する。事前にチェックして terminal 扱い (expired) にする。
-    const userExists = await TransferPollRepository.userExists({ id: transfer.gainingUserId, env });
+    const userExists = await UserRepository.exists({ id: transfer.gainingUserId, env });
     if (!userExists.success) {return userExists;}
     if (!userExists.data) {
       console.error(
@@ -158,7 +159,8 @@ async function handleOwnMessage({
       }
       return { success: true, data: { kind: "done" }, error: null };
     }
-    const commit = await TransferPollRepository.commitApproval({
+    // S-A: 共通の TransferStatusRepository に集約 (NB-8)。
+    const commit = await TransferStatusRepository.commitApproved({
       transferId,
       domainId: transfer.domainId,
       transferStatus: approvedStatus,
@@ -169,7 +171,8 @@ async function handleOwnMessage({
   } else {
     const cancelledStatus: "clientRejected" | "clientCancelled" =
       status === "clientRejected" ? "clientRejected" : "clientCancelled";
-    const commit = await TransferPollRepository.commitCancellation({
+    // S-A: 共通の TransferStatusRepository に集約 (NB-8)。
+    const commit = await TransferStatusRepository.settleAndReleaseDomain({
       transferId,
       domainId: transfer.domainId,
       transferStatus: cancelledStatus,

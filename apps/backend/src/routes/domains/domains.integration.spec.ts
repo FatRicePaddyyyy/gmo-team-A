@@ -111,7 +111,7 @@ describe("結合: POST /api/v1/public/domains/check", () => {
 
 describe("結合: POST /api/v1/secure/domains", () => {
   test("[正常系] 登録成功 → 201 + Domain レスポンス", async () => {
-    vi.spyOn(RegistryBridge, "hello").mockResolvedValue({ success: true, data: { registryCode: "kitaqsign", message: "hello", tlds: ["com"] }, error: null });
+    vi.spyOn(RegistryBridge, "hello").mockResolvedValue({ success: true, data: { registryCode: "kitaqsign", tlds: ["com"] }, error: null });
     vi.spyOn(DomainUserRepository, "findById").mockResolvedValue({ success: true, data: mockContactUser, error: null });
     vi.spyOn(RegistryBridge, "createContact").mockResolvedValue({ success: true, data: { contactId: "c-001" }, error: null });
     vi.spyOn(RegistryBridge, "create").mockResolvedValue({
@@ -131,7 +131,7 @@ describe("結合: POST /api/v1/secure/domains", () => {
   });
 
   test("[異常系] domain_exists → 409 + ユーザー向けメッセージ", async () => {
-    vi.spyOn(RegistryBridge, "hello").mockResolvedValue({ success: true, data: { registryCode: "kitaqsign", message: "hello", tlds: ["com"] }, error: null });
+    vi.spyOn(RegistryBridge, "hello").mockResolvedValue({ success: true, data: { registryCode: "kitaqsign", tlds: ["com"] }, error: null });
     vi.spyOn(DomainUserRepository, "findById").mockResolvedValue({ success: true, data: mockContactUser, error: null });
     vi.spyOn(RegistryBridge, "createContact").mockResolvedValue({ success: true, data: { contactId: "c-001" }, error: null });
     vi.spyOn(RegistryBridge, "create").mockResolvedValue({ success: false, data: null, error: "domain_exists" });
@@ -148,7 +148,7 @@ describe("結合: POST /api/v1/secure/domains", () => {
 
   test("[異常系] invalid_tld → 422 + ユーザー向けメッセージ", async () => {
     // レジストリの hello は成功するが、hello.tlds に "xyz" を返さない → service 側で unsupported_tld として弾かれ 422 になる。
-    vi.spyOn(RegistryBridge, "hello").mockResolvedValue({ success: true, data: { registryCode: "kitaqsign", message: "hello", tlds: ["com"] }, error: null });
+    vi.spyOn(RegistryBridge, "hello").mockResolvedValue({ success: true, data: { registryCode: "kitaqsign", tlds: ["com"] }, error: null });
     vi.spyOn(DomainUserRepository, "findById").mockResolvedValue({ success: true, data: mockContactUser, error: null });
     vi.spyOn(RegistryBridge, "createContact").mockResolvedValue({ success: true, data: { contactId: "c-001" }, error: null });
     vi.spyOn(RegistryBridge, "create").mockResolvedValue({ success: false, data: null, error: "invalid_tld" });

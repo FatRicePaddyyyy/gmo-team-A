@@ -40,6 +40,7 @@ const DomainSchema = z.object({
   expiresAt: z.string(),
   createdAt: z.string(),
   ownerUserId: z.string(),
+  autoRenew: z.boolean(),
   statuses: z.array(z.string()),
   registrant: z.string(),
   contacts: z.record(z.string(), z.string()),

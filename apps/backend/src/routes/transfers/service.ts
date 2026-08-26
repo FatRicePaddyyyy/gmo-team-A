@@ -291,19 +291,20 @@ async function compensateAndReconcile({
       } else {
         // (c) レジストリでは確定済み。gaining ユーザーがオーナーになった前提で DB を反映する。
         // 従来は status だけ変えて owner は据え置いていたが、それだと DB とレジストリで
-        // ownership が乖離するので commitServerApproved で 1 トランザクションで整合させる。
+        // ownership が乖離するので commitApproved で 1 トランザクションで整合させる。
         console.warn(
           `TransferService: registry transfer already settled; committing serverApproved and reassigning ownership to gainingUserId=${gainingUserId}.`,
         );
-        const commit = await TransferStatusRepository.commitServerApproved({
+        const commit = await TransferStatusRepository.commitApproved({
           transferId,
           domainId: domain.id,
+          transferStatus: "serverApproved",
           newOwnerUserId: gainingUserId,
           env,
         });
         if (!commit.success) {
           console.error(
-            `compensateAndReconcile: commitServerApproved failed for transferId=${transferId}. Manual reconciliation required.`,
+            `compensateAndReconcile: commitApproved (serverApproved) failed for transferId=${transferId}. Manual reconciliation required.`,
             commit.error,
           );
         }

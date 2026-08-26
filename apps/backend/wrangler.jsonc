@@ -95,7 +95,33 @@
           "database_id": "2ba676de-7422-4e9e-971f-f084f812c5fb",
           "migrations_dir": "drizzle"
         }
-      ]
+      ],
+      // B-C 対策: Wrangler の env override はトップレベル設定を継承しない項目もあるので、
+      // 本番でも同じ queue / cron 構成を明示的に再宣言する。
+      // トップレベルと同じ値なので、変更時は両方を同期させること。
+      "queues": {
+        "producers": [
+          { "binding": "TRANSFER_QUEUE", "queue": "transfer-poll" }
+        ],
+        "consumers": [
+          {
+            "queue": "transfer-poll",
+            "max_retries": 3,
+            "max_batch_size": 10,
+            "max_batch_timeout": 30,
+            "retry_delay": 600,
+            "dead_letter_queue": "transfer-poll-dlq"
+          },
+          {
+            "queue": "transfer-poll-dlq",
+            "max_retries": 10,
+            "max_batch_size": 10
+          }
+        ]
+      },
+      "triggers": {
+        "crons": ["0 * * * *"]
+      }
     }
   }
   // "compatibility_flags": [

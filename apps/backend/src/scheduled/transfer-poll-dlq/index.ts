@@ -6,7 +6,7 @@ import { TransferPollDlqService } from "./service";
 // backend が長時間 poll しても確定できなかった transfer なので、
 // (1) レジストリの info を叩いて真実を確認 (TransferPollDlqService.expire 内で実施)
 // (2) レジストリで pending 継続 → transfer.status = "expired" にマーク + domain.status = "ok" に戻す
-// (3) レジストリで serverApproved → commitServerApproved で所有権反映
+// (3) レジストリで serverApproved → commitApproved で所有権反映
 // (4) いずれの終端でも tryAckOwnMessage で registry キューの該当メッセージを ack
 // (5) console.error でオペレーターが気付けるようにする
 export async function handleTransferPollDlq(

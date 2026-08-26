@@ -1,4 +1,5 @@
 import { TransferStatusRepository } from "../../domains/transfer/repository";
+import { UserRepository } from "../../domains/user/repository";
 import { RegistryBridge } from "../../lib/bridge";
 import type { Registry } from "../../lib/bridge/types";
 import type { Result } from "../../types/result";
@@ -77,7 +78,7 @@ export class TransferPollDlqService {
 
     // レジストリでは確定済み。gaining ユーザーに所有権を移す。
     // gaining user が消えていた場合は expired 扱い。
-    const userExists = await TransferPollDlqRepository.userExists({ id: transfer.gainingUserId, env });
+    const userExists = await UserRepository.exists({ id: transfer.gainingUserId, env });
     if (!userExists.success) {return userExists;}
     if (!userExists.data) {
       console.error(
@@ -93,9 +94,10 @@ export class TransferPollDlqService {
     console.warn(
       `TransferPollDlqService: registry transfer already settled for transferId=${transferId}. Committing serverApproved.`,
     );
-    const commit = await TransferStatusRepository.commitServerApproved({
+    const commit = await TransferStatusRepository.commitApproved({
       transferId,
       domainId: transfer.domainId,
+      transferStatus: "serverApproved",
       newOwnerUserId: transfer.gainingUserId,
       env,
     });

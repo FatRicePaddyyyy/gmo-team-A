@@ -108,16 +108,6 @@ export class TransferStatusRepository {
     }
   }
 
-  // 後方互換ラッパ。旧名 commitServerApproved は "serverApproved" 決め打ちで呼ばれてきた。
-  // 新規コードは commitApproved を直接呼ぶこと。
-  static async commitServerApproved(params: {
-    transferId: string;
-    domainId: string;
-    newOwnerUserId: string;
-    env: CloudflareBindings;
-  }): Promise<Result<void>> {
-    return TransferStatusRepository.commitApproved({ ...params, transferStatus: "serverApproved" });
-  }
 }
 
 // transfers.status の取り得る値。schema コメントと同期させる。

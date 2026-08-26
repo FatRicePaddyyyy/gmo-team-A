@@ -1,7 +1,6 @@
 import { and, eq } from "drizzle-orm";
 import { createDBClient } from "../../lib/db";
 import { classifyDbError } from "../../lib/db-error";
-import { user } from "../../lib/schema/auth-schema";
 import { domains, transfers } from "../../lib/schema/general-schema";
 import type { Result } from "../../types/result";
 
@@ -43,77 +42,9 @@ export class TransferPollRepository {
     }
   }
 
-  // R6: gaining user が存在するかを確認する。存在しない場合は commitApproval が FK 制約違反で
-  // 永遠に失敗するので、poll consumer 側で terminal (expired) に落とすために使う。
-  static async userExists({
-    id,
-    env,
-  }: {
-    id: string;
-    env: CloudflareBindings;
-  }): Promise<Result<boolean>> {
-    try {
-      const db = createDBClient(env);
-      const rows = await db.select({ id: user.id }).from(user).where(eq(user.id, id));
-      return { success: true, data: rows.length > 0, error: null };
-    } catch (error) {
-      console.error("TransferPollRepository.userExists error:", error);
-      return { success: false, data: null, error: classifyDbError(error) };
-    }
-  }
-
-  // Drop #8: 承認確定の3更新 (transfer.status / domain.owner / domain.status) を batch で1トランザクションに。
-  // 中間状態で consumer が落ちても、次回 poll では transfer.status !== 'pendingTransfer' なので冪等スキップされる。
-  static async commitApproval({
-    transferId,
-    domainId,
-    transferStatus,
-    newOwnerUserId,
-    env,
-  }: {
-    transferId: string;
-    domainId: string;
-    transferStatus: "serverApproved" | "clientApproved";
-    newOwnerUserId: string;
-    env: CloudflareBindings;
-  }): Promise<Result<void>> {
-    try {
-      const db = createDBClient(env);
-      await db.batch([
-        db.update(transfers).set({ status: transferStatus }).where(eq(transfers.id, transferId)),
-        db.update(domains).set({ ownerUserId: newOwnerUserId, status: "ok" }).where(eq(domains.id, domainId)),
-      ]);
-      return { success: true, data: undefined, error: null };
-    } catch (error) {
-      console.error("TransferPollRepository.commitApproval error:", error);
-      return { success: false, data: null, error: classifyDbError(error) };
-    }
-  }
-
-  // Drop #8: 拒否/キャンセル確定の2更新を batch で1トランザクションに。
-  static async commitCancellation({
-    transferId,
-    domainId,
-    transferStatus,
-    env,
-  }: {
-    transferId: string;
-    domainId: string;
-    transferStatus: "clientRejected" | "clientCancelled";
-    env: CloudflareBindings;
-  }): Promise<Result<void>> {
-    try {
-      const db = createDBClient(env);
-      await db.batch([
-        db.update(transfers).set({ status: transferStatus }).where(eq(transfers.id, transferId)),
-        db.update(domains).set({ status: "ok" }).where(eq(domains.id, domainId)),
-      ]);
-      return { success: true, data: undefined, error: null };
-    } catch (error) {
-      console.error("TransferPollRepository.commitCancellation error:", error);
-      return { success: false, data: null, error: classifyDbError(error) };
-    }
-  }
+  // S-H: userExists は src/domains/user/repository.ts (UserRepository.exists) に集約。
+  // S-A: 承認/拒否/キャンセル確定の batch commit は TransferStatusRepository に集約 (NB-8)。
+  // poll consumer 側は直接 TransferStatusRepository.commitApproved / settleAndReleaseDomain を呼ぶ。
 
   // B4: poll で拾った message.payload.domain から pendingTransfer な transfer を引く。
   // 別ドメインのメッセージを消化するために使う。

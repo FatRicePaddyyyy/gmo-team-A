@@ -1,5 +1,8 @@
 // レジストリの型は openapi-typescript で Swagger から自動生成する。
-// Kitaqsign / Kitaqnic はコマンド体系が共通なので Kitaqsign を代表として参照する。
+// Kitaqsign / Kitaqnic はコマンド体系がほぼ共通なので、ここでは Kitaqsign を代表として参照する。
+// レジストリ間で shape が違うエンドポイントは bridge/index.ts 側で registry ごとに分岐して
+// 共通形に normalize する (例: hello — Kitaqnic は resData.info.supportedTlds にネスト)。
+// **生成型は bridge 内部の実装詳細**。この module から外向きに出す型は生成型に依存させない。
 // 生成: `pnpm openapi:gen`
 import type { components } from "./generated/kitaqsign";
 
@@ -32,7 +35,13 @@ export type DomainRenewResponse = WithRequiredExDate<Schemas["DomainRenewRespons
 export type DomainTransferResponse = Schemas["DomainTransferResponse"];
 
 // セッション（hello）
-export type GreetingResponse = Schemas["GreetingResponse"];
+// レジストリごとに hello の resData shape が違う (Kitaqsign は resData.tlds、
+// Kitaqnic は resData.info.supportedTlds にネスト) ので、bridge の外向きは
+// **生成型に依存しない共通形** を返す。normalize は bridge/index.ts 側で行う。
+export interface GreetingResponse {
+  registryCode: string;
+  tlds: string[];
+}
 
 // Poll
 // 生成型の payload は `{ [key: string]: Record<string, never> }` と過剰に厳しいため、

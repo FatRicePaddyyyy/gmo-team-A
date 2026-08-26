@@ -12,17 +12,26 @@ const HelloRequestSchema = z
 
 const HelloResponseSchema = z
   .object({
-    message: z.string().openapi({
-      example: "あなたはこんにちはと言いましたよ",
-      description: "エコーされたメッセージ",
+    success: z.literal(true),
+    data: z.object({
+      message: z.string().openapi({
+        example: "あなたはこんにちはと言いましたよ",
+        description: "エコーされたメッセージ",
+      }),
     }),
+    error: z.null(),
   })
   .openapi("EchoResponse");
 
+// S-E 対策: バリデーション失敗は createOpenAPIHono の defaultHook が処理し、
+// アプリ全体の統一形式 { success:false, data:null, error:"..." } で返される。
+// ここでは 400 のスキーマも同じ shape に揃える。
 const ErrorResponseSchema = z
   .object({
+    success: z.literal(false),
+    data: z.null(),
     error: z.string().openapi({
-      example: "テキストが無効です",
+      example: "入力内容に誤りがあります。項目を確認してください。",
       description: "エラーメッセージ",
     }),
   })
@@ -62,23 +71,20 @@ const echoRouteSchema = createRoute({
 
 const app = createOpenAPIHono();
 
+// S-E 対策: reachable でない try/catch を削除。
+// ctx.req.valid("json") はバリデーション失敗時に throw せず defaultHook を経由するため、
+// try/catch は無意味だった。
 export const helloRouteHandler = app.openapi(echoRouteSchema, (ctx) => {
-  try {
-    const { text } = ctx.req.valid("json");
-    const userId = ctx.get("userId");
-    return ctx.json(
-      {
+  const { text } = ctx.req.valid("json");
+  const userId = ctx.get("userId");
+  return ctx.json(
+    {
+      success: true as const,
+      data: {
         message: `あなたは${text}と言いましたよ。\n ユーザーID: ${userId}`,
       },
-      200,
-    );
-  } catch (error) {
-    console.error("Echo error:", error);
-    return ctx.json(
-      {
-        error: "テキストの処理中にエラーが発生しました",
-      },
-      400,
-    );
-  }
+      error: null,
+    },
+    200,
+  );
 });

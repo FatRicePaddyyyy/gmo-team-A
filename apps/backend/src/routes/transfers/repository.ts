@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { TransferStatusRepository } from "../../domains/transfer/repository";
 import type { TransferStatus } from "../../domains/transfer/repository";
 import { createDBClient } from "../../lib/db";

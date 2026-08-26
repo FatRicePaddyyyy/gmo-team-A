@@ -81,13 +81,15 @@ describe("getAllCategoriesAndProductsRouteHandler", () => {
   });
 
   test("[異常系] Repositoryがエラーを返した場合", async () => {
+    // B-A: repository は分類 code (db_error / unique_violation / fk_violation) を返し、
+    // ハンドラ側 toUserMessage で日本語文言に変換する。spec もそれに追随する。
     vi.spyOn(
       ProductRepository,
       "getAllCategoriesAndProducts",
     ).mockResolvedValue({
       success: false,
       data: null,
-      error: "データベースエラーが発生しました",
+      error: "db_error",
     });
 
     const res = await getAllCategoriesAndProductsRouteHandler.request(
@@ -103,7 +105,7 @@ describe("getAllCategoriesAndProductsRouteHandler", () => {
     expect(json).toEqual({
       success: false,
       data: null,
-      error: "データベースエラーが発生しました",
+      error: "データの取得または保存に失敗しました。しばらく待ってから再試行してください。",
     });
   });
 
