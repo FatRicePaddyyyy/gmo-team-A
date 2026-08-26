@@ -413,8 +413,9 @@ export class DomainService {
     //   transfer.status = "clientApproved" (losing が明示的に approve を叩いたので client 側の approve)
     //   domains.ownerUserId = gaining
     //   domains.status = "ok"
-    // これを 1 バッチで書くので、poll 側で serverApproved 経由の再度書きが来ても、既に
-    // pendingTransfer では無いので冪等スキップされる (transfer-poll/service.ts:34)。
+    // これを 1 バッチで書くので、後続の cron poll で serverApproved 経由のメッセージが届いても
+    // 既に pendingTransfer では無いので冪等スキップされる (transfer-cron-poll/service.ts handleMessage)。
+    // レジストリキューに残った通知メッセージは次回 cron drain が自然に ack して処分する。
     const commit = await TransferStatusRepository.commitApproved({
       transferId: transferResult.data.id,
       domainId,
@@ -423,31 +424,6 @@ export class DomainService {
       env,
     });
     if (!commit.success) {return commit;}
-
-    // R3 相当: approve 直後に短 delay で queue に再投入 (belt-and-suspenders)。
-    // レジストリから返る poll メッセージも消化しないとレジストリ側キューに残り HoL block する。
-    // TRANSFER_QUEUE 欠落や send 失敗は「DB 反映済み・キュー未投入」の状態になるが、
-    // safety-net cron の recent-settled-ack パス (SETTLED_ACK_LOOKBACK_HOURS=2h) が
-    // 最大 1 時間後に該当メッセージを ack するので、致命的ではない。
-    if (!env.TRANSFER_QUEUE) {
-      console.warn(
-        `DomainService.approveTransfer: TRANSFER_QUEUE binding missing for transferId=${transferResult.data.id}; DB committed, registry ack will be attempted by safety-net cron within 1h.`,
-      );
-      return { success: true, data: undefined, error: null };
-    }
-    try {
-      await env.TRANSFER_QUEUE.send(
-        { transferId: transferResult.data.id },
-        { delaySeconds: 30 },
-      );
-    } catch (e) {
-      // DB は既に確定済みなので queue send 失敗は致命的ではない。
-      // safety-net cron の recent-settled-ack パスが最大 1 時間後にレジストリ ack を試みる。
-      console.warn(
-        `DomainService.approveTransfer: TRANSFER_QUEUE.send failed for transferId=${transferResult.data.id}; DB committed, registry ack deferred to safety-net cron.`,
-        e,
-      );
-    }
 
     return { success: true, data: undefined, error: null };
   }

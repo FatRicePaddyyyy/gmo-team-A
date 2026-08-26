@@ -23,10 +23,7 @@ import { helloRouteHandler } from "./routes/hello/post";
 import { cancelTransferRouteHandler } from "./routes/transfers/[transfer-id]/cancel/post";
 import { listTransfersRouteHandler } from "./routes/transfers/get";
 import { requestTransferRouteHandler } from "./routes/transfers/post";
-import { handleTransferPollQueue } from "./scheduled/transfer-poll";
-import { handleTransferPollDlq } from "./scheduled/transfer-poll-dlq";
-import { handleTransferSafetyNetCron } from "./scheduled/transfer-safety-net";
-import type { TransferPollMessage } from "./types/queue";
+import { handleTransferCronPoll } from "./scheduled/transfer-cron-poll";
 
 const app = createOpenAPIHono();
 
@@ -82,17 +79,9 @@ export type ApiType = typeof routes;
 
 export default {
   fetch: routes.fetch,
-  // transfer-poll と transfer-poll-dlq の 2 つの consumer を queue 名で分岐する。
-  async queue(batch: MessageBatch<TransferPollMessage>, env: CloudflareBindings): Promise<void> {
-    if (batch.queue === "transfer-poll-dlq") {
-      await handleTransferPollDlq(batch, env);
-      return;
-    }
-    await handleTransferPollQueue(batch, env);
-  },
-  // R1: safety-net cron。wrangler.jsonc の triggers.crons で 1 時間ごとに発火。
-  // Cloudflare Workers spec: 第 1 引数は ScheduledController (scheduledTime プロパティを持つ)。
+  // Cron trigger: 毎分発火して両レジストリを poll drain + 22 分経過した pendingTransfer を info reconcile。
+  // wrangler.jsonc の triggers.crons ("* * * * *") で駆動される。
   async scheduled(controller: ScheduledController, env: CloudflareBindings, _ctx: ExecutionContext): Promise<void> {
-    await handleTransferSafetyNetCron(env, new Date(controller.scheduledTime));
+    await handleTransferCronPoll(env, new Date(controller.scheduledTime));
   },
 };

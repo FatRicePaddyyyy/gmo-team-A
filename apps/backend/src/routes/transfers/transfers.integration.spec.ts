@@ -15,10 +15,7 @@ import { TransferRepository } from "./repository";
 // RegistryBridge と各 Repository をモックして
 // ハンドラーが正しい HTTP ステータスとユーザー向けメッセージを返すかを検証する。
 
-const mockEnv = {
-  // Drop #1/#2 対策で TRANSFER_QUEUE.send が必須になったため、no-op モックを注入
-  TRANSFER_QUEUE: { send: async () => undefined },
-} as unknown as CloudflareBindings;
+const mockEnv = {} as unknown as CloudflareBindings;
 
 // テスト時は authMiddleware が通らず ctx.get("userId") === undefined になる。
 // ownerUserId / gainingUserId を undefined に合わせることで権限チェックを通過させる。
