@@ -1,3 +1,4 @@
+import { $checkDomain } from "@/clients";
 import type { DomainResult } from "@/components/domain-search-result";
 import {
   TLD_CATALOG,
@@ -7,16 +8,6 @@ import {
   twoYearTotalOf,
   type TldInfo,
 } from "@/shared/lib/tld-catalog";
-
-/** 同じクエリなら毎回同じ空き状況を返すための簡易ハッシュ */
-function hashString(value: string): number {
-  let hash = 0;
-  for (let i = 0; i < value.length; i++) {
-    hash = (hash << 5) - hash + value.charCodeAt(i);
-    hash |= 0;
-  }
-  return Math.abs(hash);
-}
 
 /** TLD辞書の1件を、検索結果1行の表示データに変換する */
 function toDomainResult(info: TldInfo, name: string, available: boolean): DomainResult {
@@ -37,32 +28,38 @@ function toDomainResult(info: TldInfo, name: string, available: boolean): Domain
   };
 }
 
-function mockSearchDomains(query: string): DomainResult[] {
-  const seed = hashString(query.toLowerCase());
-  return TLD_CATALOG.map((info, index) =>
-    toDomainResult(info, query, (seed + index) % 5 !== 0),
-  );
+/**
+ * 1つのTLDについて空き状況を確認する。
+ *
+ * 非対応TLD（unsupported_tld）やネットワークエラーも含め、失敗はすべて
+ * 「空きなし」として扱う。検索結果は複数TLDの一覧なので、1件のエラーで
+ * 画面全体を落とさないことを優先する。
+ */
+async function checkAvailability(fullName: string): Promise<boolean> {
+  try {
+    const response = await $checkDomain({ json: { name: fullName } });
+    const body = await response.json();
+    if (!body.success) return false;
+    return body.data.avail;
+  } catch {
+    return false;
+  }
 }
 
 /**
  * ドメイン検索。
  *
- * TODO(Issue #18): バックエンドに検索APIが実装されたら、この関数の中身だけを
- * clients.ts 経由の実API呼び出しに差し替える（呼び出し側の変更は不要）。
- *
- * 想定する差し替え後の実装（Issue #10 の check 仕様準拠）:
- *   const res = await $checkDomain({ json: { name: query } });
- *   const body = await res.json();
- *   return body.data.results.map(toDomainResult);
- *
- * 現状 apps/backend/src/routes 配下に該当エンドポイントが無いため、
- * フロント単体で確認できるようモックデータを返している。
+ * カタログの各TLDについて、実際のレジストリへ空き確認（Issue #10 の check 仕様）を
+ * 並列で問い合わせる。価格・説明はTLD_CATALOGの静的データを使う。
  */
 export async function searchDomains(query: string): Promise<DomainResult[]> {
   const name = stripKnownTld(query.trim());
   if (!name) return [];
 
-  // 実API接続時のローディング表示を確認できるよう、意図的に遅延を入れている
-  await new Promise((resolve) => setTimeout(resolve, 300));
-  return mockSearchDomains(name);
+  return Promise.all(
+    TLD_CATALOG.map(async (info) => {
+      const available = await checkAvailability(`${name}${info.tld}`);
+      return toDomainResult(info, name, available);
+    }),
+  );
 }

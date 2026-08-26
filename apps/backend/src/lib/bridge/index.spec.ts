@@ -450,3 +450,41 @@ describe("RegistryBridge.transferRequest: authInfo 不一致の吸収", () => {
     expect(res.error).toBe("domain_not_found");
   });
 });
+
+// ─── renew ───────────────────────────────────────────────────────────────────
+
+describe("RegistryBridge.renew", () => {
+  test("[正常系] 200 + 1000 なら成功し、新しい exDate を返す", async () => {
+    stubRegistry(200, okEnvelope({ domain: "example.com", exDate: "2028-08-26T00:00:00.000Z" }));
+
+    const res = await RegistryBridge.renew({
+      name: "example.com",
+      curExpDate: "2027-08-26T00:00:00.000Z",
+      period: { unit: "Y", value: 1 },
+      registry: "kitaqsign",
+      env: mockEnv,
+    });
+
+    expect(res.success).toBe(true);
+    expect(res.data?.domain).toBe("example.com");
+    expect(res.data?.exDate).toBe("2028-08-26T00:00:00.000Z");
+  });
+
+  // kitaqnic も同じ EppResponseDomainRenewResponse 形（exDate あり）を返す。
+  // update と違って renew は両レジストリでレスポンス形が一致しているため、
+  // 片方だけ通ればもう片方も通る前提だが、回帰確認として明示しておく。
+  test("[正常系] kitaqnic でも同じ形で成功する", async () => {
+    stubRegistry(200, okEnvelope({ domain: "example.xyz", exDate: "2028-08-26T00:00:00.000Z" }));
+
+    const res = await RegistryBridge.renew({
+      name: "example.xyz",
+      curExpDate: "2027-08-26T00:00:00.000Z",
+      period: { unit: "Y", value: 1 },
+      registry: "kitaqnic",
+      env: mockEnv,
+    });
+
+    expect(res.success).toBe(true);
+    expect(res.data?.exDate).toBe("2028-08-26T00:00:00.000Z");
+  });
+});

@@ -9,6 +9,10 @@ const buttonVariants = cva(
     variants: {
       variant: {
         default: "bg-primary text-primary-foreground hover:bg-primary/80",
+        // 主要 CTA 用。default（--primary）は黒でブランド色ではないため、
+        // 赤を使いたい箇所で毎回インラインスタイルを書かなくて済むようにする。
+        brand:
+          "bg-[var(--brand)] text-[var(--brand-foreground)] hover:bg-[var(--brand-dark)]",
         outline:
           "border-border bg-background hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50",
         secondary:

@@ -50,14 +50,16 @@ export function attachDetail(code: string, detail: string | undefined | null): s
 // openapi-fetch の error / data いずれにも result フィールドが乗る可能性があるので unknown で受ける。
 export function extractResultMessage(body: unknown): string | undefined {
   if (typeof body !== "object" || body === null || !("result" in body)) {return undefined;}
-  const result = (body as { result: unknown }).result;
+  const result = body.result;
   if (typeof result !== "object" || result === null) {return undefined;}
   // 実機は "message" と "msg" が混在する (メンテ中は msg で返ってくる、実測)
-  for (const key of ["message", "msg"] as const) {
-    if (key in result) {
-      const v = (result as Record<string, unknown>)[key];
-      if (typeof v === "string" && v.trim() !== "") {return v;}
-    }
+  if ("message" in result) {
+    const v = result.message;
+    if (typeof v === "string" && v.trim() !== "") {return v;}
+  }
+  if ("msg" in result) {
+    const v = result.msg;
+    if (typeof v === "string" && v.trim() !== "") {return v;}
   }
   return undefined;
 }

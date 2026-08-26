@@ -80,8 +80,7 @@ function OptionAddCard({ item }: OptionAddCardProps) {
           ) : (
             <Button
               size="sm"
-              className="text-white"
-              style={{ background: "var(--brand)" }}
+              variant="brand"
               onClick={() => item.onAdd?.(item.id)}
             >
               <Plus className="mr-1 size-3" />

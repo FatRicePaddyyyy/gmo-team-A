@@ -115,7 +115,7 @@ export class OutboundTransferRequestRepository {
         db.insert(domains).values(newDomain).returning(),
       ]);
       // batch の 2 番目 (insert...returning) の結果
-      const insertResult = results[1] as Domain[];
+      const insertResult = results[1];
       const created = insertResult[0];
       // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
       if (!created) {

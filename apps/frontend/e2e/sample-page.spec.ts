@@ -14,33 +14,32 @@ test.describe("/sample — コンポーネントカタログ", () => {
   test("SiteHeader が表示される", async ({ page }) => {
     const header = page.getByRole("banner");
     await expect(header).toBeVisible();
-    await expect(header.getByRole("link", { name: "ドメイン取得" })).toBeVisible();
+    await expect(header.getByRole("link", { name: "ドメインを探す" })).toBeVisible();
   });
 
   test("HeroSearch が表示される", async ({ page }) => {
-    const searchInput = page.getByPlaceholder(/ドメイン名を検索/);
+    const searchInput = page.getByPlaceholder("manabi-blog");
     await expect(searchInput).toBeVisible();
-    // 検索ボタンは複数あるので最初の1つ
-    await expect(page.getByRole("button", { name: "検索" }).first()).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "空き状況を調べる" }).first(),
+    ).toBeVisible();
   });
 
   test("HeroSearch に入力できる", async ({ page }) => {
-    const input = page.getByPlaceholder(/ドメイン名を検索/);
+    const input = page.getByPlaceholder("manabi-blog");
     await input.fill("testdomain");
     await expect(input).toHaveValue("testdomain");
   });
 
   test("FeatureCards が 4 件表示される", async ({ page }) => {
-    await expect(page.getByText("お名前.comが選ばれる理由")).toBeVisible();
-    await expect(page.getByText("最安値のドメイン")).toBeVisible();
-    await expect(page.getByText("国内シェア No.1")).toBeVisible();
-    // 重複テキストは heading で絞る
-    await expect(page.getByRole("heading", { name: "管理がかんたん" })).toBeVisible();
-    await expect(page.getByText("すぐに使える").first()).toBeVisible();
+    await expect(page.getByText("末尾（TLD）で条件が変わる")).toBeVisible();
+    await expect(page.getByText("ドメインは毎年の更新制")).toBeVisible();
+    await expect(page.getByText("登録者の情報は公開される")).toBeVisible();
+    await expect(page.getByText("名前は短く・打ちやすく")).toBeVisible();
   });
 
   test("DomainPriceTable が表示される", async ({ page }) => {
-    await expect(page.getByText("おすすめドメイン")).toBeVisible();
+    await expect(page.getByText("末尾（TLD）別の料金")).toBeVisible();
     await expect(page.getByText(".com").first()).toBeVisible();
     await expect(page.getByText(".net").first()).toBeVisible();
   });
@@ -100,18 +99,20 @@ test.describe("/sample — コンポーネントカタログ", () => {
     await expect(page.getByText("ドメインプロテクション")).toBeVisible();
   });
 
-  test("OptionSection の追加ボタンが機能する", async ({ page }) => {
+  test("OptionSection の追加ボタンが押せる", async ({ page }) => {
     // "use client" コンポーネントのハイドレーション完了を待つ
     await page.waitForSelector("text=Whois情報公開代行メール転送オプション", { timeout: 15_000 });
     await expect(page.getByText("Whois情報公開代行メール転送オプション")).toBeVisible();
 
-    // 「追加」ボタンをクリック（OptionSection 内の最初のもの）
     const addButton = page.getByRole("button", { name: "追加" }).first();
     await expect(addButton).toBeVisible({ timeout: 10_000 });
+    await expect(addButton).toBeEnabled();
     await addButton.click();
 
-    // クリック後「追加済み ✓」に変わる
-    await expect(page.getByRole("button", { name: /追加済み/ }).first()).toBeVisible({ timeout: 5_000 });
+    // /sample はコンポーネントの見た目を並べるカタログで、状態を持たない
+    // （OptionSection に onAdd を渡していない）。押しても「追加済み ✓」には
+    // 変わらないのが実装どおりなので、押下できることまでを確認する。
+    await expect(addButton).toBeVisible();
   });
 
   test("OrderSummary が表示される", async ({ page }) => {
@@ -141,6 +142,6 @@ test.describe("/sample — コンポーネントカタログ", () => {
   test("SiteFooter が表示される", async ({ page }) => {
     const footer = page.getByRole("contentinfo");
     await expect(footer).toBeVisible();
-    await expect(footer.getByText(/GMO Internet/)).toBeVisible();
+    await expect(footer.getByText(/まなびドメイン/).first()).toBeVisible();
   });
 });

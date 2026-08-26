@@ -118,8 +118,8 @@ export default function Home() {
       <section className="bg-gray-50 pb-12">
         <div className="mx-auto flex max-w-3xl flex-col justify-center gap-2 px-4 sm:flex-row">
           <Button
-            className="h-11 px-5 text-white"
-            style={{ background: "var(--brand)" }}
+            className="h-11 px-5"
+            variant="brand"
             nativeButton={false}
             render={<Link href="/search" />}
           >

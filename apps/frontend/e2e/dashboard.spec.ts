@@ -6,19 +6,23 @@ test.describe("ダッシュボード", () => {
   test("未ログイン状態では「ログインページへ」ボタンが表示される", async ({ page }) => {
     const dashboard = new DashboardPage(page);
     await dashboard.goto();
-    await expect(page.getByRole("button", { name: "ログインページへ" })).toBeVisible();
+    await expect(dashboard.loginPrompt).toBeVisible();
+    // Button に nativeButton={false} を付けているため、<a> でも role は button になる
+    await expect(
+      page.getByRole("button", { name: "ログインページへ" }),
+    ).toBeVisible();
   });
 
-  test("ダッシュボードのタイトルが表示される", async ({ page }) => {
-    const dashboard = new DashboardPage(page);
-    await dashboard.goto();
-    await expect(dashboard.heading).toBeVisible();
-  });
-
-  test("ログイン後はログイン済み状態が表示される", async ({ page }) => {
+  test("ログイン後はマイドメインの見出しが表示される", async ({ page }) => {
     await login(page);
     const dashboard = new DashboardPage(page);
-    await expect(dashboard.loginStatusText).toBeVisible();
+    await expect(dashboard.signedInHeading).toBeVisible();
+  });
+
+  test("ログイン後は取得済みドメインのセクションが表示される", async ({ page }) => {
+    await login(page);
+    const dashboard = new DashboardPage(page);
+    await expect(dashboard.domainSection).toBeVisible();
   });
 
   test("ログアウトするとログインページに戻る", async ({ page }) => {

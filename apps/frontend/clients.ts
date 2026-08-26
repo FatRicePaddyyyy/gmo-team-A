@@ -27,3 +27,89 @@ export const $deleteCategory = client(
 ).secure.category[":categoryId"].$delete;
 export type DeleteCategoryRequest = InferRequestType<typeof $deleteCategory>;
 export type DeleteCategoryResponse = InferResponseType<typeof $deleteCategory>;
+
+// ドメイン空き確認は認証不要の公開エンドポイント（未ログインの検索導線から呼べる）
+export const $checkDomain = client(
+  process.env.NEXT_PUBLIC_BACKEND_URL!,
+).public.domains.check.$post;
+export type CheckDomainRequest = InferRequestType<typeof $checkDomain>;
+export type CheckDomainResponse = InferResponseType<typeof $checkDomain>;
+
+export const $listDomains = client(
+  process.env.NEXT_PUBLIC_BACKEND_URL!,
+).secure.domains.$get;
+export type ListDomainsResponse = InferResponseType<typeof $listDomains>;
+
+export const $createDomain = client(
+  process.env.NEXT_PUBLIC_BACKEND_URL!,
+).secure.domains.$post;
+export type CreateDomainRequest = InferRequestType<typeof $createDomain>;
+export type CreateDomainResponse = InferResponseType<typeof $createDomain>;
+
+export const $getDomain = client(
+  process.env.NEXT_PUBLIC_BACKEND_URL!,
+).secure.domains[":domain-id"].$get;
+export type GetDomainRequest = InferRequestType<typeof $getDomain>;
+export type GetDomainResponse = InferResponseType<typeof $getDomain>;
+
+export const $updateDomain = client(
+  process.env.NEXT_PUBLIC_BACKEND_URL!,
+).secure.domains[":domain-id"].$put;
+export type UpdateDomainRequest = InferRequestType<typeof $updateDomain>;
+export type UpdateDomainResponse = InferResponseType<typeof $updateDomain>;
+
+export const $deleteDomain = client(
+  process.env.NEXT_PUBLIC_BACKEND_URL!,
+).secure.domains[":domain-id"].$delete;
+export type DeleteDomainRequest = InferRequestType<typeof $deleteDomain>;
+export type DeleteDomainResponse = InferResponseType<typeof $deleteDomain>;
+
+export const $renewDomain = client(
+  process.env.NEXT_PUBLIC_BACKEND_URL!,
+).secure.domains[":domain-id"].renew.$post;
+export type RenewDomainRequest = InferRequestType<typeof $renewDomain>;
+export type RenewDomainResponse = InferResponseType<typeof $renewDomain>;
+
+export const $restoreDomain = client(
+  process.env.NEXT_PUBLIC_BACKEND_URL!,
+).secure.domains[":domain-id"].restore.$post;
+export type RestoreDomainRequest = InferRequestType<typeof $restoreDomain>;
+export type RestoreDomainResponse = InferResponseType<typeof $restoreDomain>;
+
+export const $approveTransfer = client(
+  process.env.NEXT_PUBLIC_BACKEND_URL!,
+).secure.domains[":domain-id"].transfer.approve.$post;
+export type ApproveTransferRequest = InferRequestType<typeof $approveTransfer>;
+export type ApproveTransferResponse = InferResponseType<typeof $approveTransfer>;
+
+export const $rejectTransfer = client(
+  process.env.NEXT_PUBLIC_BACKEND_URL!,
+).secure.domains[":domain-id"].transfer.reject.$post;
+export type RejectTransferRequest = InferRequestType<typeof $rejectTransfer>;
+export type RejectTransferResponse = InferResponseType<typeof $rejectTransfer>;
+
+export const $requestTransfer = client(
+  process.env.NEXT_PUBLIC_BACKEND_URL!,
+).secure.transfers.$post;
+export type RequestTransferRequest = InferRequestType<typeof $requestTransfer>;
+export type RequestTransferResponse = InferResponseType<typeof $requestTransfer>;
+
+export const $cancelTransfer = client(
+  process.env.NEXT_PUBLIC_BACKEND_URL!,
+).secure.transfers[":transfer-id"].cancel.$post;
+export type CancelTransferRequest = InferRequestType<typeof $cancelTransfer>;
+export type CancelTransferResponse = InferResponseType<typeof $cancelTransfer>;
+
+// 自分が申請した移管の一覧（取消対象を見つけるために使う）
+export const $listTransfers = client(
+  process.env.NEXT_PUBLIC_BACKEND_URL!,
+).secure.transfers.$get;
+export type ListTransfersResponse = InferResponseType<typeof $listTransfers>;
+
+// 自分のドメインに来ている移管申請の一覧（承認・却下の対象）
+export const $listPendingInboundTransfers = client(
+  process.env.NEXT_PUBLIC_BACKEND_URL!,
+).secure.domains["pending-inbound-transfers"].$get;
+export type ListPendingInboundTransfersResponse = InferResponseType<
+  typeof $listPendingInboundTransfers
+>;

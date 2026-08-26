@@ -21,8 +21,8 @@ export default function NotFound() {
           </p>
           <div className="flex flex-col justify-center gap-2 sm:flex-row">
             <Button
-              className="h-11 px-5 text-white"
-              style={{ background: "var(--brand)" }}
+              className="h-11 px-5"
+              variant="brand"
               nativeButton={false}
               render={<Link href="/search" />}
             >
