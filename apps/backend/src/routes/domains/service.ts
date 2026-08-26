@@ -8,12 +8,33 @@ import { DomainRepository } from "./repository";
 import { DomainTransferRepository } from "./transfer-repository";
 import { DomainUserRepository } from "./user-repository";
 
+// 廃止したドメインが取りうる状態。
+//
+// レジストリの仕様（実機で確認済み）:
+//   廃止直後   status = ["pendingDelete", "redemptionPeriod"]  → 復旧できる
+//   45日経過後 status = ["pendingDelete"]                      → 復旧できない
+// pendingDelete は復旧できなくなったあとも付いたままなので、それだけでは
+// 復旧できるかを判断できない。復旧可否は redemptionPeriod の有無で決まる。
+//
+// なお復旧できるかどうかの判断はレジストリに任せている（DB の値は古い可能性があるため）。
+// ここで使うのは「復旧した直後にまだ廃止中の値が返ってきたら ok に倒す」ためだけ。
+const DELETED_STATUSES = ["redemptionPeriod", "pendingDelete"] as const;
+
+function isDeletedStatus(status: string): boolean {
+  return (DELETED_STATUSES as readonly string[]).includes(status);
+}
+
 // レジストリの status[] を DB カラム用の 1 つの status に集約する。
 // B7: DB の status は「ドメインが今どの遷移状態にあるか」を表す業務ステータスなので、
-// pending* が最優先、続いて server* の運用ロック、それ以外は "ok" に丸める。
+// 復旧できる猶予状態 (redemptionPeriod) が最優先、次に pending*、続いて server* の運用ロック、
+// それ以外は "ok" に丸める。
 // clientTransferProhibited など client 系フラグは DB.status に載せない
 // (載せると "ok" 判定が壊れて transfer/renew ができなくなる)。
 function pickPrimaryStatus(statuses: string[], fallback: string): string {
+  // 廃止直後は pendingDelete と redemptionPeriod が両方付く。復旧できるのは
+  // redemptionPeriod があるときだけなので、そちらを優先して記録する
+  // （45日経過後は pendingDelete だけが残り、復旧できない状態と区別できる）。
+  if (statuses.includes("redemptionPeriod")) {return "redemptionPeriod";}
   if (statuses.includes("pendingDelete")) {return "pendingDelete";}
   if (statuses.includes("pendingTransfer")) {return "pendingTransfer";}
   if (statuses.includes("pendingRenew")) {return "pendingRenew";}
@@ -334,10 +355,29 @@ export class DomainService {
     });
     if (!deleteResult.success) {return deleteResult;}
 
-    const updateResult = await DomainRepository.updateStatus({ id: domainId, status: "pendingDelete", env });
+    // 廃止後の status を "pendingDelete" 決め打ちにしない。
+    // delete のレスポンスは resData が空で status を返さないため info で取り直す。
+    // 猶予状態の呼び名はレジストリによって redemptionPeriod / pendingDelete と分かれ、
+    // 意味も違う（前者は復旧できる、後者は削除待ち）ので、返ってきた値をそのまま記録する。
+    // info が取れなければ、実機の挙動に合わせて pendingDelete に倒す。
+    const infoResult = await RegistryBridge.info({
+      name: domain.name,
+      registry: domain.registry,
+      env,
+    });
+    if (!infoResult.success) {
+      console.error(
+        `DomainService.delete: 廃止後の info を取得できなかったため status を "pendingDelete" として保存します: ${infoResult.error}`,
+      );
+    }
+    const status = infoResult.success
+      ? pickPrimaryStatus(infoResult.data.status ?? [], "pendingDelete")
+      : "pendingDelete";
+
+    const updateResult = await DomainRepository.updateStatus({ id: domainId, status, env });
     if (!updateResult.success) {return updateResult;}
 
-    const updated = { ...domain, status: "pendingDelete" };
+    const updated = { ...domain, status };
     return { success: true, data: DomainMapper.toResponse(updated), error: null };
   }
 
@@ -542,9 +582,10 @@ export class DomainService {
     const raw = infoResult.success
       ? pickPrimaryStatus(infoResult.data.status ?? [], "ok")
       : "ok";
-    // レジストリ側の反映が一瞬遅れて pendingDelete が返ることがある。
-    // ここで書き戻すと「復旧したのに廃止中」になってしまうので、そのときだけ ok に倒す。
-    const status = raw === "pendingDelete" ? "ok" : raw;
+    // レジストリ側の反映が一瞬遅れて、まだ廃止中（redemptionPeriod / pendingDelete）が
+    // 返ることがある。ここで書き戻すと「復旧したのに廃止中」になってしまうので ok に倒す。
+    // 「復旧できるか」の判定（isRestorable）とは別物なので、ここでは両方を見る。
+    const status = isDeletedStatus(raw) ? "ok" : raw;
 
     const updateResult = await DomainRepository.updateStatus({ id: domainId, status, env });
     if (!updateResult.success) {return updateResult;}

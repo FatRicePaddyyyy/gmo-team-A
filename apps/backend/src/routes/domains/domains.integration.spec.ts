@@ -340,11 +340,55 @@ describe("結合: PUT /api/v1/secure/domains/{id}", () => {
 
 // ─── delete ───────────────────────────────────────────────────────────────────
 
+// レジストリが返す status[] をそのまま与えるための共通モック。
+// 廃止・復旧のあとは info で status を取り直すので、対でモックしないと
+// 本物のレジストリを叩きにいって失敗し、フォールバック値でたまたま通ってしまう。
+const mockRegistryInfo = (statuses: string[]) =>
+  vi.spyOn(RegistryBridge, "info").mockResolvedValue({
+    success: true,
+    data: {
+      domain: mockDomainRow.name,
+      status: statuses,
+      registrant: "C-0001",
+      contacts: {},
+      nameservers: [],
+      crDate: "2026-08-25T00:00:00.000Z",
+      exDate: "2027-08-25T00:00:00.000Z",
+      rgpStatus: [],
+    },
+    error: null,
+  });
+
 describe("結合: DELETE /api/v1/secure/domains/{id}", () => {
-  test("[正常系] 廃止成功 → 200 + status=pendingDelete", async () => {
+  const mockDeleteDeps = () => {
     vi.spyOn(DomainRepository, "findById").mockResolvedValue({ success: true, data: mockDomainRow, error: null });
-    vi.spyOn(DomainRepository, "updateStatus").mockResolvedValue({ success: true, data: undefined, error: null });
     vi.spyOn(RegistryBridge, "delete").mockResolvedValue({ success: true, data: {}, error: null });
+    return vi.spyOn(DomainRepository, "updateStatus")
+      .mockResolvedValue({ success: true, data: undefined, error: null });
+  };
+
+  // 実機は廃止直後に pendingDelete と redemptionPeriod を両方付ける。
+  // 復旧できるのは redemptionPeriod があるときだけなので、そちらを記録する。
+  test("[正常系] 廃止成功 → 200 + status=redemptionPeriod（両方付く）", async () => {
+    const updateSpy = mockDeleteDeps();
+    mockRegistryInfo(["pendingDelete", "redemptionPeriod"]);
+
+    const res = await deleteDomainRouteHandler.request(
+      "/api/v1/secure/domains/dom-001",
+      { method: "DELETE" },
+      mockEnv,
+    );
+    expect(res.status).toBe(200);
+    const json = await res.json() as any;
+    expect(json.data.status).toBe("redemptionPeriod");
+    expect(updateSpy).toHaveBeenCalledWith(expect.objectContaining({ status: "redemptionPeriod" }));
+  });
+
+  // 廃止から45日を過ぎると redemptionPeriod が外れ、pendingDelete だけが残る。
+  // この状態は復旧できないので、区別できるようにそのまま記録する。
+  test("[正常系] 猶予期間を過ぎて pendingDelete だけなら pendingDelete を記録する", async () => {
+    const updateSpy = mockDeleteDeps();
+    mockRegistryInfo(["pendingDelete"]);
 
     const res = await deleteDomainRouteHandler.request(
       "/api/v1/secure/domains/dom-001",
@@ -354,6 +398,24 @@ describe("結合: DELETE /api/v1/secure/domains/{id}", () => {
     expect(res.status).toBe(200);
     const json = await res.json() as any;
     expect(json.data.status).toBe("pendingDelete");
+    expect(updateSpy).toHaveBeenCalledWith(expect.objectContaining({ status: "pendingDelete" }));
+  });
+
+  test("[異常系] info が失敗しても廃止は成功扱い（status は pendingDelete に倒す）", async () => {
+    const updateSpy = mockDeleteDeps();
+    vi.spyOn(RegistryBridge, "info").mockResolvedValue({
+      success: false, data: null, error: "network_error",
+    });
+
+    const res = await deleteDomainRouteHandler.request(
+      "/api/v1/secure/domains/dom-001",
+      { method: "DELETE" },
+      mockEnv,
+    );
+    expect(res.status).toBe(200);
+    const json = await res.json() as any;
+    expect(json.data.status).toBe("pendingDelete");
+    expect(updateSpy).toHaveBeenCalledWith(expect.objectContaining({ status: "pendingDelete" }));
   });
 
   test("[異常系] clientDeleteProhibited → 409 + ユーザー向けメッセージ", async () => {
@@ -493,6 +555,23 @@ describe("結合: POST /api/v1/secure/domains/{id}/restore", () => {
   // レジストリが復旧を断るケース。実機で確認できたのは「pendingDelete でない」場合で、
   // Grace Period 超過は猶予期間(kitaqnic は 45日)を待たないと再現できず未確認。
   // どちらもレジストリからは同じ 2304 で返るため、bridge から先の扱いは共通。
+  // 復旧直後にレジストリの反映が遅れると、廃止中の値（実機では両方付く）が返ることがある。
+  // 「復旧したのに廃止中」になってしまうので巻き戻さない。
+  test("[異常系] info がまだ廃止中（両方付き）を返しても巻き戻さない", async () => {
+    const updateSpy = mockRestoreDeps();
+    mockInfo(["pendingDelete", "redemptionPeriod"]);
+
+    const res = await restoreDomainRouteHandler.request(
+      "/api/v1/secure/domains/dom-001/restore",
+      { method: "POST" },
+      mockEnv,
+    );
+    expect(res.status).toBe(200);
+    const json = await res.json() as any;
+    expect(json.data.status).toBe("ok");
+    expect(updateSpy).toHaveBeenCalledWith(expect.objectContaining({ status: "ok" }));
+  });
+
   test("[異常系] レジストリが復旧を断る（2304）→ 409 + ユーザー向けメッセージ", async () => {
     mockRestoreDeps();
     vi.spyOn(RegistryBridge, "restore").mockResolvedValue({ success: false, data: null, error: "operation_prohibited" });

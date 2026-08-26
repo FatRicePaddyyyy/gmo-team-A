@@ -40,7 +40,8 @@ export const domains = sqliteTable("domains", {
   name: text("name").notNull().unique(),
   registry: text("registry", { enum: ["kitaqsign", "kitaqnic"] }).notNull(),
   status: text("status").notNull().default("ok"),
-  // ok / pendingDelete / pendingTransfer
+  // ok / redemptionPeriod / pendingDelete / pendingTransfer
+  // redemptionPeriod は廃止後の「まだ復旧できる猶予期間」、pendingDelete は削除待ちで意味が違う
   // clientDeleteProhibited 等はレジストリ側で管理。info で都度取得するため DB には持たない
   expiresAt: integer("expires_at", { mode: "timestamp_ms" }).notNull(),
   createdAt: integer("created_at", { mode: "timestamp_ms" })
