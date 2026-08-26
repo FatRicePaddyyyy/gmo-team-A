@@ -32,7 +32,8 @@ export function useInboundTransfers(
   onDomainsChanged: () => void | Promise<void>,
 ) {
   const [transfers, setTransfers] = useState<InboundTransfer[]>([]);
-  const [loading, setLoading] = useState(false);
+  // enabled なら初回取得が必ず走る。false 始まりだと取得前に空状態が一瞬描画される
+  const [loading, setLoading] = useState(enabled);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [running, setRunning] = useState<RunningTransferAction | null>(null);
   const [feedback, setFeedback] = useState<DomainFeedback | null>(null);
@@ -44,8 +45,8 @@ export function useInboundTransfers(
       $listPendingInboundTransfers(),
     );
     if (!result.success) {
+      // 直前の一覧は消さない（成功メッセージと空状態が同時に出るのを避ける）
       setLoadError(result.error);
-      setTransfers([]);
     } else {
       setTransfers(result.data);
     }

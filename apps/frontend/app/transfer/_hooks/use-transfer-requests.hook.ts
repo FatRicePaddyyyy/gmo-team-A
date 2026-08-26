@@ -29,7 +29,8 @@ export interface TransferFeedback {
  */
 export function useTransferRequests(enabled: boolean) {
   const [transfers, setTransfers] = useState<MyTransfer[]>([]);
-  const [loading, setLoading] = useState(false);
+  // enabled なら初回取得が必ず走る。false 始まりだと取得前に空状態が一瞬描画される
+  const [loading, setLoading] = useState(enabled);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
@@ -40,8 +41,8 @@ export function useTransferRequests(enabled: boolean) {
     setLoadError(null);
     const result = await callApi<MyTransfer[]>($listTransfers());
     if (!result.success) {
+      // 直前の一覧は消さない（成功メッセージと空状態が同時に出るのを避ける）
       setLoadError(result.error);
-      setTransfers([]);
     } else {
       setTransfers(result.data);
     }

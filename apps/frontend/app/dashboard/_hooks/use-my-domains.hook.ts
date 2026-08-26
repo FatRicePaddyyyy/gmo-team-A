@@ -34,7 +34,8 @@ export interface RunningDomainAction {
  */
 export function useMyDomains(enabled: boolean) {
   const [domains, setDomains] = useState<MyDomain[]>([]);
-  const [loading, setLoading] = useState(false);
+  // enabled なら初回取得が必ず走る。false 始まりだと取得前に空状態が一瞬描画される
+  const [loading, setLoading] = useState(enabled);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [running, setRunning] = useState<RunningDomainAction | null>(null);
   const [feedback, setFeedback] = useState<DomainFeedback | null>(null);
@@ -44,8 +45,8 @@ export function useMyDomains(enabled: boolean) {
     setLoadError(null);
     const result = await callApi<MyDomain[]>($listDomains());
     if (!result.success) {
+      // 直前の一覧は消さない。消すと「廃止しました」と「まだ取得していません」が同時に出る
       setLoadError(result.error);
-      setDomains([]);
     } else {
       setDomains(result.data);
     }
@@ -129,7 +130,6 @@ export function useMyDomains(enabled: boolean) {
     loadError,
     running,
     feedback,
-    clearFeedback: useCallback(() => setFeedback(null), []),
     refresh,
     renew,
     remove,
