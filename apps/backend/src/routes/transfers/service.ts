@@ -2,12 +2,21 @@ import { TransferStatusRepository } from "../../domains/transfer/repository";
 import { RegistryBridge } from "../../lib/bridge";
 import type { Registry } from "../../lib/bridge/types";
 import { detectRegistry, isValidFqdn } from "../../lib/registry-policy";
-import type { transfers } from "../../lib/schema/general-schema";
+import type { outboundTransferRequests, transfers } from "../../lib/schema/general-schema";
 import type { Result } from "../../types/result";
 import { TransferDomainRepository } from "./domain-repository";
+import { OutboundTransferRequestRepository } from "./outbound-repository";
 import { TransferRepository } from "./repository";
 
 type Transfer = typeof transfers.$inferSelect;
+type OutboundRequest = typeof outboundTransferRequests.$inferSelect;
+
+// TransferService.request の返り値。
+// (a) inbound (自 backend の domain を別 user に移管) の場合 = 従来通り Transfer 行
+// (b) outbound (別レジストラ domain を取りに行く) の場合 = OutboundRequest 行
+export type TransferRequestResult =
+  | { kind: "inbound"; transfer: Transfer }
+  | { kind: "outbound"; request: OutboundRequest };
 
 export class TransferService {
   static async request({
@@ -22,7 +31,7 @@ export class TransferService {
     registry: Registry;
     gainingUserId: string;
     env: CloudflareBindings;
-  }): Promise<Result<Transfer>> {
+  }): Promise<Result<TransferRequestResult>> {
     // B15/NB-4: FQDN 形式は Zod でも検証しているが、service 層でも念のためチェック。
     // 正規化 (trim + lowercase) してから RFC 1035 準拠の isValidFqdn を通す。
     const normalizedName = name.trim().toLowerCase();
@@ -40,7 +49,9 @@ export class TransferService {
     const domainResult = await TransferDomainRepository.findByName({ name: normalizedName, env });
     if (!domainResult.success) {return domainResult;}
     if (!domainResult.data) {
-      return { success: false, data: null, error: "domain_not_found" };
+      // backend DB に該当ドメイン無し = 外部レジストラのドメインを取りに行くケース (outbound)。
+      // outbound_transfer_requests に pending を INSERT + registry に transferRequest を投げる。
+      return await requestOutbound({ name: normalizedName, authInfo, registry, gainingUserId, env });
     }
     const domain = domainResult.data;
 
@@ -128,7 +139,11 @@ export class TransferService {
     // 以降の確定処理は 1 分ごとの cron (scheduled/transfer-cron-poll) が両レジストリを
     // drain して行う。加えて 22 分経過しても pending のままなら同 cron の Phase 2 が
     // info で真実確認して serverApproved / expired に確定させる。
-    return { success: true, data: transferResult.data, error: null };
+    return {
+      success: true,
+      data: { kind: "inbound", transfer: transferResult.data },
+      error: null,
+    };
   }
 
   static async cancel({
@@ -143,7 +158,9 @@ export class TransferService {
     const transferResult = await TransferRepository.findById({ id: transferId, env });
     if (!transferResult.success) {return transferResult;}
     if (!transferResult.data) {
-      return { success: false, data: null, error: "transfer_not_found" };
+      // inbound 側 (自 backend の transfers) に無ければ outbound_transfer_requests を検索。
+      // teama が別レジストラのドメインを取りに行った申請を取消するケース。
+      return await cancelOutbound({ outboundId: transferId, userId, env });
     }
     const transfer = transferResult.data;
 
@@ -284,4 +301,109 @@ async function compensateAndReconcile({
   console.error(
     `TransferService: compensating cancel failed with error=${compensate.error}. Deferring to next cron.`,
   );
+}
+
+// 別レジストラのドメインを取りに行く outbound リクエスト。
+// backend DB に domain 行を作らずに outbound_transfer_requests に pending を INSERT する。
+// registry.transferRequest で authInfo 不一致等は登録元 registry が拒否するので、
+// backend 側での事前 authInfo バリデーションは不要 (bridge が authInfo_mismatch で返す)。
+//
+// 遷移保証:
+//   (a) outbound INSERT 成功 + registry request 成功 → outbound.status = pendingTransfer
+//   (b) INSERT 成功 + registry request 失敗       → outbound を clientCancelled にして即返す
+//   (c) INSERT 失敗                                → その error を返す
+async function requestOutbound({
+  name,
+  authInfo,
+  registry,
+  gainingUserId,
+  env,
+}: {
+  name: string;
+  authInfo: string;
+  registry: Registry;
+  gainingUserId: string;
+  env: CloudflareBindings;
+}): Promise<Result<TransferRequestResult>> {
+  const outboundResult = await OutboundTransferRequestRepository.create({
+    data: {
+      domainName: name,
+      registry,
+      status: "pendingTransfer",
+      gainingUserId,
+      authInfo,
+    },
+    env,
+  });
+  if (!outboundResult.success) {
+    if (outboundResult.error === "unique_violation") {
+      return { success: false, data: null, error: "transfer_already_pending" };
+    }
+    return outboundResult;
+  }
+
+  const bridgeResult = await RegistryBridge.transferRequest({ name, authInfo, registry, env });
+  if (!bridgeResult.success) {
+    // registry 側は動いていないので outbound を clientCancelled にして排他解除。
+    const rollback = await OutboundTransferRequestRepository.updateStatus({
+      id: outboundResult.data.id,
+      status: "clientCancelled",
+      env,
+    });
+    if (!rollback.success) {
+      console.error(
+        `requestOutbound: rollback (clientCancelled) failed for id=${outboundResult.data.id}`,
+        rollback.error,
+      );
+    }
+    return bridgeResult;
+  }
+
+  return {
+    success: true,
+    data: { kind: "outbound", request: outboundResult.data },
+    error: null,
+  };
+}
+
+// outbound_transfer_requests に対する取消 (gaining ユーザーが自分で申請を取り下げる)。
+// registry に transferCancel を投げて成功したら outbound.status を clientCancelled に更新。
+async function cancelOutbound({
+  outboundId,
+  userId,
+  env,
+}: {
+  outboundId: string;
+  userId: string;
+  env: CloudflareBindings;
+}): Promise<Result<void>> {
+  const found = await OutboundTransferRequestRepository.findById({ id: outboundId, env });
+  if (!found.success) {return found;}
+  if (!found.data) {
+    return { success: false, data: null, error: "transfer_not_found" };
+  }
+  const outbound = found.data;
+
+  if (outbound.gainingUserId !== userId) {
+    return { success: false, data: null, error: "forbidden" };
+  }
+  if (outbound.status !== "pendingTransfer") {
+    return { success: false, data: null, error: "transfer_not_cancellable" };
+  }
+
+  const bridgeResult = await RegistryBridge.transferCancel({
+    name: outbound.domainName,
+    registry: outbound.registry,
+    env,
+  });
+  if (!bridgeResult.success) {return bridgeResult;}
+
+  const update = await OutboundTransferRequestRepository.updateStatus({
+    id: outbound.id,
+    status: "clientCancelled",
+    env,
+  });
+  if (!update.success) {return update;}
+
+  return { success: true, data: undefined, error: null };
 }

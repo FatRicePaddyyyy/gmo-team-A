@@ -20,12 +20,16 @@ describe("POST /api/v1/secure/transfers（移管申請フロー）", () => {
     vi.spyOn(TransferService, "request").mockResolvedValue({
       success: true,
       data: {
-        id: "tr-001",
-        domainId: "dom-001",
-        registry: "kitaqsign",
-        status: "pendingTransfer",
-        gainingUserId: "user-002",
-        createdAt: new Date("2026-08-25T00:00:00.000Z"),
+        kind: "inbound",
+        transfer: {
+          id: "tr-001",
+          domainId: "dom-001",
+          registry: "kitaqsign",
+          status: "pendingTransfer",
+          gainingUserId: "user-002",
+          gainingRegistrar: null,
+          createdAt: new Date("2026-08-25T00:00:00.000Z"),
+        },
       },
       error: null,
     });
@@ -307,12 +311,16 @@ describe("移管フロー統合テスト（check → create → transfer request
     vi.spyOn(TransferService, "request").mockResolvedValue({
       success: true,
       data: {
+        kind: "inbound",
+        transfer: {
         id: "tr-001",
         domainId: "dom-001",
         registry: "kitaqsign",
         status: "pendingTransfer",
         gainingUserId: "user-002",
+        gainingRegistrar: null,
         createdAt: new Date("2026-08-25T00:00:00.000Z"),
+      },
       },
       error: null,
     });
@@ -354,12 +362,16 @@ describe("移管フロー統合テスト（check → create → transfer request
     vi.spyOn(TransferService, "request").mockResolvedValue({
       success: true,
       data: {
+        kind: "inbound",
+        transfer: {
         id: "tr-002",
         domainId: "dom-001",
         registry: "kitaqsign",
         status: "pendingTransfer",
         gainingUserId: "user-002",
+        gainingRegistrar: null,
         createdAt: new Date("2026-08-25T00:00:00.000Z"),
+      },
       },
       error: null,
     });

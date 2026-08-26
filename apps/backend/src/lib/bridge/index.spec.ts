@@ -345,7 +345,9 @@ describe("RegistryBridge.transferApprove: 401/403/404/409 の意味分け", () =
     });
 
     expect(res.success).toBe(false);
-    expect(res.error).toBe("invalid_registry_response");
+    // detail 付き ("invalid_registry_response: <レジストリ由来メッセージ>") で返る場合もあるため
+    // プレフィックスで判定する。ユーザー向け toUserMessage は同じ定型文言 + 理由付加で処理される。
+    expect(res.error).toMatch(/^invalid_registry_response(?::|$)/);
   });
 
   // 実測: ドメイン不在 → 404 + 2303 "Object does not exist"。

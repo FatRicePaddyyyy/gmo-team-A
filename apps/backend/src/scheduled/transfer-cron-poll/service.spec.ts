@@ -37,6 +37,7 @@ describe("runTransferCronPoll", () => {
       registry: "kitaqsign" as const,
       status: "pendingTransfer",
       gainingUserId: "user-gaining",
+      gainingRegistrar: null,
       createdAt: new Date(now.getTime() - 60 * 60 * 1000),
     };
     const domain = {
@@ -123,6 +124,7 @@ describe("runTransferCronPoll", () => {
             registry: name.startsWith("kitaqsign") ? "kitaqsign" : "kitaqnic",
             status: "pendingTransfer",
             gainingUserId: "u",
+            gainingRegistrar: null,
             createdAt: new Date(),
           },
           domain: {
@@ -155,6 +157,7 @@ describe("runTransferCronPoll", () => {
         registry: "kitaqsign" as const,
         status: "pendingTransfer",
         gainingUserId: "user-gaining",
+        gainingRegistrar: null,
         createdAt: new Date(now.getTime() - 30 * 60 * 1000),
       },
       domain: {
@@ -217,6 +220,7 @@ describe("runTransferCronPoll", () => {
         registry: "kitaqsign" as const,
         status: "pendingTransfer",
         gainingUserId: "u",
+        gainingRegistrar: null,
         createdAt: new Date(now.getTime() - 30 * 60 * 1000),
       },
       domain: {
