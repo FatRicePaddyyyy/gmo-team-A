@@ -50,28 +50,6 @@ export class TransferRepository {
     }
   }
 
-  // status='pendingTransfer' のレコードを一意に取得する。
-  // partial UNIQUE index で 0 or 1 行が保証されているので orderBy 不要。
-  static async findPendingByDomainId({
-    domainId,
-    env,
-  }: {
-    domainId: string;
-    env: CloudflareBindings;
-  }): Promise<Result<Transfer | null>> {
-    try {
-      const db = createDBClient(env);
-      const rows = await db
-        .select()
-        .from(transfers)
-        .where(and(eq(transfers.domainId, domainId), eq(transfers.status, "pendingTransfer")));
-      return { success: true, data: rows[0] ?? null, error: null };
-    } catch (error) {
-      console.error("TransferRepository.findPendingByDomainId error:", error);
-      return { success: false, data: null, error: classifyDbError(error) };
-    }
-  }
-
   static async updateStatus({
     id,
     status,

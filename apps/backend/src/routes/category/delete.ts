@@ -47,14 +47,6 @@ const deleteCategoryRouteSchema = createRoute({
       },
       description: "カテゴリの削除に成功しました",
     },
-    404: {
-      content: {
-        "application/json": {
-          schema: DeleteProductErrorResponseSchema,
-        },
-      },
-      description: "削除対象のカテゴリが見つかりません",
-    },
     500: {
       content: {
         "application/json": {

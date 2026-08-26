@@ -20,12 +20,10 @@
   },
   "queues": {
     "producers": [
-      { "binding": "TRANSFER_QUEUE", "queue": "transfer-poll" },
-      // Config Bug 対策: DLQ も producer として明示宣言する。
-      // Cloudflare Queues の auto-create 挙動に依存せず、deploy 時に確実に存在保証する。
-      // このバインディングを backend から直接 send することは今のところ無いが、
-      // wrangler の一貫したチェックを効かせるために宣言のみ残す。
-      { "binding": "TRANSFER_POLL_DLQ", "queue": "transfer-poll-dlq" }
+      { "binding": "TRANSFER_QUEUE", "queue": "transfer-poll" }
+      // DLQ (transfer-poll-dlq) は producer binding としては宣言しない。
+      // Cloudflare Queues が dead_letter_queue 設定から自動作成 + auto-route する。
+      // backend から DLQ に直接 send する用途は無いので binding も不要。
     ],
     "consumers": [
       {

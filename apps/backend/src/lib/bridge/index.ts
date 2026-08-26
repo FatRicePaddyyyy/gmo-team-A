@@ -467,7 +467,12 @@ export class RegistryBridge {
       if (response.status === 204 || !data) {return { success: true, data: null, error: null };}
 
       if (data.result.code !== 1000) {
-        return { success: false, data: null, error: data.result.message || "poll_failed" };
+        // S-6: レジストリ生 message はユーザー応答に載せず、normalized code に固定。
+        // 詳細は console.error でログに残す。
+        console.error(
+          `RegistryBridge.poll: non-success code=${data.result.code}, message="${data.result.message}"`,
+        );
+        return { success: false, data: null, error: "poll_failed" };
       }
 
       const message = data.resData?.message;
