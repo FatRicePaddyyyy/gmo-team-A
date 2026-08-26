@@ -113,8 +113,8 @@ export function HeroSearch({
             </select>
             <Button
               type="submit"
-              className="h-11 shrink-0 px-6 text-white"
-              style={{ background: "var(--brand)" }}
+              className="h-11 shrink-0 px-6"
+              variant="brand"
             >
               <Search className="mr-1 size-4" aria-hidden="true" />
               空き状況を調べる

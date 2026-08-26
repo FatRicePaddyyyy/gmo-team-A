@@ -102,8 +102,8 @@ export default function LoginPage() {
               <Button
                 type="submit"
                 disabled={isLoading}
-                className="h-11 w-full text-white"
-                style={{ background: "var(--brand)" }}
+                className="h-11 w-full"
+                variant="brand"
               >
                 {isLoading ? "ログイン中..." : "ログインする"}
               </Button>

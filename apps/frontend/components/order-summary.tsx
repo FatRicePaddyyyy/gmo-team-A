@@ -109,8 +109,8 @@ function OrderDomainCard({ domain }: OrderDomainCardProps) {
                   </span>
                   <Button
                     size="sm"
-                    className="h-6 px-2 text-xs text-white"
-                    style={{ background: "var(--brand)" }}
+                    className="h-6 px-2 text-xs"
+                    variant="brand"
                     onClick={item.onAdd}
                   >
                     <Plus className="mr-0.5 size-3" />
