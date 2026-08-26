@@ -108,6 +108,40 @@ export class TransferStatusRepository {
     }
   }
 
+  // 別レジストラへの移管を確定するバッチ (外部 pending 承認 = gainingUserId が null のケース)。
+  // transfer.status を確定値にした後、自 backend の domains 行は削除する
+  // (別レジストラに所有権が移ったので自 backend の管轄外になる)。
+  // transfers 側の FK は onDelete: "restrict" なので、先に transfer を settled にしてから
+  // 順に SQL を発行する必要がある。ただし D1 の batch は同一トランザクション + 順序保持なので、
+  // transfers UPDATE → transfers DELETE (この domain 参照) → domains DELETE の順で書ける。
+  // ここでは「同 domain の全 transfer 行を DELETE」してから「domain 行を DELETE」する。
+  static async commitApprovedAndDropDomain({
+    transferId,
+    domainId,
+    transferStatus,
+    env,
+  }: {
+    transferId: string;
+    domainId: string;
+    transferStatus: "clientApproved" | "serverApproved";
+    env: CloudflareBindings;
+  }): Promise<Result<void>> {
+    try {
+      const db = createDBClient(env);
+      // まず対象 transfer を settled にして pending 部分 UNIQUE から外す。
+      // その後、同 domain に紐づく全 transfer を消し (履歴は諦める)、最後に domain を消す。
+      // 履歴を残したい場合は将来 archive テーブル追加を検討。
+      await db.batch([
+        db.update(transfers).set({ status: transferStatus }).where(eq(transfers.id, transferId)),
+        db.delete(transfers).where(eq(transfers.domainId, domainId)),
+        db.delete(domains).where(eq(domains.id, domainId)),
+      ]);
+      return { success: true, data: undefined, error: null };
+    } catch (error) {
+      console.error("TransferStatusRepository.commitApprovedAndDropDomain error:", error);
+      return { success: false, data: null, error: classifyDbError(error) };
+    }
+  }
 }
 
 // transfers.status の取り得る値。schema コメントと同期させる。

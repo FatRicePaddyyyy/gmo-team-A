@@ -22,9 +22,13 @@ const RequestSchema = z.object({
 }).openapi("TransferRequestBody");
 
 // B13: gainingUserId をレスポンスから除外。誰が奪おうとしているかを他所に晒さない。
+// domainId は inbound (自 backend の既存 domain を移管) のときのみ入る。
+// domainName は常に入る (outbound では自 backend に domain 行が無いので name 直接返す)。
 const TransferSchema = z.object({
   id: z.string(),
-  domainId: z.string(),
+  kind: z.enum(["inbound", "outbound"]),
+  domainName: z.string(),
+  domainId: z.string().nullable(),
   registry: z.string(),
   status: z.string(),
   createdAt: z.string(),
@@ -93,16 +97,38 @@ export const requestTransferRouteHandler = app.openapi(route, async (ctx) => {
     return ctx.json({ success: false as const, data: null, error: toUserMessage(result.error) }, 500);
   }
 
-  const transfer = result.data;
-  return ctx.json({
-    success: true as const,
-    data: {
-      id: transfer.id,
-      domainId: transfer.domainId,
-      registry: transfer.registry,
-      status: transfer.status,
-      createdAt: new Date(transfer.createdAt).toISOString(),
-    },
-    error: null,
-  }, 202);
+  // TransferService.request は inbound (自 backend の domain) と outbound (別レジストラの domain)
+  // 2 系統の結果を返す。それぞれ domainId/domainName の有無が違うので統一形に落とす。
+  if (result.data.kind === "inbound") {
+    const { transfer } = result.data;
+    // inbound の domainName は Transfer 行に無いので、name 引数 (正規化済み) をそのまま使う。
+    return ctx.json({
+      success: true as const,
+      data: {
+        id: transfer.id,
+        kind: "inbound" as const,
+        domainName: name,
+        domainId: transfer.domainId,
+        registry: transfer.registry,
+        status: transfer.status,
+        createdAt: new Date(transfer.createdAt).toISOString(),
+      },
+      error: null,
+    }, 202);
+  } else {
+    const { request } = result.data;
+    return ctx.json({
+      success: true as const,
+      data: {
+        id: request.id,
+        kind: "outbound" as const,
+        domainName: request.domainName,
+        domainId: null,
+        registry: request.registry,
+        status: request.status,
+        createdAt: new Date(request.createdAt).toISOString(),
+      },
+      error: null,
+    }, 202);
+  }
 });

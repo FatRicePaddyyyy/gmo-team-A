@@ -89,4 +89,80 @@ export class TransferCronPollRepository {
       return { success: false, data: null, error: classifyDbError(error) };
     }
   }
+
+  // domain 名で domain 行を取得。cron が外部発の pending を検知したときに
+  // 「そもそも自 backend で管理しているドメインか」を判定するために使う。
+  static async findDomainByName({
+    name,
+    env,
+  }: {
+    name: string;
+    env: CloudflareBindings;
+  }): Promise<Result<Domain | null>> {
+    try {
+      const db = createDBClient(env);
+      const rows = await db.select().from(domains).where(eq(domains.name, name));
+      return { success: true, data: rows[0] ?? null, error: null };
+    } catch (error) {
+      console.error("TransferCronPollRepository.findDomainByName error:", error);
+      return { success: false, data: null, error: classifyDbError(error) };
+    }
+  }
+
+  // 別レジストラ発の pending を DB に INSERT する。
+  // gainingUserId は null (自 backend に相手のユーザーは居ない)、
+  // gainingRegistrar には payload.counterpartyRegistrar (例: "teama-2") を入れる。
+  // partial UNIQUE index により、同 domain の pending が既にあれば constraint 違反で失敗する
+  // (呼び出し側が事前に findPendingTransferByDomainName で確認する前提)。
+  static async createExternalPending({
+    domainId,
+    registry,
+    gainingRegistrar,
+    env,
+  }: {
+    domainId: string;
+    registry: "kitaqsign" | "kitaqnic";
+    gainingRegistrar: string;
+    env: CloudflareBindings;
+  }): Promise<Result<Transfer>> {
+    try {
+      const db = createDBClient(env);
+      const rows = await db.insert(transfers).values({
+        domainId,
+        registry,
+        status: "pendingTransfer",
+        gainingUserId: null,
+        gainingRegistrar,
+      }).returning();
+      const created = rows[0];
+      // rows[0] は Drizzle 型上 non-null と扱われるが、D1 の異常応答で空配列が返るケースに備えて保険で検知する
+      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+      if (!created) {
+        return { success: false, data: null, error: "transfer_create_failed" };
+      }
+      return { success: true, data: created, error: null };
+    } catch (error) {
+      console.error("TransferCronPollRepository.createExternalPending error:", error);
+      return { success: false, data: null, error: classifyDbError(error) };
+    }
+  }
+
+  // 外部 pending 検知時に domain.status を pendingTransfer に揃える。
+  // owner 側 UI で「移管申請中」を表示できるようにするためのミラーリング。
+  static async setDomainPendingTransfer({
+    domainId,
+    env,
+  }: {
+    domainId: string;
+    env: CloudflareBindings;
+  }): Promise<Result<void>> {
+    try {
+      const db = createDBClient(env);
+      await db.update(domains).set({ status: "pendingTransfer" }).where(eq(domains.id, domainId));
+      return { success: true, data: undefined, error: null };
+    } catch (error) {
+      console.error("TransferCronPollRepository.setDomainPendingTransfer error:", error);
+      return { success: false, data: null, error: classifyDbError(error) };
+    }
+  }
 }

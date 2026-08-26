@@ -8,6 +8,7 @@ import { DomainRepository } from "../domains/repository";
 import { DomainTransferRepository } from "../domains/transfer-repository";
 import { cancelTransferRouteHandler } from "./[transfer-id]/cancel/post";
 import { TransferDomainRepository } from "./domain-repository";
+import { OutboundTransferRequestRepository } from "./outbound-repository";
 import { requestTransferRouteHandler } from "./post";
 import { TransferRepository } from "./repository";
 
@@ -39,7 +40,8 @@ const mockTransferRow = {
   domainId: "dom-001",
   registry: "kitaqsign" as const,
   status: "pendingTransfer",
-  gainingUserId: undefined as unknown as string, // ctx.get("userId") === undefined に合わせる
+  gainingUserId: undefined as unknown as string,
+  gainingRegistrar: null, // ctx.get("userId") === undefined に合わせる
   createdAt: new Date("2026-08-25T00:00:00.000Z"),
 };
 
@@ -103,8 +105,19 @@ describe("結合: POST /api/v1/secure/transfers", () => {
     expect(json.error).toContain("AuthCode");
   });
 
-  test("[異常系] ドメイン不在 → 404 + ユーザー向けメッセージ", async () => {
+  test("[異常系] backend にも registry にもドメイン不在 → 404 + ユーザー向けメッセージ", async () => {
+    // 新設計: backend DB に無くても outbound として registry に問い合わせる。
+    // registry でも見つからなければ registry.transferRequest が domain_not_found を返し、
+    // outbound 経路が失敗をそのまま伝搬して 404 になる。
     vi.spyOn(TransferDomainRepository, "findByName").mockResolvedValue({ success: true, data: null, error: null });
+    // outbound の DB INSERT は成功、その後 registry で拒否 → rollback
+    vi.spyOn(OutboundTransferRequestRepository, "create").mockResolvedValue({
+      success: true,
+      data: { id: "out-001", domainName: "notexist.com", registry: "kitaqsign", status: "pendingTransfer", gainingUserId: "user", authInfo: "auth", createdAt: new Date() },
+      error: null,
+    });
+    vi.spyOn(OutboundTransferRequestRepository, "updateStatus").mockResolvedValue({ success: true, data: undefined, error: null });
+    vi.spyOn(RegistryBridge, "transferRequest").mockResolvedValue({ success: false, data: null, error: "domain_not_found" });
 
     const res = await requestTransferRouteHandler.request(
       "/api/v1/secure/transfers",
@@ -133,7 +146,7 @@ describe("結合: POST /api/v1/secure/domains/{id}/transfer/approve", () => {
     vi.spyOn(DomainRepository, "findById").mockResolvedValue({ success: true, data: mockDomainRow, error: null });
     vi.spyOn(DomainTransferRepository, "findPendingByDomainId").mockResolvedValue({
       success: true,
-      data: { id: "tr-001", domainId: "dom-001", registry: "kitaqsign" as const, status: "pendingTransfer", gainingUserId: "user-002", createdAt: new Date() },
+      data: { id: "tr-001", domainId: "dom-001", registry: "kitaqsign" as const, status: "pendingTransfer", gainingUserId: "user-002", gainingRegistrar: null, createdAt: new Date() },
       error: null,
     });
     vi.spyOn(RegistryBridge, "transferApprove").mockResolvedValue({ success: true, data: { domain: "example.com", status: "clientApproved", gainingRegistrar: "R2", losingRegistrar: "R1" }, error: null });
@@ -186,7 +199,7 @@ describe("結合: POST /api/v1/secure/domains/{id}/transfer/approve", () => {
 describe("結合: POST /api/v1/secure/domains/{id}/transfer/reject", () => {
   test("[正常系] reject 成功 → 200（DB 更新を含む）", async () => {
     vi.spyOn(DomainRepository, "findById").mockResolvedValue({ success: true, data: { ...mockDomainRow, status: "pendingTransfer" }, error: null });
-    vi.spyOn(DomainTransferRepository, "findPendingByDomainId").mockResolvedValue({ success: true, data: { id: "tr-001", domainId: "dom-001", registry: "kitaqsign" as const, status: "pendingTransfer", gainingUserId: "user-002", createdAt: new Date() }, error: null });
+    vi.spyOn(DomainTransferRepository, "findPendingByDomainId").mockResolvedValue({ success: true, data: { id: "tr-001", domainId: "dom-001", registry: "kitaqsign" as const, status: "pendingTransfer", gainingUserId: "user-002", gainingRegistrar: null, createdAt: new Date() }, error: null });
     // R2: 2 更新が batch 化された。settleAndReleaseDomain を mock。
     vi.spyOn(TransferStatusRepository, "settleAndReleaseDomain").mockResolvedValue({ success: true, data: undefined, error: null });
     vi.spyOn(RegistryBridge, "transferReject").mockResolvedValue({ success: true, data: { domain: "example.com", status: "clientApproved", gainingRegistrar: "R2", losingRegistrar: "R1" }, error: null });
@@ -271,8 +284,10 @@ describe("結合: POST /api/v1/secure/transfers/{id}/cancel", () => {
     expect(json.error).toContain("取り消しできません");
   });
 
-  test("[異常系] 移管申請不在 → 404 + ユーザー向けメッセージ", async () => {
+  test("[異常系] 移管申請不在 (inbound/outbound とも無し) → 404 + ユーザー向けメッセージ", async () => {
     vi.spyOn(TransferRepository, "findById").mockResolvedValue({ success: true, data: null, error: null });
+    // 新設計: inbound で無ければ outbound を検索。outbound にも無い場合に 404 を返す。
+    vi.spyOn(OutboundTransferRequestRepository, "findById").mockResolvedValue({ success: true, data: null, error: null });
 
     const res = await cancelTransferRouteHandler.request(
       "/api/v1/secure/transfers/notexist/cancel",

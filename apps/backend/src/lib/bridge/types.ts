@@ -52,8 +52,17 @@ export interface GreetingResponse {
 export type PollMessage = Omit<Schemas["PollMessageDto"], "payload"> & {
   msgType?: string;
   payload: {
+    // 対象ドメイン (両レジストリで共通)
     domain?: string;
+    // 承認/拒否/取消後のステータス (例: "serverApproved", "clientRejected")
     status?: string;
+    // 操作種別。実測値: "request", "approve", "reject", "cancel", "serverApproved" 等。
+    // op が "request" のときは相手 (counterpartyRegistrar) が申請してきたことを意味する。
+    op?: string;
+    // 相手方のレジストラ ID (例: "teama-2")。
+    // 自分が losing のとき = gaining のレジストラ ID、gaining のとき = losing のレジストラ ID。
+    // 別レジストラ発の pending を backend DB に自動作成するときに使う。
+    counterpartyRegistrar?: string;
     [key: string]: unknown;
   };
 };

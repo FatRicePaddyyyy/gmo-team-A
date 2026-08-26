@@ -58,6 +58,16 @@ const errorMessages: Record<string, string> = {
   poll_failed: "通知の取得に失敗しました。しばらく待ってから再試行してください。",
 };
 
+// bridge が `"code: detail"` 形式で返してきた場合、":" 前のコードで定型文言を引き、
+// ":" 後のレジストリ由来メッセージ (メンテ中の理由など) を「(理由: ...)」で末尾に付加する。
+// これによりレジストリ障害の内容がユーザー応答まで届く。
 export function toUserMessage(error: string): string {
+  const sep = error.indexOf(":");
+  if (sep > 0) {
+    const code = error.slice(0, sep).trim();
+    const detail = error.slice(sep + 1).trim();
+    const base = errorMessages[code] ?? "予期しないエラーが発生しました。しばらく待ってから再試行してください。";
+    return detail ? `${base} (理由: ${detail})` : base;
+  }
   return errorMessages[error] ?? "予期しないエラーが発生しました。しばらく待ってから再試行してください。";
 }

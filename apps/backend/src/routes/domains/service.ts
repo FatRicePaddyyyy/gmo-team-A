@@ -412,21 +412,28 @@ export class DomainService {
     });
     if (!bridgeResult.success) {return bridgeResult;}
 
-    // Bug 対策: bridge 成功後に同期的に DB へ確定を反映する。
-    //   transfer.status = "clientApproved" (losing が明示的に approve を叩いたので client 側の approve)
-    //   domains.ownerUserId = gaining
-    //   domains.status = "ok"
-    // これを 1 バッチで書くので、後続の cron poll で serverApproved 経由のメッセージが届いても
-    // 既に pendingTransfer では無いので冪等スキップされる (transfer-cron-poll/service.ts handleMessage)。
-    // レジストリキューに残った通知メッセージは次回 cron drain が自然に ack して処分する。
-    const commit = await TransferStatusRepository.commitApproved({
-      transferId: transferResult.data.id,
-      domainId,
-      transferStatus: "clientApproved",
-      newOwnerUserId: transferResult.data.gainingUserId,
-      env,
-    });
-    if (!commit.success) {return commit;}
+    // bridge 成功後に DB へ確定を反映する。gaining が誰かで分岐:
+    //   (a) gainingUserId が入っている = 自 backend 発 pending → owner を書き換え + domain.status=ok
+    //   (b) gainingUserId が null = 外部レジストラ発 pending → 別レジストラに所有権が移った
+    //       ので自 backend の domains 行を削除する
+    if (transferResult.data.gainingUserId === null) {
+      const commit = await TransferStatusRepository.commitApprovedAndDropDomain({
+        transferId: transferResult.data.id,
+        domainId,
+        transferStatus: "clientApproved",
+        env,
+      });
+      if (!commit.success) {return commit;}
+    } else {
+      const commit = await TransferStatusRepository.commitApproved({
+        transferId: transferResult.data.id,
+        domainId,
+        transferStatus: "clientApproved",
+        newOwnerUserId: transferResult.data.gainingUserId,
+        env,
+      });
+      if (!commit.success) {return commit;}
+    }
 
     return { success: true, data: undefined, error: null };
   }

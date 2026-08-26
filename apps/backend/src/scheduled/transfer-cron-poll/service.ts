@@ -2,6 +2,7 @@ import { TransferStatusRepository } from "../../domains/transfer/repository";
 import { UserRepository } from "../../domains/user/repository";
 import { RegistryBridge } from "../../lib/bridge";
 import type { PollMessage, Registry } from "../../lib/bridge/types";
+import { OutboundTransferRequestRepository } from "../../routes/transfers/outbound-repository";
 import { TransferCronPollRepository } from "./repository";
 
 // 対応レジストリ。Cron のたびに全レジストリを順に drain する。
@@ -131,8 +132,72 @@ async function handleMessage({
   }
 
   if (!found.data) {
-    // pending 無し = 既に別経路で確定 or backend の管轄外。
-    // 過去 settled があるなら念のため ack を保留 (DB replica lag 対策で次回 cron に持ち越す)。
+    // pending 無し。ここで 4 分岐:
+    //   (a) outbound_transfer_requests に pending あり (自 backend の user が別レジストラのドメインを取りに行き中)
+    //        → op に応じて確定処理 (approve なら domain 行 INSERT + outbound を clientApproved)
+    //   (b) op='request' + 自 backend が知っているドメイン (inbound: 別レジストラが取りに来た)
+    //        → transfers に pending 行を INSERT
+    //   (c) 過去 settled あり → ack せず持ち越し
+    //   (d) 完全に知らないドメイン → ack して先頭を空ける
+    const outbound = await OutboundTransferRequestRepository.findPending({
+      domainName,
+      registry,
+      env,
+    });
+    if (!outbound.success) {
+      console.error(
+        `TransferCronPoll.handleMessage: outbound findPending failed for domain=${domainName}`,
+        outbound.error,
+      );
+      return;
+    }
+    if (outbound.data) {
+      await handleOutboundMessage({ outbound: outbound.data, msg, registry, env });
+      return;
+    }
+
+    const op = msg.payload.op;
+    const counterparty = msg.payload.counterpartyRegistrar;
+    if (op === "request" && counterparty) {
+      const dom = await TransferCronPollRepository.findDomainByName({ name: domainName, env });
+      if (!dom.success) {
+        console.error(
+          `TransferCronPoll.handleMessage: findDomainByName failed for domain=${domainName}`,
+          dom.error,
+        );
+        return;
+      }
+      if (dom.data) {
+        // 自 backend の管轄ドメイン。cron 検知の外部 pending として DB に INSERT する。
+        const inserted = await TransferCronPollRepository.createExternalPending({
+          domainId: dom.data.id,
+          registry: dom.data.registry,
+          gainingRegistrar: counterparty,
+          env,
+        });
+        if (!inserted.success) {
+          console.error(
+            `TransferCronPoll.handleMessage: createExternalPending failed for domain=${domainName}`,
+            inserted.error,
+          );
+          return;
+        }
+        // domain.status も pendingTransfer に揃える (owner 側 UI で「移管申請中」を出せるように)
+        await TransferCronPollRepository.setDomainPendingTransfer({
+          domainId: dom.data.id,
+          env,
+        });
+        console.info(
+          `TransferCronPoll.handleMessage: created external pending transfer for domain=${domainName} gainingRegistrar=${counterparty}`,
+        );
+        // DB に保存できたら request メッセージは ack して先に進める。
+        // 次回以降 approve/reject/cancel/serverApproved の別メッセージが別 id で届くので、
+        // request メッセージを残す必要はない (むしろ残すとキューが詰まる)。
+        await tryAck({ messageId: msg.id, registry, env });
+        return;
+      }
+    }
+
     const hasAny = await TransferCronPollRepository.hasAnyTransferForDomainName({
       name: domainName,
       env,
@@ -172,13 +237,18 @@ async function handleMessage({
   }
 
   const status = msg.payload.status;
-  const isApproved = status === "serverApproved" || status === "clientApproved";
-  const isCancelled = status === "clientRejected" || status === "clientCancelled";
+  const op = msg.payload.op;
+
+  // レジストリによっては approve/reject/cancel の反映メッセージが payload.status ではなく
+  // payload.op のみで通知される (例: kitaqsign の cancel は {op:"cancel"} のみ)。両方を見る。
+  const isApproved = status === "serverApproved" || status === "clientApproved" || op === "approve";
+  const isCancelled =
+    status === "clientRejected" || status === "clientCancelled" || op === "reject" || op === "cancel";
 
   if (!isApproved && !isCancelled) {
     // 中間ステータス (pendingTransfer 等) or 未知。ack せず次回 cron で状態が進んだメッセージを待つ。
     console.warn(
-      `TransferCronPoll.handleMessage: intermediate status="${status ?? "<none>"}" for domain=${domainName}. Not acking.`,
+      `TransferCronPoll.handleMessage: intermediate status="${status ?? "<none>"}" op="${op ?? "<none>"}" for domain=${domainName}. Not acking.`,
     );
     return;
   }
@@ -186,51 +256,71 @@ async function handleMessage({
   if (isApproved) {
     const approvedStatus: "serverApproved" | "clientApproved" =
       status === "serverApproved" ? "serverApproved" : "clientApproved";
-    // gaining user が消えていたら FK 制約違反で commitApproval が無限失敗するので expired にする。
-    const userExists = await UserRepository.exists({ id: transfer.gainingUserId, env });
-    if (!userExists.success) {
-      console.error(
-        `TransferCronPoll.handleMessage: UserRepository.exists failed for transferId=${transfer.id}`,
-        userExists.error,
-      );
-      return;
-    }
-    if (!userExists.data) {
-      console.error(
-        `TransferCronPoll.handleMessage: gaining user ${transfer.gainingUserId} no longer exists for transferId=${transfer.id}. Marking expired.`,
-      );
-      const expire = await TransferStatusRepository.expireAndReleaseDomain({
+
+    if (transfer.gainingUserId === null) {
+      // 外部 pending (別レジストラが gaining) の承認確定。
+      // 自 backend の user に該当者は居ないので、所有権移転先を書き換える代わりに domain 行を削除する。
+      const commit = await TransferStatusRepository.commitApprovedAndDropDomain({
         transferId: transfer.id,
         domainId: transfer.domainId,
+        transferStatus: approvedStatus,
         env,
       });
-      if (!expire.success) {
+      if (!commit.success) {
         console.error(
-          `TransferCronPoll.handleMessage: expireAndReleaseDomain failed for transferId=${transfer.id}`,
-          expire.error,
+          `TransferCronPoll.handleMessage: commitApprovedAndDropDomain failed for transferId=${transfer.id}`,
+          commit.error,
         );
         return;
       }
-      await tryAck({ messageId: msg.id, registry, env });
-      return;
-    }
-    const commit = await TransferStatusRepository.commitApproved({
-      transferId: transfer.id,
-      domainId: transfer.domainId,
-      transferStatus: approvedStatus,
-      newOwnerUserId: transfer.gainingUserId,
-      env,
-    });
-    if (!commit.success) {
-      console.error(
-        `TransferCronPoll.handleMessage: commitApproved failed for transferId=${transfer.id}`,
-        commit.error,
-      );
-      return;
+    } else {
+      // 自 backend 発 pending (gaining が自 user)。従来通り owner を書き換えて確定。
+      // gaining user が消えていたら FK 制約違反で commitApproval が無限失敗するので expired にする。
+      const userExists = await UserRepository.exists({ id: transfer.gainingUserId, env });
+      if (!userExists.success) {
+        console.error(
+          `TransferCronPoll.handleMessage: UserRepository.exists failed for transferId=${transfer.id}`,
+          userExists.error,
+        );
+        return;
+      }
+      if (!userExists.data) {
+        console.error(
+          `TransferCronPoll.handleMessage: gaining user ${transfer.gainingUserId} no longer exists for transferId=${transfer.id}. Marking expired.`,
+        );
+        const expire = await TransferStatusRepository.expireAndReleaseDomain({
+          transferId: transfer.id,
+          domainId: transfer.domainId,
+          env,
+        });
+        if (!expire.success) {
+          console.error(
+            `TransferCronPoll.handleMessage: expireAndReleaseDomain failed for transferId=${transfer.id}`,
+            expire.error,
+          );
+          return;
+        }
+        await tryAck({ messageId: msg.id, registry, env });
+        return;
+      }
+      const commit = await TransferStatusRepository.commitApproved({
+        transferId: transfer.id,
+        domainId: transfer.domainId,
+        transferStatus: approvedStatus,
+        newOwnerUserId: transfer.gainingUserId,
+        env,
+      });
+      if (!commit.success) {
+        console.error(
+          `TransferCronPoll.handleMessage: commitApproved failed for transferId=${transfer.id}`,
+          commit.error,
+        );
+        return;
+      }
     }
   } else {
     const cancelledStatus: "clientRejected" | "clientCancelled" =
-      status === "clientRejected" ? "clientRejected" : "clientCancelled";
+      status === "clientRejected" || op === "reject" ? "clientRejected" : "clientCancelled";
     const commit = await TransferStatusRepository.settleAndReleaseDomain({
       transferId: transfer.id,
       domainId: transfer.domainId,
@@ -259,7 +349,7 @@ async function reconcileTimedOut({
   domain,
   env,
 }: {
-  transfer: { id: string; domainId: string; gainingUserId: string; registry: Registry };
+  transfer: { id: string; domainId: string; gainingUserId: string | null; registry: Registry };
   domain: { name: string };
   env: CloudflareBindings;
 }): Promise<"serverApproved" | "expired" | "skipped"> {
@@ -298,7 +388,28 @@ async function reconcileTimedOut({
   }
 
   // レジストリでは pending 解除済み = serverApproved 相当 (poll イベントを取りこぼしたケース)。
-  // gaining user が存在するなら所有権移転、消えていれば expired。
+  if (transfer.gainingUserId === null) {
+    // 外部 pending (別レジストラ gaining) の承認確定。domain 行を削除。
+    const commit = await TransferStatusRepository.commitApprovedAndDropDomain({
+      transferId: transfer.id,
+      domainId: transfer.domainId,
+      transferStatus: "serverApproved",
+      env,
+    });
+    if (!commit.success) {
+      console.error(
+        `TransferCronPoll.reconcileTimedOut: commitApprovedAndDropDomain failed for transferId=${transfer.id}`,
+        commit.error,
+      );
+      return "skipped";
+    }
+    console.info(
+      `TransferCronPoll.reconcileTimedOut: reconciled serverApproved (external) via info for domain=${domain.name}. domain row dropped.`,
+    );
+    return "serverApproved";
+  }
+
+  // 自 backend 発 pending の場合。gaining user が存在するなら所有権移転、消えていれば expired。
   const userExists = await UserRepository.exists({ id: transfer.gainingUserId, env });
   if (!userExists.success) {
     console.error(
@@ -362,4 +473,102 @@ async function tryAck({
       ack.error,
     );
   }
+}
+
+// 自 backend の user が別レジストラのドメインを取りに行った outbound の pending がある状態で
+// registry から poll メッセージを受け取った場合の処理。
+// - status=approve/serverApproved → domain 行を owner=gainingUserId で INSERT + outbound を確定
+// - status=reject/cancel/expire   → outbound を確定 (domain 行は作らない)
+// - status=pendingTransfer 等の中間 → 何もしない (ack せず次回持ち越し)
+async function handleOutboundMessage({
+  outbound,
+  msg,
+  registry,
+  env,
+}: {
+  outbound: { id: string; domainName: string; registry: "kitaqsign" | "kitaqnic"; gainingUserId: string; authInfo: string };
+  msg: PollMessage;
+  registry: Registry;
+  env: CloudflareBindings;
+}): Promise<void> {
+  const status = msg.payload.status;
+  const op = msg.payload.op;
+
+  const isApproved = status === "serverApproved" || status === "clientApproved" || op === "approve";
+  const isCancelled = status === "clientRejected" || status === "clientCancelled" || op === "reject" || op === "cancel";
+
+  if (!isApproved && !isCancelled) {
+    // op=request 通知は自 backend が投げた request の反響なので無視 (ack しない、次で消化される想定)。
+    // 中間 or 未知は次回 cron で状態が進んだメッセージを待つ。
+    console.warn(
+      `TransferCronPoll.handleOutboundMessage: intermediate status="${status ?? "<none>"}" op="${op ?? "<none>"}" for domain=${outbound.domainName}. Not acking.`,
+    );
+    return;
+  }
+
+  if (isApproved) {
+    // 承認された = 所有権が gaining (自 backend user) に来た。domains 行を新規 INSERT。
+    // exDate は info 経由で正確に取得する。
+    const infoResult = await RegistryBridge.info({ name: outbound.domainName, registry: outbound.registry, env });
+    if (!infoResult.success) {
+      console.error(
+        `TransferCronPoll.handleOutboundMessage: info failed for domain=${outbound.domainName}`,
+        infoResult.error,
+      );
+      return;
+    }
+    const expiresAt = new Date(infoResult.data.exDate);
+    if (Number.isNaN(expiresAt.getTime())) {
+      console.error(
+        `TransferCronPoll.handleOutboundMessage: invalid exDate for domain=${outbound.domainName}: ${infoResult.data.exDate}`,
+      );
+      return;
+    }
+    const approvedStatus: "serverApproved" | "clientApproved" =
+      status === "serverApproved" ? "serverApproved" : "clientApproved";
+    const commit = await OutboundTransferRequestRepository.commitApprovedWithDomain({
+      outboundId: outbound.id,
+      outboundStatus: approvedStatus,
+      newDomain: {
+        name: outbound.domainName,
+        registry: outbound.registry,
+        status: "ok",
+        expiresAt,
+        authInfo: outbound.authInfo,
+        ownerUserId: outbound.gainingUserId,
+      },
+      env,
+    });
+    if (!commit.success) {
+      console.error(
+        `TransferCronPoll.handleOutboundMessage: commitApprovedWithDomain failed for domain=${outbound.domainName}`,
+        commit.error,
+      );
+      return;
+    }
+    console.info(
+      `TransferCronPoll.handleOutboundMessage: outbound approved for domain=${outbound.domainName} owner=${outbound.gainingUserId}`,
+    );
+  } else {
+    // 拒否 or 取消。outbound.status を落とすだけ (domain 行は作らない)。
+    const cancelledStatus: "clientRejected" | "clientCancelled" =
+      status === "clientRejected" || op === "reject" ? "clientRejected" : "clientCancelled";
+    const update = await OutboundTransferRequestRepository.updateStatus({
+      id: outbound.id,
+      status: cancelledStatus,
+      env,
+    });
+    if (!update.success) {
+      console.error(
+        `TransferCronPoll.handleOutboundMessage: updateStatus failed for outbound=${outbound.id}`,
+        update.error,
+      );
+      return;
+    }
+    console.info(
+      `TransferCronPoll.handleOutboundMessage: outbound ${cancelledStatus} for domain=${outbound.domainName}`,
+    );
+  }
+
+  await tryAck({ messageId: msg.id, registry, env });
 }
