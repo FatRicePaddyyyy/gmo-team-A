@@ -149,11 +149,15 @@ export class RegistryBridge {
     name: string;
     env: CloudflareBindings;
   }): Promise<Result<Registry>> {
-    const lastDot = name.trim().toLowerCase().lastIndexOf(".");
-    if (lastDot < 0 || lastDot === name.length - 1) {
+    // trim + lowercase 後の同じ文字列に対して index/length を取る。
+    // 前は元の `name.length` と trim 後の lastIndexOf を混ぜていて、
+    // 末尾スペースなどのケースで判定が微妙にズレていた。
+    const normalizedName = name.trim().toLowerCase();
+    const lastDot = normalizedName.lastIndexOf(".");
+    if (lastDot < 0 || lastDot === normalizedName.length - 1) {
       return { success: false, data: null, error: "invalid_domain_name" };
     }
-    const tld = name.trim().toLowerCase().slice(lastDot + 1);
+    const tld = normalizedName.slice(lastDot + 1);
 
     const [ks, kn] = await Promise.all([
       RegistryBridge.hello({ registry: "kitaqsign", env }),
