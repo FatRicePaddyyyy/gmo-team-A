@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { Menu, X, ShoppingCart } from "lucide-react";
+import { Menu, X, ShoppingCart, UserRound } from "lucide-react";
+import { useSession } from "@/auth-client";
 import { Button } from "@/components/ui/button";
 import { useCart } from "@/shared/hooks/use-cart.hook";
 
@@ -19,6 +20,10 @@ const navItems = [
 export function SiteHeader() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const { count } = useCart();
+  const { data: session, isPending } = useSession();
+  const signedInName = session?.user
+    ? session.user.name || session.user.email
+    : null;
 
   return (
     <header className="sticky top-0 z-50 w-full border-b border-border bg-white shadow-sm">
@@ -65,14 +70,29 @@ export function SiteHeader() {
               </span>
             )}
           </Link>
-          <Button
-            className="h-11 text-white"
-            style={{ background: "var(--brand)" }}
-            nativeButton={false}
-            render={<Link href="/login" />}
-          >
-            ログイン
-          </Button>
+          {/* セッション判定中は同じ幅の箱を置いてレイアウトを揺らさない */}
+          {isPending ? (
+            <div className="h-11 w-24" aria-hidden="true" />
+          ) : signedInName ? (
+            <Button
+              variant="ghost"
+              className="h-11 max-w-40"
+              nativeButton={false}
+              render={<Link href="/dashboard" />}
+            >
+              <UserRound aria-hidden="true" />
+              <span className="truncate">{signedInName}</span>
+            </Button>
+          ) : (
+            <Button
+              variant="brand"
+              className="h-11"
+              nativeButton={false}
+              render={<Link href="/login" />}
+            >
+              ログイン
+            </Button>
+          )}
           <Button
             variant="ghost"
             size="icon"
