@@ -47,10 +47,24 @@ export class RegistryBridge {
       if (!response.ok || !data) {return { success: false, data: null, error: "invalid_registry_response" };}
       const extracted = extractResData(data);
       if (!extracted.success) {return extracted;}
-      if (!extracted.data || !Array.isArray(extracted.data.tlds)) {
-        return { success: false, data: null, error: "invalid_registry_response" };
-      }
-      return { success: true, data: extracted.data, error: null };
+      if (!extracted.data) {return { success: false, data: null, error: "invalid_registry_response" };}
+
+      // 対応 TLD の入れ物がレジストリごとに違う（実機で確認済み）。
+      //   kitaqsign: resData.tlds               = ["com","net","org","info"]
+      //   kitaqnic : resData.info.supportedTlds = ["xyz","online",...]（tlds は存在しない）
+      // 生成型は kitaqsign 側を代表にしているため kitaqnic の形は型に出てこない。
+      // ここで吸収して、呼び出し側は常に tlds を見ればよい状態にする。
+      const resData = extracted.data as GreetingResponse & {
+        info?: { supportedTlds?: unknown };
+      };
+      const tlds = Array.isArray(resData.tlds)
+        ? resData.tlds
+        : Array.isArray(resData.info?.supportedTlds)
+          ? (resData.info.supportedTlds as string[])
+          : null;
+      if (!tlds) {return { success: false, data: null, error: "invalid_registry_response" };}
+
+      return { success: true, data: { ...resData, tlds }, error: null };
     } catch (e) {
       console.error("RegistryBridge.hello error:", e);
       return { success: false, data: null, error: "network_error" };
@@ -324,6 +338,15 @@ export class RegistryBridge {
         params: { path: { name } },
       });
       if (response.status === 404) {return { success: false, data: null, error: "domain_not_found" };}
+
+      // restore と同じ。廃止できない状態（すでに pendingDelete 等）は 2304 だが、
+      // 実機は **HTTP 409 + 2304** で返す（実測: `Domain xxx is pending delete`）。
+      // 非 2xx だと openapi-fetch が body を error 側に入れるので、`if (error)` より前に拾う。
+      const conflictCode = (error as { result?: { code?: number } } | undefined)?.result?.code;
+      if (response.status === 409 || conflictCode === 2304) {
+        return { success: false, data: null, error: "operation_prohibited" };
+      }
+
       if (error) {return { success: false, data: null, error: "invalid_registry_response" };}
       if (data.result.code === 2304) {return { success: false, data: null, error: "operation_prohibited" };}
       const extracted = extractResData(data);
