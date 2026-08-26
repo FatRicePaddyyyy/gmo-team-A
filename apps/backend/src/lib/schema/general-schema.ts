@@ -63,7 +63,13 @@ export const transfers = sqliteTable("transfers", {
   // restrict: pendingTransfer 中のドメインは削除不可（cascade だと Queue consumer が参照できなくなる）
   registry: text("registry", { enum: ["kitaqsign", "kitaqnic"] }).notNull(),
   status: text("status").notNull().default("pendingTransfer"),
-  // pendingTransfer / clientApproved / clientRejected / clientCancelled / serverApproved
+  // 取り得る値:
+  //   - pendingTransfer: 申請直後・poll 待ち
+  //   - clientApproved:  losing 側が承認 (approve エンドポイント経由)
+  //   - clientRejected:  losing 側が拒否 (reject エンドポイント経由)
+  //   - clientCancelled: gaining 側が取消 (cancel エンドポイント経由)
+  //   - serverApproved:  レジストリが自動承認
+  //   - expired:         poll 試行が上限超過して backend が諦めた (NB-10 対応)
   gainingUserId: text("gaining_user_id").notNull()
     .references(() => user.id),
   // losingUserId は持たない。domains.ownerUserId が losing 相当

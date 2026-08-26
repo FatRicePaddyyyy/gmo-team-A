@@ -1,6 +1,6 @@
-import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
+import { createRoute, z } from "@hono/zod-openapi";
 import { toUserMessage } from "../../../../lib/error-messages";
-import type { Variables } from "../../../../types";
+import { createOpenAPIHono } from "../../../../lib/openapi-hono";
 import { TransferService } from "../../service";
 
 const ParamsSchema = z.object({
@@ -32,7 +32,7 @@ const route = createRoute({
   },
 });
 
-const app = new OpenAPIHono<{ Bindings: CloudflareBindings; Variables: Variables }>();
+const app = createOpenAPIHono();
 
 export const cancelTransferRouteHandler = app.openapi(route, async (ctx) => {
   const { "transfer-id": transferId } = ctx.req.valid("param");

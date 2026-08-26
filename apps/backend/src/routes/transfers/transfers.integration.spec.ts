@@ -1,5 +1,6 @@
 /// <reference types="../../../worker-configuration" />
 import { beforeEach, describe, expect, test, vi } from "vitest";
+import { TransferStatusRepository } from "../../domains/transfer/repository";
 import { RegistryBridge } from "../../lib/bridge";
 import { approveTransferRouteHandler } from "../domains/[domain-id]/transfer/approve/post";
 import { rejectTransferRouteHandler } from "../domains/[domain-id]/transfer/reject/post";
@@ -14,7 +15,10 @@ import { TransferRepository } from "./repository";
 // RegistryBridge と各 Repository をモックして
 // ハンドラーが正しい HTTP ステータスとユーザー向けメッセージを返すかを検証する。
 
-const mockEnv = {} as CloudflareBindings;
+const mockEnv = {
+  // Drop #1/#2 対策で TRANSFER_QUEUE.send が必須になったため、no-op モックを注入
+  TRANSFER_QUEUE: { send: async () => undefined },
+} as unknown as CloudflareBindings;
 
 // テスト時は authMiddleware が通らず ctx.get("userId") === undefined になる。
 // ownerUserId / gainingUserId を undefined に合わせることで権限チェックを通過させる。
@@ -66,7 +70,7 @@ describe("結合: POST /api/v1/secure/transfers", () => {
       mockEnv,
     );
     expect(res.status).toBe(202);
-    const json = await res.json();
+    const json = await res.json() as any;
     expect(json.data.status).toBe("pendingTransfer");
   });
 
@@ -81,12 +85,15 @@ describe("結合: POST /api/v1/secure/transfers", () => {
       mockEnv,
     );
     expect(res.status).toBe(409);
-    const json = await res.json();
+    const json = await res.json() as any;
     expect(json.error).toContain("移管できません");
   });
 
   test("[異常系] authInfo 不一致 → 409 + ユーザー向けメッセージ", async () => {
     vi.spyOn(TransferDomainRepository, "findByName").mockResolvedValue({ success: true, data: otherOwnerDomain, error: null });
+    // NB-9 対応で bridge を叩く前に DB insert する順序に変わったので、create も mock する
+    vi.spyOn(TransferRepository, "create").mockResolvedValue({ success: true, data: mockTransferRow, error: null });
+    vi.spyOn(TransferRepository, "updateStatus").mockResolvedValue({ success: true, data: undefined, error: null });
     vi.spyOn(RegistryBridge, "transferRequest").mockResolvedValue({ success: false, data: null, error: "authInfo_mismatch" });
 
     const res = await requestTransferRouteHandler.request(
@@ -95,7 +102,7 @@ describe("結合: POST /api/v1/secure/transfers", () => {
       mockEnv,
     );
     expect(res.status).toBe(409);
-    const json = await res.json();
+    const json = await res.json() as any;
     expect(json.error).toContain("AuthCode");
   });
 
@@ -108,7 +115,7 @@ describe("結合: POST /api/v1/secure/transfers", () => {
       mockEnv,
     );
     expect(res.status).toBe(404);
-    const json = await res.json();
+    const json = await res.json() as any;
     expect(json.error).toContain("見つかりません");
   });
 
@@ -133,6 +140,8 @@ describe("結合: POST /api/v1/secure/domains/{id}/transfer/approve", () => {
       error: null,
     });
     vi.spyOn(RegistryBridge, "transferApprove").mockResolvedValue({ success: true, data: { domain: "example.com", status: "clientApproved", gainingRegistrar: "R2", losingRegistrar: "R1" }, error: null });
+    // Bug 対策: approveTransfer が同期的に commitApproved を呼ぶようになったため mock。
+    vi.spyOn(TransferStatusRepository, "commitApproved").mockResolvedValue({ success: true, data: undefined, error: null });
 
     const res = await approveTransferRouteHandler.request(
       "/api/v1/secure/domains/dom-001/transfer/approve",
@@ -140,6 +149,9 @@ describe("結合: POST /api/v1/secure/domains/{id}/transfer/approve", () => {
       mockEnv,
     );
     expect(res.status).toBe(200);
+    expect(TransferStatusRepository.commitApproved).toHaveBeenCalledWith(
+      expect.objectContaining({ transferStatus: "clientApproved", newOwnerUserId: "user-002" }),
+    );
   });
 
   test("[異常系] 非 losing ユーザー → 403 + ユーザー向けメッセージ", async () => {
@@ -153,7 +165,7 @@ describe("結合: POST /api/v1/secure/domains/{id}/transfer/approve", () => {
       mockEnv,
     );
     expect(res.status).toBe(403);
-    const json = await res.json();
+    const json = await res.json() as any;
     expect(json.error).toContain("権限");
   });
 
@@ -167,7 +179,7 @@ describe("結合: POST /api/v1/secure/domains/{id}/transfer/approve", () => {
       mockEnv,
     );
     expect(res.status).toBe(409);
-    const json = await res.json();
+    const json = await res.json() as any;
     expect(json.error).toContain("見つかりません");
   });
 });
@@ -178,8 +190,8 @@ describe("結合: POST /api/v1/secure/domains/{id}/transfer/reject", () => {
   test("[正常系] reject 成功 → 200（DB 更新を含む）", async () => {
     vi.spyOn(DomainRepository, "findById").mockResolvedValue({ success: true, data: { ...mockDomainRow, status: "pendingTransfer" }, error: null });
     vi.spyOn(DomainTransferRepository, "findPendingByDomainId").mockResolvedValue({ success: true, data: { id: "tr-001", domainId: "dom-001", registry: "kitaqsign" as const, status: "pendingTransfer", gainingUserId: "user-002", createdAt: new Date() }, error: null });
-    vi.spyOn(DomainTransferRepository, "updateStatus").mockResolvedValue({ success: true, data: undefined, error: null });
-    vi.spyOn(DomainRepository, "updateStatus").mockResolvedValue({ success: true, data: undefined, error: null });
+    // R2: 2 更新が batch 化された。settleAndReleaseDomain を mock。
+    vi.spyOn(TransferStatusRepository, "settleAndReleaseDomain").mockResolvedValue({ success: true, data: undefined, error: null });
     vi.spyOn(RegistryBridge, "transferReject").mockResolvedValue({ success: true, data: { domain: "example.com", status: "clientApproved", gainingRegistrar: "R2", losingRegistrar: "R1" }, error: null });
 
     const res = await rejectTransferRouteHandler.request(
@@ -188,8 +200,9 @@ describe("結合: POST /api/v1/secure/domains/{id}/transfer/reject", () => {
       mockEnv,
     );
     expect(res.status).toBe(200);
-    // DomainRepository.updateStatus が "ok" で呼ばれているか確認
-    expect(DomainRepository.updateStatus).toHaveBeenCalledWith(expect.objectContaining({ status: "ok" }));
+    expect(TransferStatusRepository.settleAndReleaseDomain).toHaveBeenCalledWith(
+      expect.objectContaining({ transferStatus: "clientRejected" }),
+    );
   });
 
   test("[異常系] 非 losing ユーザー → 403 + ユーザー向けメッセージ", async () => {
@@ -203,7 +216,7 @@ describe("結合: POST /api/v1/secure/domains/{id}/transfer/reject", () => {
       mockEnv,
     );
     expect(res.status).toBe(403);
-    const json = await res.json();
+    const json = await res.json() as any;
     expect(json.error).toContain("権限");
   });
 });
@@ -215,8 +228,8 @@ describe("結合: POST /api/v1/secure/transfers/{id}/cancel", () => {
     // ctx.get("userId") === undefined に合わせて gainingUserId も undefined にする
     vi.spyOn(TransferRepository, "findById").mockResolvedValue({ success: true, data: mockTransferRow, error: null });
     vi.spyOn(TransferDomainRepository, "findById").mockResolvedValue({ success: true, data: mockDomainRow, error: null });
-    vi.spyOn(TransferRepository, "updateStatus").mockResolvedValue({ success: true, data: undefined, error: null });
-    vi.spyOn(TransferDomainRepository, "updateStatus").mockResolvedValue({ success: true, data: undefined, error: null });
+    // R2: 2 更新が batch 化された。settleAndReleaseDomain を mock。
+    vi.spyOn(TransferStatusRepository, "settleAndReleaseDomain").mockResolvedValue({ success: true, data: undefined, error: null });
     vi.spyOn(RegistryBridge, "transferCancel").mockResolvedValue({ success: true, data: { domain: "example.com", status: "clientApproved", gainingRegistrar: "R2", losingRegistrar: "R1" }, error: null });
 
     const res = await cancelTransferRouteHandler.request(
@@ -225,8 +238,9 @@ describe("結合: POST /api/v1/secure/transfers/{id}/cancel", () => {
       mockEnv, // ctx.get("userId") === undefined === mockTransferRow.gainingUserId
     );
     expect(res.status).toBe(200);
-    expect(TransferDomainRepository.updateStatus).toHaveBeenCalledWith(expect.objectContaining({ status: "ok" }));
-    expect(TransferRepository.updateStatus).toHaveBeenCalledWith(expect.objectContaining({ status: "clientCancelled" }));
+    expect(TransferStatusRepository.settleAndReleaseDomain).toHaveBeenCalledWith(
+      expect.objectContaining({ transferStatus: "clientCancelled" }),
+    );
   });
 
   test("[異常系] gaining でないユーザー → 403 + ユーザー向けメッセージ", async () => {
@@ -241,7 +255,7 @@ describe("結合: POST /api/v1/secure/transfers/{id}/cancel", () => {
       mockEnv, // userId = undefined ≠ "user-002"
     );
     expect(res.status).toBe(403);
-    const json = await res.json();
+    const json = await res.json() as any;
     expect(json.error).toContain("権限");
   });
 
@@ -253,10 +267,10 @@ describe("結合: POST /api/v1/secure/transfers/{id}/cancel", () => {
     const res = await cancelTransferRouteHandler.request(
       "/api/v1/secure/transfers/tr-001/cancel",
       { method: "POST" },
-      { ...mockEnv, __userId: "user-002" },
+      mockEnv,
     );
     expect(res.status).toBe(409);
-    const json = await res.json();
+    const json = await res.json() as any;
     expect(json.error).toContain("取り消しできません");
   });
 
@@ -269,7 +283,7 @@ describe("結合: POST /api/v1/secure/transfers/{id}/cancel", () => {
       mockEnv,
     );
     expect(res.status).toBe(404);
-    const json = await res.json();
+    const json = await res.json() as any;
     expect(json.error).toContain("見つかりません");
   });
 });

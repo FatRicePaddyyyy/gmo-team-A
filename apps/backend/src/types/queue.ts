@@ -1,7 +1,6 @@
+// Cloudflare Queues の transfer-poll に送るメッセージ本体。
+// リトライ回数は Cloudflare Queues 側 (message.attempts / max_retries) が管理するので、
+// backend 側で attempt を持たない。
 export interface TransferPollMessage {
   transferId: string;
-  // このメッセージが何回目の poll 試行か。1 origin。
-  // レジストリが自動承認するまでの間、空振りが続く場合は再エンキューして attempt を +1 する。
-  // 一定回数超えたら poll を諦めて transfer を expired 扱いにする (B10)。
-  attempt: number;
 }

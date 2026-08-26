@@ -1,6 +1,6 @@
-import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
+import { createRoute, z } from "@hono/zod-openapi";
 import { toUserMessage } from "../../../lib/error-messages";
-import type { Variables } from "../../../types";
+import { createOpenAPIHono } from "../../../lib/openapi-hono";
 import { DomainService } from "../service";
 
 // 空き確認は認証不要の /api/v1/public/* に配置。
@@ -36,7 +36,7 @@ const route = createRoute({
   },
 });
 
-const app = new OpenAPIHono<{ Bindings: CloudflareBindings; Variables: Variables }>();
+const app = createOpenAPIHono();
 
 export const checkDomainRouteHandler = app.openapi(route, async (ctx) => {
   const { name } = ctx.req.valid("json");

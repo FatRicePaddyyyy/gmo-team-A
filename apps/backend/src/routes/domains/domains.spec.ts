@@ -60,7 +60,7 @@ describe("POST /api/v1/public/domains/check", () => {
     );
 
     expect(res.status).toBe(200);
-    const json = await res.json();
+    const json = await res.json() as any;
     expect(json).toMatchObject({ success: true, data: { avail: true } });
   });
 
@@ -82,7 +82,7 @@ describe("POST /api/v1/public/domains/check", () => {
     );
 
     expect(res.status).toBe(200);
-    const json = await res.json();
+    const json = await res.json() as any;
     expect(json).toMatchObject({ success: true, data: { avail: false } });
   });
 
@@ -146,7 +146,7 @@ describe("POST /api/v1/secure/domains", () => {
     );
 
     expect(res.status).toBe(201);
-    const json = await res.json();
+    const json = await res.json() as any;
     expect(json).toMatchObject({ success: true, data: { name: "example.com" } });
   });
 
@@ -274,7 +274,7 @@ describe("GET /api/v1/secure/domains", () => {
     );
 
     expect(res.status).toBe(200);
-    const json = await res.json();
+    const json = await res.json() as any;
     expect(json.data).toHaveLength(1);
   });
 
@@ -292,7 +292,7 @@ describe("GET /api/v1/secure/domains", () => {
     );
 
     expect(res.status).toBe(200);
-    const json = await res.json();
+    const json = await res.json() as any;
     expect(json.data).toHaveLength(0);
   });
 });
@@ -314,7 +314,7 @@ describe("GET /api/v1/secure/domains/{domain-id}", () => {
     );
 
     expect(res.status).toBe(200);
-    const json = await res.json();
+    const json = await res.json() as any;
     expect(json).toMatchObject({ success: true, data: { id: "dom-001" } });
   });
 
@@ -356,7 +356,7 @@ describe("POST /api/v1/secure/domains/{domain-id}/renew", () => {
     );
 
     expect(res.status).toBe(200);
-    const json = await res.json();
+    const json = await res.json() as any;
     expect(json).toMatchObject({ success: true });
   });
 
@@ -473,7 +473,7 @@ describe("DELETE /api/v1/secure/domains/{domain-id}", () => {
     );
 
     expect(res.status).toBe(200);
-    const json = await res.json();
+    const json = await res.json() as any;
     expect(json).toMatchObject({ success: true, data: { status: "pendingDelete" } });
   });
 
@@ -527,7 +527,7 @@ describe("POST /api/v1/secure/domains/{domain-id}/restore", () => {
     );
 
     expect(res.status).toBe(200);
-    const json = await res.json();
+    const json = await res.json() as any;
     expect(json).toMatchObject({ success: true, data: { status: "ok" } });
   });
 

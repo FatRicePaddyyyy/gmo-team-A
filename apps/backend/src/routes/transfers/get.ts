@@ -1,6 +1,6 @@
-import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
+import { createRoute, z } from "@hono/zod-openapi";
 import { toUserMessage } from "../../lib/error-messages";
-import type { Variables } from "../../types";
+import { createOpenAPIHono } from "../../lib/openapi-hono";
 import { TransferService } from "./service";
 
 // B16: gaining ユーザー自身の transfer 一覧。cancel 対象を見つけるための最小 API。
@@ -33,7 +33,7 @@ const route = createRoute({
   },
 });
 
-const app = new OpenAPIHono<{ Bindings: CloudflareBindings; Variables: Variables }>();
+const app = createOpenAPIHono();
 
 export const listTransfersRouteHandler = app.openapi(route, async (ctx) => {
   const userId = ctx.get("userId");

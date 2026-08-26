@@ -1,3 +1,4 @@
+import { TransferStatusRepository } from "../../domains/transfer/repository";
 import { RegistryBridge } from "../../lib/bridge";
 import type { Registry } from "../../lib/bridge/types";
 import type { Result } from "../../types/result";
@@ -340,6 +341,37 @@ export class DomainService {
     return { success: true, data: DomainMapper.toResponse(updated), error: null };
   }
 
+  // losing (現オーナー) 目線で pending な inbound transfer の一覧を返す。
+  // frontend はこの一覧を使って「あなたのドメイン xxx.com に移管申請が来ています」と表示し、
+  // approve / reject を叩けるようにする。
+  static async listInboundPendingTransfers({
+    userId,
+    env,
+  }: {
+    userId: string;
+    env: CloudflareBindings;
+  }): Promise<Result<{
+    transferId: string;
+    domainId: string;
+    domainName: string;
+    registry: "kitaqsign" | "kitaqnic";
+    requestedAt: string;
+  }[]>> {
+    const result = await DomainTransferRepository.findInboundPendingByOwner({ ownerUserId: userId, env });
+    if (!result.success) {return result;}
+    return {
+      success: true,
+      data: result.data.map(row => ({
+        transferId: row.transferId,
+        domainId: row.domainId,
+        domainName: row.domainName,
+        registry: row.registry,
+        requestedAt: new Date(row.requestedAt).toISOString(),
+      })),
+      error: null,
+    };
+  }
+
   static async approveTransfer({
     domainId,
     userId,
@@ -377,7 +409,46 @@ export class DomainService {
     });
     if (!bridgeResult.success) {return bridgeResult;}
 
-    // DB更新はQueue consumerが担当（approve後にpollAndAckで結果を受け取る）
+    // Bug 対策: bridge 成功後に同期的に DB へ確定を反映する。
+    //   transfer.status = "clientApproved" (losing が明示的に approve を叩いたので client 側の approve)
+    //   domains.ownerUserId = gaining
+    //   domains.status = "ok"
+    // これを 1 バッチで書くので、poll 側で serverApproved 経由の再度書きが来ても、既に
+    // pendingTransfer では無いので冪等スキップされる (transfer-poll/service.ts:34)。
+    const commit = await TransferStatusRepository.commitApproved({
+      transferId: transferResult.data.id,
+      domainId,
+      transferStatus: "clientApproved",
+      newOwnerUserId: transferResult.data.gainingUserId,
+      env,
+    });
+    if (!commit.success) {return commit;}
+
+    // R3 相当: approve 直後に短 delay で queue に再投入 (belt-and-suspenders)。
+    // レジストリから返る poll メッセージも消化しないとレジストリ側キューに残り HoL block する。
+    // TRANSFER_QUEUE 欠落や send 失敗は「DB 反映済み・キュー未投入」の状態になるが、
+    // safety-net cron の recent-settled-ack パス (SETTLED_ACK_LOOKBACK_HOURS=2h) が
+    // 最大 1 時間後に該当メッセージを ack するので、致命的ではない。
+    if (!env.TRANSFER_QUEUE) {
+      console.warn(
+        `DomainService.approveTransfer: TRANSFER_QUEUE binding missing for transferId=${transferResult.data.id}; DB committed, registry ack will be attempted by safety-net cron within 1h.`,
+      );
+      return { success: true, data: undefined, error: null };
+    }
+    try {
+      await env.TRANSFER_QUEUE.send(
+        { transferId: transferResult.data.id },
+        { delaySeconds: 30 },
+      );
+    } catch (e) {
+      // DB は既に確定済みなので queue send 失敗は致命的ではない。
+      // safety-net cron の recent-settled-ack パスが最大 1 時間後にレジストリ ack を試みる。
+      console.warn(
+        `DomainService.approveTransfer: TRANSFER_QUEUE.send failed for transferId=${transferResult.data.id}; DB committed, registry ack deferred to safety-net cron.`,
+        e,
+      );
+    }
+
     return { success: true, data: undefined, error: null };
   }
 
@@ -416,15 +487,14 @@ export class DomainService {
     });
     if (!bridgeResult.success) {return bridgeResult;}
 
-    const rejectStatusResult = await DomainTransferRepository.updateStatus({
-      id: transferResult.data.id,
-      status: "clientRejected",
+    // R2: transfer.status と domain.status の 2 更新を batch でアトミック化。
+    const settle = await TransferStatusRepository.settleAndReleaseDomain({
+      transferId: transferResult.data.id,
+      domainId,
+      transferStatus: "clientRejected",
       env,
     });
-    if (!rejectStatusResult.success) {return rejectStatusResult;}
-
-    const domainStatusResult = await DomainRepository.updateStatus({ id: domainId, status: "ok", env });
-    if (!domainStatusResult.success) {return domainStatusResult;}
+    if (!settle.success) {return settle;}
 
     return { success: true, data: undefined, error: null };
   }

@@ -1,5 +1,8 @@
 import { and, eq } from "drizzle-orm";
+import { TransferStatusRepository } from "../../domains/transfer/repository";
+import type { TransferStatus } from "../../domains/transfer/repository";
 import { createDBClient } from "../../lib/db";
+import { classifyDbError } from "../../lib/db-error";
 import { transfers } from "../../lib/schema/general-schema";
 import type { Result } from "../../types/result";
 
@@ -20,12 +23,13 @@ export class TransferRepository {
       // Drizzle の returning() 型上は必ず 1 行返る前提だが、D1 の異常系で 0 件のケースを保険で検知する
       // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
       if (!created) {
-        return { success: false, data: null, error: "移管レコードの作成に失敗しました" };
+        return { success: false, data: null, error: "transfer_create_failed" };
       }
       return { success: true, data: created, error: null };
     } catch (error) {
       console.error("TransferRepository.create error:", error);
-      return { success: false, data: null, error: error instanceof Error ? error.message : "予期しないエラー" };
+      // UNIQUE violation は service 層で transfer_already_pending に再マップされる。
+      return { success: false, data: null, error: classifyDbError(error) };
     }
   }
 
@@ -42,29 +46,7 @@ export class TransferRepository {
       return { success: true, data: rows[0] ?? null, error: null };
     } catch (error) {
       console.error("TransferRepository.findById error:", error);
-      return { success: false, data: null, error: error instanceof Error ? error.message : "予期しないエラー" };
-    }
-  }
-
-  // status='pendingTransfer' のレコードを一意に取得する。
-  // partial UNIQUE index で 0 or 1 行が保証されているので orderBy 不要。
-  static async findPendingByDomainId({
-    domainId,
-    env,
-  }: {
-    domainId: string;
-    env: CloudflareBindings;
-  }): Promise<Result<Transfer | null>> {
-    try {
-      const db = createDBClient(env);
-      const rows = await db
-        .select()
-        .from(transfers)
-        .where(and(eq(transfers.domainId, domainId), eq(transfers.status, "pendingTransfer")));
-      return { success: true, data: rows[0] ?? null, error: null };
-    } catch (error) {
-      console.error("TransferRepository.findPendingByDomainId error:", error);
-      return { success: false, data: null, error: error instanceof Error ? error.message : "予期しないエラー" };
+      return { success: false, data: null, error: classifyDbError(error) };
     }
   }
 
@@ -74,17 +56,11 @@ export class TransferRepository {
     env,
   }: {
     id: string;
-    status: string;
+    status: TransferStatus;
     env: CloudflareBindings;
   }): Promise<Result<void>> {
-    try {
-      const db = createDBClient(env);
-      await db.update(transfers).set({ status }).where(eq(transfers.id, id));
-      return { success: true, data: undefined, error: null };
-    } catch (error) {
-      console.error("TransferRepository.updateStatus error:", error);
-      return { success: false, data: null, error: error instanceof Error ? error.message : "予期しないエラー" };
-    }
+    // NB-8: 共通の TransferStatusRepository に委譲。
+    return TransferStatusRepository.update({ id, status, env });
   }
 
   // B16: gaining ユーザーが自分で申請した移管一覧。
@@ -101,7 +77,7 @@ export class TransferRepository {
       return { success: true, data: rows, error: null };
     } catch (error) {
       console.error("TransferRepository.findByGainingUserId error:", error);
-      return { success: false, data: null, error: error instanceof Error ? error.message : "予期しないエラー" };
+      return { success: false, data: null, error: classifyDbError(error) };
     }
   }
 }
