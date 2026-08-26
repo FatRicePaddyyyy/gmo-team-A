@@ -512,8 +512,10 @@ export class RegistryBridge {
       );
       // authInfo 不一致の伝え方がレジストリで違う (bridge で共通コードに集約する):
       //   Kitaqnic  … Swagger 定義通り HTTP 401
-      //   Kitaqsign … Swagger 定義通り HTTP 202 + result.code 2202 (下の分岐で処理)
+      //   Kitaqsign … 実測は HTTP 403 + result.code 2202 (Swagger は 202/404 のみ定義)、
+      //               または HTTP 202/200 + result.code 2202 (下の分岐で処理)
       if (response.status === 401) {return { success: false, data: null, error: "authInfo_mismatch" };}
+      if (response.status === 403) {return { success: false, data: null, error: "authInfo_mismatch" };}
       // ドメイン不在 (両レジストリ Swagger 定義)
       if (response.status === 404) {return { success: false, data: null, error: "domain_not_found" };}
       if (error) {return { success: false, data: null, error: "invalid_registry_response" };}

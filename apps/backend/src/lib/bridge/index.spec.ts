@@ -387,3 +387,64 @@ describe("RegistryBridge.transferApprove: 401/403/404/409 の意味分け", () =
     expect(res.error).toBe("forbidden");
   });
 });
+
+// ─── transferRequest ─────────────────────────────────────────────────────────
+
+describe("RegistryBridge.transferRequest: authInfo 不一致の吸収", () => {
+  // e2e 実測 (teama-2 が違う authInfo で request): Kitaqsign は HTTP 403 + result.code 2202 を返す。
+  // Swagger 定義には無いが、bridge で authInfo_mismatch に集約して routes 側で 409 応答にする。
+  test("[異常系] 403 + result.code 2202 → authInfo_mismatch", async () => {
+    stubRegistry(403, errEnvelope(2202, "Invalid authorization information"));
+
+    const res = await RegistryBridge.transferRequest({
+      name: "example.com",
+      authInfo: "WRONG-authInfo",
+      registry: "kitaqsign",
+      env: mockEnv,
+    });
+
+    expect(res.success).toBe(false);
+    expect(res.error).toBe("authInfo_mismatch");
+  });
+
+  // Kitaqnic 側 (Swagger 定義通り HTTP 401)
+  test("[異常系] 401 → authInfo_mismatch (Kitaqnic 相当)", async () => {
+    stubRegistry(401, errEnvelope(2202, "Invalid authorization information"));
+
+    const res = await RegistryBridge.transferRequest({
+      name: "example.xyz",
+      authInfo: "WRONG-authInfo",
+      registry: "kitaqnic",
+      env: mockEnv,
+    });
+
+    expect(res.error).toBe("authInfo_mismatch");
+  });
+
+  // 202 + result.code 2202 (Kitaqsign が仕様通り返した場合)
+  test("[異常系] 202 + result.code 2202 → authInfo_mismatch", async () => {
+    stubRegistry(202, errEnvelope(2202, "Invalid authorization information"));
+
+    const res = await RegistryBridge.transferRequest({
+      name: "example.com",
+      authInfo: "WRONG-authInfo",
+      registry: "kitaqsign",
+      env: mockEnv,
+    });
+
+    expect(res.error).toBe("authInfo_mismatch");
+  });
+
+  test("[異常系] 404 → domain_not_found", async () => {
+    stubRegistry(404, errEnvelope(2303, "Object does not exist"));
+
+    const res = await RegistryBridge.transferRequest({
+      name: "nope.com",
+      authInfo: "any",
+      registry: "kitaqsign",
+      env: mockEnv,
+    });
+
+    expect(res.error).toBe("domain_not_found");
+  });
+});
