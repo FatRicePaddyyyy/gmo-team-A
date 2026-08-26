@@ -91,6 +91,7 @@ export default function DashboardPage() {
             </p>
             <Button
               className="w-full"
+              variant="brand"
               nativeButton={false}
               render={<Link href="/login" />}
             >

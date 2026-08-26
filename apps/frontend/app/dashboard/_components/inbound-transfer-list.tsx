@@ -85,6 +85,7 @@ export function InboundTransferList({ state }: InboundTransferListProps) {
               <div className="flex flex-wrap gap-2">
                 <Button
                   size="sm"
+                  variant="brand"
                   disabled={busy}
                   onClick={() => void state.approve(transfer)}
                 >

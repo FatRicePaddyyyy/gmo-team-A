@@ -57,6 +57,7 @@ export function DomainList({ state }: DomainListProps) {
           <div className="mt-4 flex flex-wrap justify-center gap-2">
             <Button
               size="sm"
+              variant="brand"
               nativeButton={false}
               render={<Link href="/search" />}
             >

@@ -64,6 +64,7 @@ export default function TransferPage() {
             </p>
             <Button
               className="w-full"
+              variant="brand"
               nativeButton={false}
               render={<Link href="/login" />}
             >

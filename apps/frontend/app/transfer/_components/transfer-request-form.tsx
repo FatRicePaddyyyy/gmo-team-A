@@ -108,7 +108,7 @@ export function TransferRequestForm({
             )}
           </div>
 
-          <Button type="submit" size="lg" disabled={submitting}>
+          <Button type="submit" size="lg" variant="brand" disabled={submitting}>
             {submitting ? "申請中..." : "移管を申請する"}
           </Button>
         </form>

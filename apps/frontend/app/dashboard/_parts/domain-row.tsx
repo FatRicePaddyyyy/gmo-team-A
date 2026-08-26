@@ -106,6 +106,7 @@ export function DomainRow({
                 </select>
                 <Button
                   size="sm"
+                  variant="brand"
                   disabled={busy}
                   onClick={() =>
                     void onRenew(domain, { unit: "Y", value: years })
