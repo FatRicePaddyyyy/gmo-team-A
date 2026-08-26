@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { CalendarClock, RotateCcw, Trash2 } from "lucide-react";
+import Link from "next/link";
+import { CalendarClock, RotateCcw, Settings2, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import type {
@@ -47,9 +48,12 @@ export function DomainRow({
       <CardContent className="space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="min-w-0">
-            <p className="truncate font-heading text-base font-semibold text-gray-900">
+            <Link
+              href={`/dashboard/${domain.id}`}
+              className="block truncate font-heading text-base font-semibold text-gray-900 underline-offset-2 hover:text-[var(--brand)] hover:underline"
+            >
               {domain.name}
-            </p>
+            </Link>
             <p className="mt-0.5 text-xs text-gray-500">
               レジストリ: {domain.registry} / 取得日:{" "}
               {formatDate(domain.createdAt)}
@@ -141,9 +145,19 @@ export function DomainRow({
               </Button>
             )}
 
+            <Button
+              size="sm"
+              variant="outline"
+              nativeButton={false}
+              render={<Link href={`/dashboard/${domain.id}`} />}
+            >
+              <Settings2 aria-hidden="true" />
+              設定・詳細
+            </Button>
+
             {!canRenew(domain.status) && !canRestore(domain.status) && (
               <p className="text-xs text-gray-500">
-                いまはこのドメインに対して行える操作がありません。
+                いまは更新・復旧を行えません。状態は「設定・詳細」から確認できます。
               </p>
             )}
           </div>

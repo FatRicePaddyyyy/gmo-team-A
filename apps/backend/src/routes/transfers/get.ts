@@ -7,6 +7,8 @@ import { TransferService } from "./service";
 const TransferSchema = z.object({
   id: z.string(),
   domainId: z.string(),
+  // ID だけでは何の申請か分からないので名前も返す
+  domainName: z.string(),
   registry: z.string(),
   status: z.string(),
   createdAt: z.string(),
@@ -46,6 +48,7 @@ export const listTransfersRouteHandler = app.openapi(route, async (ctx) => {
     data: result.data.map(t => ({
       id: t.id,
       domainId: t.domainId,
+      domainName: t.domainName,
       registry: t.registry,
       status: t.status,
       createdAt: new Date(t.createdAt).toISOString(),

@@ -19,6 +19,8 @@ type RequestedTransfer = RequestSuccess["data"];
 export interface TransferFeedback {
   tone: "success" | "error";
   message: string;
+  /** セッション切れ。帯にログイン導線を出すため */
+  unauthorized?: boolean;
 }
 
 /**
@@ -33,6 +35,7 @@ export function useTransferRequests(enabled: boolean) {
   // 一度でも取得を終えたか。取得前に空状態が描画されるのを防ぐために見る
   const [loaded, setLoaded] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [loadUnauthorized, setLoadUnauthorized] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<TransferFeedback | null>(null);
@@ -40,10 +43,12 @@ export function useTransferRequests(enabled: boolean) {
   const refresh = useCallback(async () => {
     setLoading(true);
     setLoadError(null);
+    setLoadUnauthorized(false);
     const result = await callApi<MyTransfer[]>($listTransfers());
     if (!result.success) {
       // 直前の一覧は消さない（成功メッセージと空状態が同時に出るのを避ける）
       setLoadError(result.error);
+      setLoadUnauthorized(Boolean(result.unauthorized));
     } else {
       setTransfers(result.data);
     }
@@ -74,7 +79,11 @@ export function useTransferRequests(enabled: boolean) {
       );
 
       if (!result.success) {
-        setFeedback({ tone: "error", message: result.error });
+        setFeedback({
+          tone: "error",
+          message: result.error,
+          unauthorized: result.unauthorized,
+        });
         setSubmitting(false);
         return false;
       }
@@ -99,7 +108,11 @@ export function useTransferRequests(enabled: boolean) {
         $cancelTransfer({ param: { "transfer-id": transfer.id } }),
       );
       if (!result.success) {
-        setFeedback({ tone: "error", message: result.error });
+        setFeedback({
+          tone: "error",
+          message: result.error,
+          unauthorized: result.unauthorized,
+        });
       } else {
         setFeedback({ tone: "success", message: "移管申請を取り消しました。" });
         await refresh();
@@ -115,6 +128,7 @@ export function useTransferRequests(enabled: boolean) {
     // 初回取得が終わるまでは読み込み中として扱う。
     loading: loading || (enabled && !loaded),
     loadError,
+    loadUnauthorized,
     submitting,
     cancellingId,
     feedback,

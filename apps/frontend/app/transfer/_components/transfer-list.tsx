@@ -21,7 +21,7 @@ interface TransferListProps {
 
 /** 自分が出した移管申請の一覧。承認待ちのものは取り消せる */
 export function TransferList({ state }: TransferListProps) {
-  const { transfers, loading, loadError, cancellingId, refresh } = state;
+  const { transfers, loading, loadError, loadUnauthorized, cancellingId, refresh } = state;
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
 
   return (
@@ -41,7 +41,13 @@ export function TransferList({ state }: TransferListProps) {
         </Button>
       </div>
 
-      {loadError && <FeedbackBanner tone="error" message={loadError} />}
+      {loadError && (
+        <FeedbackBanner
+          tone="error"
+          message={loadError}
+          unauthorized={loadUnauthorized}
+        />
+      )}
 
       {loading && transfers.length === 0 && (
         <p className="text-sm text-gray-600">申請を読み込んでいます...</p>

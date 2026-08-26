@@ -1,9 +1,16 @@
+import Link from "next/link";
 import { AlertCircle, CheckCircle2 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
 
 interface FeedbackBannerProps {
   tone: "success" | "error";
   message: string;
+  /**
+   * セッション切れのとき true。ログインページへの導線を添える。
+   * 文言だけ出しても、どうすれば復帰できるのか分からないため。
+   */
+  unauthorized?: boolean;
   className?: string;
 }
 
@@ -14,6 +21,7 @@ interface FeedbackBannerProps {
 export function FeedbackBanner({
   tone,
   message,
+  unauthorized = false,
   className = "",
 }: FeedbackBannerProps) {
   const isError = tone === "error";
@@ -31,6 +39,18 @@ export function FeedbackBanner({
         className={isError ? "text-red-800" : "text-green-800"}
       >
         {message}
+        {unauthorized && (
+          <span className="mt-2 block">
+            <Button
+              size="sm"
+              variant="brand"
+              nativeButton={false}
+              render={<Link href="/login" />}
+            >
+              ログインページへ
+            </Button>
+          </span>
+        )}
       </AlertDescription>
     </Alert>
   );
