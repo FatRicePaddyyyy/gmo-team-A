@@ -291,11 +291,22 @@ describe("結合: POST /api/v1/secure/domains/{id}/renew", () => {
 // ─── update ───────────────────────────────────────────────────────────────────
 
 describe("結合: PUT /api/v1/secure/domains/{id}", () => {
-  test("[正常系] 更新成功 → 200", async () => {
+  test("[正常系] 更新成功 → 200（Kitaqsign形: update が DomainResponse を返す）", async () => {
     vi.spyOn(DomainRepository, "findById").mockResolvedValue({ success: true, data: mockDomainRow, error: null });
     vi.spyOn(DomainRepository, "updateAuthInfo").mockResolvedValue({ success: true, data: undefined, error: null });
     vi.spyOn(DomainRepository, "updateExpiresAtAndStatus").mockResolvedValue({ success: true, data: undefined, error: null });
     vi.spyOn(RegistryBridge, "update").mockResolvedValue({
+      success: true,
+      data: {
+        domain: "example.com", status: ["ok"], registrant: "C-0001",
+        contacts: {}, nameservers: ["ns1.example.com"],
+        crDate: "2026-08-25T00:00:00.000Z", exDate: "2027-08-25T00:00:00.000Z",
+        rgpStatus: [],
+      },
+      error: null,
+    });
+    // update 成功後、最新状態の同期に info を呼ぶ（Kitaqsign / Kitaqnic 共通の後続処理）
+    vi.spyOn(RegistryBridge, "info").mockResolvedValue({
       success: true,
       data: {
         domain: "example.com", status: ["ok"], registrant: "C-0001",
@@ -312,6 +323,43 @@ describe("結合: PUT /api/v1/secure/domains/{id}", () => {
       mockEnv,
     );
     expect(res.status).toBe(200);
+  });
+
+  test("[正常系] 更新成功 → 200（Kitaqnic形: update が空の resData しか返さなくても成功扱いになる）", async () => {
+    vi.spyOn(DomainRepository, "findById").mockResolvedValue({ success: true, data: mockDomainRow, error: null });
+    vi.spyOn(DomainRepository, "updateAuthInfo").mockResolvedValue({ success: true, data: undefined, error: null });
+    vi.spyOn(DomainRepository, "updateExpiresAtAndStatus").mockResolvedValue({ success: true, data: undefined, error: null });
+    // Kitaqnic の domain:update は EppResponseUnit（resData が空）を返す
+    vi.spyOn(RegistryBridge, "update").mockResolvedValue({ success: true, data: {}, error: null });
+    vi.spyOn(RegistryBridge, "info").mockResolvedValue({
+      success: true,
+      data: {
+        domain: "example.com", status: ["ok"], registrant: "C-0001",
+        contacts: {}, nameservers: ["ns1.example.com"],
+        crDate: "2026-08-25T00:00:00.000Z", exDate: "2027-08-25T00:00:00.000Z",
+        rgpStatus: [],
+      },
+      error: null,
+    });
+
+    const res = await updateDomainRouteHandler.request(
+      "/api/v1/secure/domains/dom-001",
+      { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ chg: { authInfo: "new-pass" } }) },
+      mockEnv,
+    );
+    expect(res.status).toBe(200);
+  });
+
+  test("[異常系] add で指定したネームサーバーが未登録 → 400 + referenced_object_not_found", async () => {
+    vi.spyOn(DomainRepository, "findById").mockResolvedValue({ success: true, data: mockDomainRow, error: null });
+    vi.spyOn(RegistryBridge, "update").mockResolvedValue({ success: false, data: null, error: "referenced_object_not_found" });
+
+    const res = await updateDomainRouteHandler.request(
+      "/api/v1/secure/domains/dom-001",
+      { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ nameServers: ["ns1.example.com", "ns2.example.com"] }) },
+      mockEnv,
+    );
+    expect(res.status).toBe(400);
   });
 
   test("[異常系] addStatuses と remStatuses が重複 → 400", async () => {
