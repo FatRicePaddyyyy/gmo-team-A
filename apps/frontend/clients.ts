@@ -9,25 +9,6 @@ const client = (baseUrl: string) =>
     },
   }).api.v1;
 
-export const $getHello = client(
-  process.env.NEXT_PUBLIC_BACKEND_URL!,
-).secure.hello.$post;
-export type GetHelloRequest = InferRequestType<typeof $getHello>;
-export type GetHelloResponse = InferResponseType<typeof $getHello>;
-
-export const $getAllCategoriesAndProducts = client(
-  process.env.NEXT_PUBLIC_BACKEND_URL!,
-).secure.category.$get;
-export type getAllCategoriesAndProductsResponse = InferResponseType<
-  typeof $getAllCategoriesAndProducts
->;
-
-export const $deleteCategory = client(
-  process.env.NEXT_PUBLIC_BACKEND_URL!,
-).secure.category[":categoryId"].$delete;
-export type DeleteCategoryRequest = InferRequestType<typeof $deleteCategory>;
-export type DeleteCategoryResponse = InferResponseType<typeof $deleteCategory>;
-
 // ドメイン空き確認は認証不要の公開エンドポイント（未ログインの検索導線から呼べる）
 export const $checkDomain = client(
   process.env.NEXT_PUBLIC_BACKEND_URL!,
