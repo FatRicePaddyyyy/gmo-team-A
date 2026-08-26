@@ -62,7 +62,11 @@ export default function TransferPage() {
             <p className="text-sm text-gray-600">
               移管の申請にはログインが必要です。
             </p>
-            <Button className="w-full" render={<Link href="/login" />}>
+            <Button
+              className="w-full"
+              nativeButton={false}
+              render={<Link href="/login" />}
+            >
               ログインページへ
             </Button>
           </div>

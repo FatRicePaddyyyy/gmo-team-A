@@ -66,6 +66,7 @@ export default function DashboardPage() {
                 <Button
                   variant="outline"
                   size="sm"
+                  nativeButton={false}
                   render={<Link href="/transfer" />}
                 >
                   <ArrowLeftRight aria-hidden="true" />
@@ -88,7 +89,11 @@ export default function DashboardPage() {
             <p className="text-sm text-gray-600">
               取得済みドメインの管理には、ログインしてください。
             </p>
-            <Button className="w-full" render={<Link href="/login" />}>
+            <Button
+              className="w-full"
+              nativeButton={false}
+              render={<Link href="/login" />}
+            >
               ログインページへ
             </Button>
           </div>

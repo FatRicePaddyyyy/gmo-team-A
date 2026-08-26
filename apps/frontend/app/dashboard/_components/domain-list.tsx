@@ -55,12 +55,17 @@ export function DomainList({ state }: DomainListProps) {
             まだドメインを取得していません。
           </p>
           <div className="mt-4 flex flex-wrap justify-center gap-2">
-            <Button size="sm" render={<Link href="/search" />}>
+            <Button
+              size="sm"
+              nativeButton={false}
+              render={<Link href="/search" />}
+            >
               ドメインを探す
             </Button>
             <Button
               size="sm"
               variant="outline"
+              nativeButton={false}
               render={<Link href="/transfer" />}
             >
               他社のドメインを移管する
