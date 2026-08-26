@@ -21,10 +21,12 @@ interface InboundTransferListProps {
  * 申請が 1 件も無いときは何も出さない（普段は空のセクションが居座らないようにする）。
  */
 export function InboundTransferList({ state }: InboundTransferListProps) {
-  const { transfers, loading, loadError, running, feedback } = state;
+  const { transfers, loadError, running, feedback } = state;
   const [rejecting, setRejecting] = useState<string | null>(null);
 
-  if (!loading && !loadError && transfers.length === 0 && !feedback) {
+  // 読み込み中も出さない。移管申請は普段 0 件なので、読み込み表示を挟むと
+  // 「あなたのドメインへの移管申請」が毎回一瞬現れて消えることになる。
+  if (transfers.length === 0 && !loadError && !feedback) {
     return null;
   }
 
@@ -45,10 +47,6 @@ export function InboundTransferList({ state }: InboundTransferListProps) {
         <FeedbackBanner tone={feedback.tone} message={feedback.message} />
       )}
       {loadError && <FeedbackBanner tone="error" message={loadError} />}
-
-      {loading && transfers.length === 0 && (
-        <p className="text-sm text-gray-600">申請を読み込んでいます...</p>
-      )}
 
       {transfers.map((transfer: InboundTransfer) => (
         <Card key={transfer.transferId} className="ring-1 ring-amber-200">

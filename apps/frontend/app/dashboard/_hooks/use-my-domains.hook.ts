@@ -20,7 +20,10 @@ export interface DomainFeedback {
   message: string;
 }
 
-/** 実行中の操作。`domainId` 単位で持つので、他の行のボタンは押せたままにできる */
+/**
+ * 実行中の操作。どの行のどの操作かを表示に使う（「更新中...」を出す行の特定）。
+ * 同時に走らせられるのは 1 件だけ。
+ */
 export interface RunningDomainAction {
   domainId: string;
   kind: "renew" | "delete" | "restore";
@@ -29,13 +32,15 @@ export interface RunningDomainAction {
 /**
  * 取得済みドメインの一覧と、その行に対する操作（更新・廃止・復旧）をまとめて持つ。
  *
- * 二重送信は `running` で防ぐ。ボタン側は `running` が自分の行を指している間 disabled にする。
+ * 二重送信は `running` で防ぐ。走っている間は全行のボタンを止める
+ * （成功のたびに一覧を取り直すので、並行させると取得順で表示が壊れる）。
  * 操作が成功したら一覧を取り直す（レジストリ側で status / expiresAt が変わるため）。
  */
 export function useMyDomains(enabled: boolean) {
   const [domains, setDomains] = useState<MyDomain[]>([]);
-  // enabled なら初回取得が必ず走る。false 始まりだと取得前に空状態が一瞬描画される
-  const [loading, setLoading] = useState(enabled);
+  const [loading, setLoading] = useState(false);
+  // 一度でも取得を終えたか。取得前に空状態が描画されるのを防ぐために見る
+  const [loaded, setLoaded] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [running, setRunning] = useState<RunningDomainAction | null>(null);
   const [feedback, setFeedback] = useState<DomainFeedback | null>(null);
@@ -50,6 +55,7 @@ export function useMyDomains(enabled: boolean) {
     } else {
       setDomains(result.data);
     }
+    setLoaded(true);
     setLoading(false);
   }, []);
 
@@ -126,7 +132,10 @@ export function useMyDomains(enabled: boolean) {
 
   return {
     domains,
-    loading,
+    // enabled が後から true になる（セッション解決後）ケースを含めて、
+    // 初回取得が終わるまでは読み込み中として扱う。
+    // useState の初期値では R2 の描画に間に合わず、空状態が1フレーム出てしまう。
+    loading: loading || (enabled && !loaded),
     loadError,
     running,
     feedback,

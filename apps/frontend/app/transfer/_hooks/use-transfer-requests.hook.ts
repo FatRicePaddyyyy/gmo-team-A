@@ -29,8 +29,9 @@ export interface TransferFeedback {
  */
 export function useTransferRequests(enabled: boolean) {
   const [transfers, setTransfers] = useState<MyTransfer[]>([]);
-  // enabled なら初回取得が必ず走る。false 始まりだと取得前に空状態が一瞬描画される
-  const [loading, setLoading] = useState(enabled);
+  const [loading, setLoading] = useState(false);
+  // 一度でも取得を終えたか。取得前に空状態が描画されるのを防ぐために見る
+  const [loaded, setLoaded] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
@@ -46,6 +47,7 @@ export function useTransferRequests(enabled: boolean) {
     } else {
       setTransfers(result.data);
     }
+    setLoaded(true);
     setLoading(false);
   }, []);
 
@@ -109,7 +111,9 @@ export function useTransferRequests(enabled: boolean) {
 
   return {
     transfers,
-    loading,
+    // enabled が後から true になる（セッション解決後）ケースを含めて、
+    // 初回取得が終わるまでは読み込み中として扱う。
+    loading: loading || (enabled && !loaded),
     loadError,
     submitting,
     cancellingId,
