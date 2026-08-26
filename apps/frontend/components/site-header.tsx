@@ -70,29 +70,33 @@ export function SiteHeader() {
               </span>
             )}
           </Link>
-          {/* セッション判定中は同じ幅の箱を置いてレイアウトを揺らさない */}
-          {isPending ? (
-            <div className="h-11 w-24" aria-hidden="true" />
-          ) : signedInName ? (
-            <Button
-              variant="ghost"
-              className="h-11 max-w-40"
-              nativeButton={false}
-              render={<Link href="/dashboard" />}
-            >
-              <UserRound aria-hidden="true" />
-              <span className="truncate">{signedInName}</span>
-            </Button>
-          ) : (
-            <Button
-              variant="brand"
-              className="h-11"
-              nativeButton={false}
-              render={<Link href="/login" />}
-            >
-              ログイン
-            </Button>
-          )}
+          {/*
+            幅を固定した枠に入れる。中身（判定中の空 → ログイン or ユーザー名）で
+            横幅が変わっても、枠の外にあるカートやナビが動かない。
+            名前が長い場合は枠の中で truncate される。
+          */}
+          <div className="flex w-32 justify-end">
+            {isPending ? null : signedInName ? (
+              <Button
+                variant="ghost"
+                className="h-11 min-w-0"
+                nativeButton={false}
+                render={<Link href="/dashboard" />}
+              >
+                <UserRound aria-hidden="true" />
+                <span className="truncate">{signedInName}</span>
+              </Button>
+            ) : (
+              <Button
+                variant="brand"
+                className="h-11"
+                nativeButton={false}
+                render={<Link href="/login" />}
+              >
+                ログイン
+              </Button>
+            )}
+          </div>
           <Button
             variant="ghost"
             size="icon"
