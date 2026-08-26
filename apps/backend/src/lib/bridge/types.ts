@@ -1,6 +1,6 @@
 export type Registry = "kitaqsign" | "kitaqnic";
 
-export type EppResult = { code: number; message: string };
+export type EppResult = { code: number; message: string; reason?: string };
 export type TrId = { clTRID?: string; svTRID: string };
 
 export type EppEnvelope<T> = {

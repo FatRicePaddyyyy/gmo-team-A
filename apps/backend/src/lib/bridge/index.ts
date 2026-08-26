@@ -242,25 +242,47 @@ export class RegistryBridge {
     chg?: { registrant?: string; authInfo?: string };
     registry: Registry;
     env: CloudflareBindings;
-  }): Promise<Result<DomainResponse>> {
+  }): Promise<Result<Partial<DomainResponse>>> {
     try {
+      // レジストリ実装は Swagger 上 registrant/authInfo とも任意にもかかわらず、
+      // chg を送る際は registrant を必須で要求してくる（authInfo だけの変更が 2003 で拒否される）。
+      // authInfo だけの変更を通すため、指定が無ければ現在の registrant を info で補って送る。
+      let effectiveChg = chg;
+      if (chg?.authInfo && !chg.registrant) {
+        const infoResult = await RegistryBridge.info({ name, registry, env });
+        if (!infoResult.success) return infoResult;
+        effectiveChg = { ...chg, registrant: infoResult.data.registrant };
+      }
+
       const res = await fetch(`${RegistryBridge.baseUrl(registry, env)}/api/v1/epp/domains/${encodeURIComponent(name)}`, {
         method: "PUT",
         headers: RegistryBridge.authHeaders(registry, env),
-        body: JSON.stringify({ ...(add ? { add } : {}), ...(rem ? { rem } : {}), ...(chg ? { chg } : {}) }),
+        body: JSON.stringify({ ...(add ? { add } : {}), ...(rem ? { rem } : {}), ...(effectiveChg ? { chg: effectiveChg } : {}) }),
       });
-      if (res.status === 404) { await res.body?.cancel(); return { success: false, data: null, error: "domain_not_found" }; }
-      // update レスポンスは EppResponseDomainResponse（DomainResponse を含む）
-      const json = await safeParseEpp<DomainResponse>(res);
-      if (!json) return { success: false, data: null, error: "invalid_registry_response" };
+      // update レスポンスは EppResponseDomainResponse（Kitaqsign）または EppResponseUnit（Kitaqnic）。
+      // どちらも result.code で成否を判定できるため、HTTP ステータスだけで判定しない。
+      const json = await safeParseEpp<Partial<DomainResponse>>(res);
+      if (!json) {
+        if (res.status === 404) return { success: false, data: null, error: "domain_not_found" };
+        return { success: false, data: null, error: "invalid_registry_response" };
+      }
+      if (json.result.code === 2303) {
+        // "Object does not exist" はドメイン自体だけでなく、add/rem で指定した
+        // ネームサーバーやコンタクトが未登録の場合にも同じコードで返ってくる。
+        // reason にドメイン名が含まれるかで区別する（含まれなければ参照先オブジェクトの不在）。
+        const reason = json.result.reason ?? "";
+        const isDomainItself = !reason || reason.includes(name);
+        return {
+          success: false,
+          data: null,
+          error: isDomainItself ? "domain_not_found" : "referenced_object_not_found",
+        };
+      }
       if (json.result.code !== 1000) {
         return { success: false, data: null, error: json.result.message || "registry_error" };
       }
-      if (!json.resData || !json.resData.exDate) {
-        // レジストリが DomainResponse を返さなかった場合（一部レジストリで発生しうる）
-        return { success: false, data: null, error: "invalid_registry_response" };
-      }
-      return { success: true, data: json.resData, error: null };
+      // Kitaqnic は resData を返さない（Unit）。ドメインの最新状態は呼び出し側が info で取得する。
+      return { success: true, data: json.resData ?? {}, error: null };
     } catch (e) {
       console.error("RegistryBridge.update error:", e);
       return { success: false, data: null, error: "network_error" };

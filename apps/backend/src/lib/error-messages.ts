@@ -32,6 +32,7 @@ const errorMessages: Record<string, string> = {
   ack_failed: "通知の処理中に問題が発生しました。しばらく待ってから再試行してください。",
   invalid_registry_response: "レジストリから予期しない応答がありました。しばらく待ってから再試行してください。",
   registry_error: "レジストリでエラーが発生しました。しばらく待ってから再試行してください。",
+  referenced_object_not_found: "指定したネームサーバーやコンタクトがレジストリに登録されていません。内容を確認してください。",
   poll_failed: "通知の取得に失敗しました。しばらく待ってから再試行してください。",
 };
 

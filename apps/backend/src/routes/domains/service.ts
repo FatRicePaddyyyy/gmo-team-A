@@ -225,8 +225,11 @@ export class DomainService {
     });
     if (!updateResult.success) return updateResult;
 
-    // レジストリが返した最新の DomainResponse で DB を同期
-    const registryData = updateResult.data;
+    // update のレスポンス形はレジストリによって異なる（Kitaqnic は空）ため、
+    // 最新の DomainResponse は改めて info で取得して DB に同期する
+    const infoResult = await RegistryBridge.info({ name: domain.name, registry: domain.registry as Registry, env });
+    if (!infoResult.success) return infoResult;
+    const registryData = infoResult.data;
     const expiresAt = new Date(registryData.exDate);
     const status = pickPrimaryStatus(registryData.status, domain.status);
     const syncResult = await DomainRepository.updateExpiresAtAndStatus({ id: domainId, expiresAt, status, env });
