@@ -99,3 +99,17 @@ export const $cancelTransfer = client(
 ).secure.transfers[":transfer-id"].cancel.$post;
 export type CancelTransferRequest = InferRequestType<typeof $cancelTransfer>;
 export type CancelTransferResponse = InferResponseType<typeof $cancelTransfer>;
+
+// 自分が申請した移管の一覧（取消対象を見つけるために使う）
+export const $listTransfers = client(
+  process.env.NEXT_PUBLIC_BACKEND_URL!,
+).secure.transfers.$get;
+export type ListTransfersResponse = InferResponseType<typeof $listTransfers>;
+
+// 自分のドメインに来ている移管申請の一覧（承認・却下の対象）
+export const $listPendingInboundTransfers = client(
+  process.env.NEXT_PUBLIC_BACKEND_URL!,
+).secure.domains["pending-inbound-transfers"].$get;
+export type ListPendingInboundTransfersResponse = InferResponseType<
+  typeof $listPendingInboundTransfers
+>;
