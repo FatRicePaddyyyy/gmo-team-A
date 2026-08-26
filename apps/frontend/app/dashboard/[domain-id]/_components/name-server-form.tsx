@@ -47,6 +47,9 @@ export function NameServerForm({
   const [rows, setRows] = useState<string[]>(() => toRows(current));
   const [error, setError] = useState<string | null>(null);
 
+  // エラーを全入力欄に紐づける（どの行が原因かはメッセージ本文で示す）
+  const errorId = "name-server-error";
+
   // 保存が成功して再取得された値に追従する
   useEffect(() => {
     setRows(toRows(current));
@@ -110,6 +113,8 @@ export function NameServerForm({
                 placeholder={`ns${index + 1}.example.com`}
                 autoComplete="off"
                 disabled={disabled}
+                aria-invalid={error ? true : undefined}
+                aria-describedby={error ? errorId : undefined}
                 onChange={(event) => setRow(index, event.target.value)}
                 className="h-11"
               />
@@ -128,7 +133,11 @@ export function NameServerForm({
           </Button>
         )}
 
-        {error && <p className="text-xs text-red-700">{error}</p>}
+        {error && (
+          <p id={errorId} role="alert" className="text-xs text-red-700">
+            {error}
+          </p>
+        )}
 
         {feedback && (
           <FeedbackBanner

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { KeyRound, Lock, LockOpen } from "lucide-react";
+import { Eye, EyeOff, KeyRound, Lock, LockOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -42,8 +42,13 @@ export function TransferOutCard({
   onSetLock,
 }: TransferOutCardProps) {
   const [authInfo, setAuthInfo] = useState("");
+  const [showAuthInfo, setShowAuthInfo] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirmingUnlock, setConfirmingUnlock] = useState(false);
+
+  // 入力欄とヒント・エラーを aria で紐づける（ログイン画面と同じ書き方）
+  const authInfoHintId = "auth-info-hint";
+  const authInfoErrorId = "auth-info-error";
 
   const handleAuthInfo = async () => {
     const value = authInfo.trim();
@@ -151,20 +156,45 @@ export function TransferOutCard({
             <label htmlFor="auth-info" className="sr-only">
               新しい認証コード
             </label>
-            <Input
-              id="auth-info"
-              value={authInfo}
-              placeholder="新しい認証コードを入力"
-              autoComplete="off"
-              disabled={disabled}
-              aria-invalid={Boolean(error)}
-              onChange={(event) => setAuthInfo(event.target.value)}
-              className="h-11"
-            />
-            <p className="text-xs text-gray-500">
+            <div className="relative">
+              <Input
+                id="auth-info"
+                type={showAuthInfo ? "text" : "password"}
+                value={authInfo}
+                placeholder="新しい認証コードを入力"
+                // password 型にするとブラウザがログインパスワードを補完してくる。
+                // new-password なら「新しく作る資格情報」と伝わり、既存の値を入れてこない。
+                autoComplete="new-password"
+                disabled={disabled}
+                aria-invalid={error ? true : undefined}
+                aria-describedby={error ? authInfoErrorId : authInfoHintId}
+                onChange={(event) => setAuthInfo(event.target.value)}
+                className="h-11 pr-12"
+              />
+              <button
+                type="button"
+                onClick={() => setShowAuthInfo((v) => !v)}
+                aria-label={
+                  showAuthInfo ? "認証コードを隠す" : "認証コードを表示する"
+                }
+                aria-pressed={showAuthInfo}
+                className="absolute right-0 top-0 flex h-11 w-11 items-center justify-center text-gray-500 hover:text-gray-900"
+              >
+                {showAuthInfo ? (
+                  <EyeOff className="size-5" aria-hidden="true" />
+                ) : (
+                  <Eye className="size-5" aria-hidden="true" />
+                )}
+              </button>
+            </div>
+            <p id={authInfoHintId} className="text-xs text-gray-500">
               {AUTH_INFO_MIN}〜{AUTH_INFO_MAX} 文字。推測されにくい文字列にしてください。
             </p>
-            {error && <p className="text-xs text-red-700">{error}</p>}
+            {error && (
+              <p id={authInfoErrorId} role="alert" className="text-xs text-red-700">
+                {error}
+              </p>
+            )}
           </div>
 
           {authInfoFeedback && (
