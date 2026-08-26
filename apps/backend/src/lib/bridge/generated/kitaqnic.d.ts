@@ -494,7 +494,9 @@ export interface components {
         EppResponseHostResponse: {
             result: components["schemas"]["Result"];
             resData?: components["schemas"]["HostResponse"];
-            extension?: Record<string, Record<string, never>>;
+            extension?: {
+                [key: string]: Record<string, never>;
+            };
             trID: components["schemas"]["TrId"];
         };
         /** @description ホスト情報 (host:info) のレスポンス。 */
@@ -545,7 +547,9 @@ export interface components {
              *       "TECH": "C-0003"
              *     }
              */
-            contacts?: Record<string, string>;
+            contacts?: {
+                [key: string]: string;
+            };
             /**
              * @description 設定/解除するステータス。domain:update で操作できるのは以下の**クライアント側ステータス**のみ: `clientHold`(掲載保留=名前解決を止める) / `clientTransferProhibited`(移管禁止) / `clientUpdateProhibited`(情報修正禁止) / `clientDeleteProhibited`(廃止禁止) / `clientRenewProhibited`(更新禁止)。`ok`/`inactive`/`pending*` は自動導出、`server*` 系はレジストリのみ設定可 (指定不可)。
              * @example [
@@ -574,14 +578,18 @@ export interface components {
             rem?: components["schemas"]["DomainChangeSet"];
             chg?: components["schemas"]["DomainChg"];
             /** @description レジストリ固有拡張 (通常不要)。 */
-            extensions?: Record<string, components["schemas"]["JsonNode"]>;
+            extensions?: {
+                [key: string]: components["schemas"]["JsonNode"];
+            };
         };
         /** @description レジストリ固有拡張 (通常不要)。 */
         JsonNode: Record<string, never>;
         EppResponseUnit: {
             result: components["schemas"]["Result"];
             resData?: components["schemas"]["Unit"];
-            extension?: Record<string, Record<string, never>>;
+            extension?: {
+                [key: string]: Record<string, never>;
+            };
             trID: components["schemas"]["TrId"];
         };
         Unit: Record<string, never>;
@@ -668,14 +676,31 @@ export interface components {
         EppResponseContactResponse: {
             result: components["schemas"]["Result"];
             resData?: components["schemas"]["ContactResponse"];
-            extension?: Record<string, Record<string, never>>;
+            extension?: {
+                [key: string]: Record<string, never>;
+            };
             trID: components["schemas"]["TrId"];
         };
-        EppResponseMapStringString: {
+        EppResponseLoginResData: {
             result: components["schemas"]["Result"];
-            resData?: Record<string, string>;
-            extension?: Record<string, Record<string, never>>;
+            resData?: components["schemas"]["LoginResData"];
+            extension?: {
+                [key: string]: Record<string, never>;
+            };
             trID: components["schemas"]["TrId"];
+        };
+        /** @description login のレスポンス本体 */
+        LoginResData: {
+            /**
+             * @description 認証されたレジストラ ID
+             * @example teama
+             */
+            registrarId: string;
+            /**
+             * @description ウェルカムメッセージ
+             * @example Welcome, Team A
+             */
+            message: string;
         };
         LaunchApplicationRequest: {
             domain: string;
@@ -685,7 +710,9 @@ export interface components {
         EppResponseLaunchApplicationResult: {
             result: components["schemas"]["Result"];
             resData?: components["schemas"]["LaunchApplicationResult"];
-            extension?: Record<string, Record<string, never>>;
+            extension?: {
+                [key: string]: Record<string, never>;
+            };
             trID: components["schemas"]["TrId"];
         };
         LaunchApplicationResult: {
@@ -711,7 +738,9 @@ export interface components {
         EppResponseHostCheckResponse: {
             result: components["schemas"]["Result"];
             resData?: components["schemas"]["HostCheckResponse"];
-            extension?: Record<string, Record<string, never>>;
+            extension?: {
+                [key: string]: Record<string, never>;
+            };
             trID: components["schemas"]["TrId"];
         };
         HostCheckResponse: {
@@ -749,14 +778,18 @@ export interface components {
              *       "TECH": "C-0001"
              *     }
              */
-            contacts?: Record<string, string>;
+            contacts?: {
+                [key: string]: string;
+            };
             /**
              * @description authInfo (移管パスフレーズ)。ドメイン移管時に gaining 側が提示する。1〜64 文字 (レジストリ運用上の上限。RFC には固定上限は無いが RFC 9154 は 128bit 以上のエントロピーを推奨)。推測されにくい値を推奨。
              * @example s3cr3t-pass
              */
             authInfo: string;
             /** @description レジストリ固有拡張 (kitaqnic の launch/premium 等)。通常は不要。 */
-            extensions?: Record<string, components["schemas"]["JsonNode"]>;
+            extensions?: {
+                [key: string]: components["schemas"]["JsonNode"];
+            };
         };
         /** @description 登録/更新期間。 */
         Period: {
@@ -776,12 +809,16 @@ export interface components {
             domain: string;
             crDate: string;
             exDate: string;
-            extensions?: Record<string, Record<string, never>>;
+            extensions?: {
+                [key: string]: Record<string, never>;
+            };
         };
         EppResponseDomainCreateResponse: {
             result: components["schemas"]["Result"];
             resData?: components["schemas"]["DomainCreateResponse"];
-            extension?: Record<string, Record<string, never>>;
+            extension?: {
+                [key: string]: Record<string, never>;
+            };
             trID: components["schemas"]["TrId"];
         };
         /** @description ドメイン移管リクエスト。op で操作種別を指定する。 */
@@ -810,8 +847,21 @@ export interface components {
         EppResponseDomainTransferResponse: {
             result: components["schemas"]["Result"];
             resData?: components["schemas"]["DomainTransferResponse"];
-            extension?: Record<string, Record<string, never>>;
+            extension?: {
+                [key: string]: Record<string, never>;
+            };
             trID: components["schemas"]["TrId"];
+        };
+        EppResponseRotateAuthInfoResponse: {
+            result: components["schemas"]["Result"];
+            resData?: components["schemas"]["RotateAuthInfoResponse"];
+            extension?: {
+                [key: string]: Record<string, never>;
+            };
+            trID: components["schemas"]["TrId"];
+        };
+        RotateAuthInfoResponse: {
+            authInfo: string;
         };
         /** @description ドメイン更新 (domain:renew, 有効期限の延長) リクエスト。 */
         DomainRenewRequest: {
@@ -829,7 +879,9 @@ export interface components {
         EppResponseDomainRenewResponse: {
             result: components["schemas"]["Result"];
             resData?: components["schemas"]["DomainRenewResponse"];
-            extension?: Record<string, Record<string, never>>;
+            extension?: {
+                [key: string]: Record<string, never>;
+            };
             trID: components["schemas"]["TrId"];
         };
         DomainNamesRequest: {
@@ -837,7 +889,9 @@ export interface components {
         };
         DomainCheckResponse: {
             results: components["schemas"]["DomainCheckResult"][];
-            extensions?: Record<string, Record<string, never>>;
+            extensions?: {
+                [key: string]: Record<string, never>;
+            };
         };
         DomainCheckResult: {
             name: string;
@@ -847,7 +901,9 @@ export interface components {
         EppResponseDomainCheckResponse: {
             result: components["schemas"]["Result"];
             resData?: components["schemas"]["DomainCheckResponse"];
-            extension?: Record<string, Record<string, never>>;
+            extension?: {
+                [key: string]: Record<string, never>;
+            };
             trID: components["schemas"]["TrId"];
         };
         /** @description コンタクト作成リクエスト。ドメインの registrant / 各ロールで参照する連絡先。個人情報保護のため、氏名・メール等は決められたダミー値のみ受け付ける (下記 example 参照)。 */
@@ -886,26 +942,121 @@ export interface components {
         EppResponseContactCheckResponse: {
             result: components["schemas"]["Result"];
             resData?: components["schemas"]["ContactCheckResponse"];
-            extension?: Record<string, Record<string, never>>;
+            extension?: {
+                [key: string]: Record<string, never>;
+            };
             trID: components["schemas"]["TrId"];
         };
-        EppResponseMapStringObject: {
+        EppResponseGreetingResData: {
             result: components["schemas"]["Result"];
-            resData?: Record<string, Record<string, never>>;
-            extension?: Record<string, Record<string, never>>;
+            resData?: components["schemas"]["GreetingResData"];
+            extension?: {
+                [key: string]: Record<string, never>;
+            };
             trID: components["schemas"]["TrId"];
+        };
+        /** @description hello (疎通確認) のレスポンス本体。レジストリの greeting 情報。 */
+        GreetingResData: {
+            /**
+             * @description サーバ (レジストリ) 識別子
+             * @example KQNIC
+             */
+            svID: string;
+            /**
+             * @description サーバ現在時刻 (UTC, ISO 8601)
+             * @example 2026-08-26T02:36:33Z
+             */
+            svDate: string;
+            svcMenu: components["schemas"]["SvcMenuData"];
+            info: components["schemas"]["RegistryInfoData"];
+        };
+        /** @description レジストリの構成情報 */
+        RegistryInfoData: {
+            /**
+             * @description レジストリコード
+             * @example KQNIC
+             */
+            registryCode: string;
+            /**
+             * @description 対応 TLD 一覧 (実行時の設定を反映)
+             * @example [
+             *       "xyz",
+             *       "online",
+             *       "site",
+             *       "tech"
+             *     ]
+             */
+            supportedTlds: string[];
+            /**
+             * @description IDN (国際化ドメイン名) を許可するか
+             * @example true
+             */
+            allowIdn: boolean;
+            /**
+             * Format: int32
+             * @description 登録可能な最小期間 (年)
+             * @example 1
+             */
+            minPeriodYears: number;
+            /**
+             * Format: int32
+             * @description 登録可能な最大期間 (年)
+             * @example 10
+             */
+            maxPeriodYears: number;
+            /**
+             * Format: int32
+             * @description 各種猶予期間の日数
+             * @example 45
+             */
+            gracePeriodDays: number;
+        };
+        /** @description サーバが提供するサービスメニュー (対応オブジェクト・拡張) */
+        SvcMenuData: {
+            /**
+             * @description プロトコルバージョン
+             * @example 1.0
+             */
+            version: string;
+            /**
+             * @description メッセージ言語
+             * @example en
+             */
+            lang: string;
+            /**
+             * @description 対応するオブジェクト種別
+             * @example [
+             *       "domain",
+             *       "contact",
+             *       "host"
+             *     ]
+             */
+            objURIs: string[];
+            /**
+             * @description 対応する拡張
+             * @example [
+             *       "premium",
+             *       "launch",
+             *       "fee"
+             *     ]
+             */
+            extensions: string[];
         };
         EppResponsePollResponse: {
             result: components["schemas"]["Result"];
             resData?: components["schemas"]["PollResponse"];
-            extension?: Record<string, Record<string, never>>;
+            extension?: {
+                [key: string]: Record<string, never>;
+            };
             trID: components["schemas"]["TrId"];
         };
         PollMessageDto: {
             /** Format: int64 */
             id: number;
             msgType: string;
-            payload: Record<string, Record<string, never>>;
+            payload: {
+                [key: string]: Record<string, never>;
+            };
             qdate: string;
         };
         PollResponse: {
@@ -913,11 +1064,23 @@ export interface components {
             count: number;
             message?: components["schemas"]["PollMessageDto"];
         };
+        EppResponseMapStringString: {
+            result: components["schemas"]["Result"];
+            resData?: {
+                [key: string]: string;
+            };
+            extension?: {
+                [key: string]: Record<string, never>;
+            };
+            trID: components["schemas"]["TrId"];
+        };
         DomainInfoResponse: {
             domain: string;
             status: string[];
             registrant: string;
-            contacts: Record<string, string>;
+            contacts: {
+                [key: string]: string;
+            };
             nameservers: string[];
             period?: components["schemas"]["Period"];
             crDate: string;
@@ -925,12 +1088,16 @@ export interface components {
             exDate?: string;
             trDate?: string;
             rgpStatus: string[];
-            extensions?: Record<string, Record<string, never>>;
+            extensions?: {
+                [key: string]: Record<string, never>;
+            };
         };
         EppResponseDomainInfoResponse: {
             result: components["schemas"]["Result"];
             resData?: components["schemas"]["DomainInfoResponse"];
-            extension?: Record<string, Record<string, never>>;
+            extension?: {
+                [key: string]: Record<string, never>;
+            };
             trID: components["schemas"]["TrId"];
         };
     };
@@ -958,7 +1125,9 @@ export interface operations {
         responses: {
             /** @description OK */
             200: {
-                headers: Record<string, unknown>;
+                headers: {
+                    [name: string]: unknown;
+                };
                 content: {
                     "*/*": components["schemas"]["EppResponseHostResponse"];
                 };
@@ -985,7 +1154,9 @@ export interface operations {
         responses: {
             /** @description OK */
             200: {
-                headers: Record<string, unknown>;
+                headers: {
+                    [name: string]: unknown;
+                };
                 content: {
                     "*/*": components["schemas"]["EppResponseHostResponse"];
                 };
@@ -1008,7 +1179,9 @@ export interface operations {
         responses: {
             /** @description OK */
             200: {
-                headers: Record<string, unknown>;
+                headers: {
+                    [name: string]: unknown;
+                };
                 content: {
                     "*/*": components["schemas"]["EppResponseUnit"];
                 };
@@ -1032,14 +1205,18 @@ export interface operations {
         responses: {
             /** @description info success */
             200: {
-                headers: Record<string, unknown>;
+                headers: {
+                    [name: string]: unknown;
+                };
                 content: {
                     "*/*": components["schemas"]["EppResponseDomainInfoResponse"];
                 };
             };
             /** @description Domain not found */
             404: {
-                headers: Record<string, unknown>;
+                headers: {
+                    [name: string]: unknown;
+                };
                 content: {
                     "*/*": components["schemas"]["EppResponseDomainInfoResponse"];
                 };
@@ -1067,14 +1244,18 @@ export interface operations {
         responses: {
             /** @description update success */
             200: {
-                headers: Record<string, unknown>;
+                headers: {
+                    [name: string]: unknown;
+                };
                 content: {
                     "*/*": components["schemas"]["EppResponseUnit"];
                 };
             };
             /** @description Domain not found */
             404: {
-                headers: Record<string, unknown>;
+                headers: {
+                    [name: string]: unknown;
+                };
                 content: {
                     "*/*": components["schemas"]["EppResponseUnit"];
                 };
@@ -1098,14 +1279,18 @@ export interface operations {
         responses: {
             /** @description delete success */
             200: {
-                headers: Record<string, unknown>;
+                headers: {
+                    [name: string]: unknown;
+                };
                 content: {
                     "*/*": components["schemas"]["EppResponseUnit"];
                 };
             };
             /** @description Domain not found */
             404: {
-                headers: Record<string, unknown>;
+                headers: {
+                    [name: string]: unknown;
+                };
                 content: {
                     "*/*": components["schemas"]["EppResponseUnit"];
                 };
@@ -1128,7 +1313,9 @@ export interface operations {
         responses: {
             /** @description OK */
             200: {
-                headers: Record<string, unknown>;
+                headers: {
+                    [name: string]: unknown;
+                };
                 content: {
                     "*/*": components["schemas"]["EppResponseContactResponse"];
                 };
@@ -1155,7 +1342,9 @@ export interface operations {
         responses: {
             /** @description OK */
             200: {
-                headers: Record<string, unknown>;
+                headers: {
+                    [name: string]: unknown;
+                };
                 content: {
                     "*/*": components["schemas"]["EppResponseContactResponse"];
                 };
@@ -1178,7 +1367,9 @@ export interface operations {
         responses: {
             /** @description OK */
             200: {
-                headers: Record<string, unknown>;
+                headers: {
+                    [name: string]: unknown;
+                };
                 content: {
                     "*/*": components["schemas"]["EppResponseUnit"];
                 };
@@ -1199,7 +1390,9 @@ export interface operations {
         responses: {
             /** @description OK */
             200: {
-                headers: Record<string, unknown>;
+                headers: {
+                    [name: string]: unknown;
+                };
                 content: {
                     "*/*": components["schemas"]["EppResponseUnit"];
                 };
@@ -1220,16 +1413,20 @@ export interface operations {
         responses: {
             /** @description login 成功 */
             200: {
-                headers: Record<string, unknown>;
+                headers: {
+                    [name: string]: unknown;
+                };
                 content: {
-                    "*/*": components["schemas"]["EppResponseMapStringString"];
+                    "*/*": components["schemas"]["EppResponseLoginResData"];
                 };
             };
             /** @description 認証失敗 */
             401: {
-                headers: Record<string, unknown>;
+                headers: {
+                    [name: string]: unknown;
+                };
                 content: {
-                    "*/*": components["schemas"]["EppResponseMapStringString"];
+                    "*/*": components["schemas"]["EppResponseLoginResData"];
                 };
             };
         };
@@ -1252,7 +1449,9 @@ export interface operations {
         responses: {
             /** @description OK */
             200: {
-                headers: Record<string, unknown>;
+                headers: {
+                    [name: string]: unknown;
+                };
                 content: {
                     "*/*": components["schemas"]["EppResponseHostResponse"];
                 };
@@ -1277,7 +1476,9 @@ export interface operations {
         responses: {
             /** @description OK */
             200: {
-                headers: Record<string, unknown>;
+                headers: {
+                    [name: string]: unknown;
+                };
                 content: {
                     "*/*": components["schemas"]["EppResponseHostCheckResponse"];
                 };
@@ -1302,21 +1503,27 @@ export interface operations {
         responses: {
             /** @description create success */
             201: {
-                headers: Record<string, unknown>;
+                headers: {
+                    [name: string]: unknown;
+                };
                 content: {
                     "*/*": components["schemas"]["EppResponseDomainCreateResponse"];
                 };
             };
             /** @description Domain already exists */
             409: {
-                headers: Record<string, unknown>;
+                headers: {
+                    [name: string]: unknown;
+                };
                 content: {
                     "*/*": components["schemas"]["EppResponseDomainCreateResponse"];
                 };
             };
             /** @description Policy violation (TLD, premium, launch phase) */
             422: {
-                headers: Record<string, unknown>;
+                headers: {
+                    [name: string]: unknown;
+                };
                 content: {
                     "*/*": components["schemas"]["EppResponseDomainCreateResponse"];
                 };
@@ -1344,21 +1551,27 @@ export interface operations {
         responses: {
             /** @description Transfer pending */
             202: {
-                headers: Record<string, unknown>;
+                headers: {
+                    [name: string]: unknown;
+                };
                 content: {
                     "*/*": components["schemas"]["EppResponseDomainTransferResponse"];
                 };
             };
             /** @description Invalid authInfo */
             401: {
-                headers: Record<string, unknown>;
+                headers: {
+                    [name: string]: unknown;
+                };
                 content: {
                     "*/*": components["schemas"]["EppResponseDomainTransferResponse"];
                 };
             };
             /** @description Domain not found */
             404: {
-                headers: Record<string, unknown>;
+                headers: {
+                    [name: string]: unknown;
+                };
                 content: {
                     "*/*": components["schemas"]["EppResponseDomainTransferResponse"];
                 };
@@ -1382,7 +1595,9 @@ export interface operations {
         responses: {
             /** @description Transfer rejected */
             200: {
-                headers: Record<string, unknown>;
+                headers: {
+                    [name: string]: unknown;
+                };
                 content: {
                     "*/*": components["schemas"]["EppResponseDomainTransferResponse"];
                 };
@@ -1406,7 +1621,9 @@ export interface operations {
         responses: {
             /** @description Transfer cancelled */
             200: {
-                headers: Record<string, unknown>;
+                headers: {
+                    [name: string]: unknown;
+                };
                 content: {
                     "*/*": components["schemas"]["EppResponseDomainTransferResponse"];
                 };
@@ -1430,7 +1647,9 @@ export interface operations {
         responses: {
             /** @description Transfer approved */
             200: {
-                headers: Record<string, unknown>;
+                headers: {
+                    [name: string]: unknown;
+                };
                 content: {
                     "*/*": components["schemas"]["EppResponseDomainTransferResponse"];
                 };
@@ -1454,23 +1673,29 @@ export interface operations {
         responses: {
             /** @description 再生成成功 */
             200: {
-                headers: Record<string, unknown>;
+                headers: {
+                    [name: string]: unknown;
+                };
                 content: {
-                    "*/*": components["schemas"]["EppResponseMapStringString"];
+                    "*/*": components["schemas"]["EppResponseRotateAuthInfoResponse"];
                 };
             };
             /** @description sponsoring registrar 以外の呼び出し */
             403: {
-                headers: Record<string, unknown>;
+                headers: {
+                    [name: string]: unknown;
+                };
                 content: {
-                    "*/*": components["schemas"]["EppResponseMapStringString"];
+                    "*/*": components["schemas"]["EppResponseRotateAuthInfoResponse"];
                 };
             };
             /** @description ドメイン不在 */
             404: {
-                headers: Record<string, unknown>;
+                headers: {
+                    [name: string]: unknown;
+                };
                 content: {
-                    "*/*": components["schemas"]["EppResponseMapStringString"];
+                    "*/*": components["schemas"]["EppResponseRotateAuthInfoResponse"];
                 };
             };
         };
@@ -1492,21 +1717,27 @@ export interface operations {
         responses: {
             /** @description restore success */
             200: {
-                headers: Record<string, unknown>;
+                headers: {
+                    [name: string]: unknown;
+                };
                 content: {
                     "*/*": components["schemas"]["EppResponseUnit"];
                 };
             };
             /** @description sponsoring registrar 以外の呼び出し */
             403: {
-                headers: Record<string, unknown>;
+                headers: {
+                    [name: string]: unknown;
+                };
                 content: {
                     "*/*": components["schemas"]["EppResponseUnit"];
                 };
             };
             /** @description Domain not found */
             404: {
-                headers: Record<string, unknown>;
+                headers: {
+                    [name: string]: unknown;
+                };
                 content: {
                     "*/*": components["schemas"]["EppResponseUnit"];
                 };
@@ -1534,14 +1765,18 @@ export interface operations {
         responses: {
             /** @description renew success */
             200: {
-                headers: Record<string, unknown>;
+                headers: {
+                    [name: string]: unknown;
+                };
                 content: {
                     "*/*": components["schemas"]["EppResponseDomainRenewResponse"];
                 };
             };
             /** @description Domain not found */
             404: {
-                headers: Record<string, unknown>;
+                headers: {
+                    [name: string]: unknown;
+                };
                 content: {
                     "*/*": components["schemas"]["EppResponseDomainRenewResponse"];
                 };
@@ -1566,14 +1801,18 @@ export interface operations {
         responses: {
             /** @description check complete */
             200: {
-                headers: Record<string, unknown>;
+                headers: {
+                    [name: string]: unknown;
+                };
                 content: {
                     "*/*": components["schemas"]["EppResponseDomainCheckResponse"];
                 };
             };
             /** @description Unsupported TLD */
             422: {
-                headers: Record<string, unknown>;
+                headers: {
+                    [name: string]: unknown;
+                };
                 content: {
                     "*/*": components["schemas"]["EppResponseDomainCheckResponse"];
                 };
@@ -1598,7 +1837,9 @@ export interface operations {
         responses: {
             /** @description OK */
             200: {
-                headers: Record<string, unknown>;
+                headers: {
+                    [name: string]: unknown;
+                };
                 content: {
                     "*/*": components["schemas"]["EppResponseContactResponse"];
                 };
@@ -1623,7 +1864,9 @@ export interface operations {
         responses: {
             /** @description OK */
             200: {
-                headers: Record<string, unknown>;
+                headers: {
+                    [name: string]: unknown;
+                };
                 content: {
                     "*/*": components["schemas"]["EppResponseContactCheckResponse"];
                 };
@@ -1644,9 +1887,11 @@ export interface operations {
         responses: {
             /** @description OK */
             200: {
-                headers: Record<string, unknown>;
+                headers: {
+                    [name: string]: unknown;
+                };
                 content: {
-                    "*/*": components["schemas"]["EppResponseMapStringObject"];
+                    "*/*": components["schemas"]["EppResponseGreetingResData"];
                 };
             };
         };
@@ -1665,7 +1910,9 @@ export interface operations {
         responses: {
             /** @description OK */
             200: {
-                headers: Record<string, unknown>;
+                headers: {
+                    [name: string]: unknown;
+                };
                 content: {
                     "*/*": components["schemas"]["EppResponsePollResponse"];
                 };
@@ -1688,7 +1935,9 @@ export interface operations {
         responses: {
             /** @description OK */
             200: {
-                headers: Record<string, unknown>;
+                headers: {
+                    [name: string]: unknown;
+                };
                 content: {
                     "*/*": components["schemas"]["EppResponseUnit"];
                 };
