@@ -6,4 +6,4 @@ const authClient = createAuthClient({
   basePath: "/api/v1/auth",
 });
 
-export const { signIn, signUp, signOut, getSession, useSession } = authClient;
+export const { signIn, signOut, getSession, useSession } = authClient;

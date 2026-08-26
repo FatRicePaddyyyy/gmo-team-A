@@ -78,7 +78,7 @@ export default function CartCompletePage() {
             お申し込み内容の確認まで完了しました
           </h1>
           <p className="text-sm leading-relaxed text-gray-600">
-            まだ課金は発生していません。実際に取得するには、このあとアカウントの作成とお支払いが必要です。
+            まだ課金は発生していません。実際に取得するには、このあとログインが必要です。
           </p>
         </div>
 
@@ -178,10 +178,10 @@ export default function CartCompletePage() {
         <div className="mt-6 space-y-3">
           <LearningNote title="この先で起きること" tone="info">
             <p>
-              アカウントを作ると、いま選んだ設定（Whois 情報公開代行:{" "}
+              ログインすると、その場でこのドメインが登録されます（設定: Whois 情報公開代行:{" "}
               {settings?.whoisProxy ? "使う" : "使わない"} ／ 自動更新:{" "}
               {settings?.autoRenew ? "オン" : "オフ"}
-              ）のまま取得手続きに進めます。お支払いの直前にも、もう一度金額を確認できます。
+              ）。このデモに決済機能は無いため、料金は発生しません。
             </p>
           </LearningNote>
 
@@ -192,20 +192,29 @@ export default function CartCompletePage() {
           <div className="flex items-start gap-2 rounded-lg border border-border bg-gray-50 px-4 py-3 text-sm text-gray-700">
             <Info className="mt-0.5 size-4 shrink-0 text-gray-500" aria-hidden="true" />
             <p>
-              このサイトは学習用のデモです。会員登録から先（決済・実際のドメイン取得）は準備中のため、
-              ここで料金が請求されることはありません。
+              このサイトは学習用のデモです。ログインと同時にドメインの登録は実際に行われますが、
+              決済機能は無いため料金が請求されることはありません。
             </p>
           </div>
         </div>
 
-        <div className="mt-6 flex flex-col items-stretch gap-3 sm:flex-row sm:justify-center">
+        <div className="mt-6 rounded-lg border border-border bg-gray-50 px-4 py-4 text-center">
+          <p className="text-sm font-bold text-gray-900">
+            お申し込みにはログインが必要です
+          </p>
+          <p className="mt-1 text-sm leading-relaxed text-gray-600">
+            ドメインの管理・更新のため、購入にはアカウントとの紐付けが必須です。
+          </p>
+        </div>
+
+        <div className="mt-4 flex flex-col items-stretch gap-3 sm:flex-row sm:justify-center">
           <Button
             className="h-11 px-6 text-white"
             style={{ background: "var(--brand)" }}
             nativeButton={false}
-            render={<Link href="/signup" />}
+            render={<Link href="/login" />}
           >
-            アカウントを作る
+            ログイン
           </Button>
           <Button
             variant="outline"

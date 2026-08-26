@@ -3,6 +3,7 @@ import type { DomainResult } from "@/components/domain-search-result";
 import {
   TLD_CATALOG,
   formatYen,
+  matchKnownTld,
   renewalWarningOf,
   stripKnownTld,
   twoYearTotalOf,
@@ -49,15 +50,20 @@ async function checkAvailability(fullName: string): Promise<boolean> {
 /**
  * ドメイン検索。
  *
- * カタログの各TLDについて、実際のレジストリへ空き確認（Issue #10 の check 仕様）を
- * 並列で問い合わせる。価格・説明はTLD_CATALOGの静的データを使う。
+ * 入力の末尾に既知のTLD（プルダウン選択 or 手入力）が付いている場合は、そのTLD1件だけに
+ * 絞り込む。付いていない（「指定なし」）場合は、カタログの全TLDについて実際のレジストリへ
+ * 空き確認（Issue #10 の check 仕様）を並列で問い合わせる。価格・説明はTLD_CATALOGの静的データを使う。
  */
 export async function searchDomains(query: string): Promise<DomainResult[]> {
-  const name = stripKnownTld(query.trim());
+  const trimmed = query.trim();
+  const matchedTld = matchKnownTld(trimmed);
+  const name = stripKnownTld(trimmed);
   if (!name) return [];
 
+  const candidates = matchedTld ? [matchedTld] : TLD_CATALOG;
+
   return Promise.all(
-    TLD_CATALOG.map(async (info) => {
+    candidates.map(async (info) => {
       const available = await checkAvailability(`${name}${info.tld}`);
       return toDomainResult(info, name, available);
     }),

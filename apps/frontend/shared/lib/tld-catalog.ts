@@ -174,6 +174,17 @@ export function stripKnownTld(value: string): string {
   return value.slice(0, value.length - matched.length);
 }
 
+/**
+ * 入力値の末尾に既知のTLDが付いていれば、そのTLDの情報を返す。
+ * 検索結果をそのTLD1件だけに絞り込むために使う（`.co.jp` を `.jp` より先に判定）。
+ */
+export function matchKnownTld(value: string): TldInfo | undefined {
+  const lower = value.toLowerCase();
+  const matchedTld = KNOWN_TLDS_DESC.find((tld) => lower.endsWith(tld));
+  if (!matchedTld) return undefined;
+  return findTld(matchedTld);
+}
+
 /** 取得可否の判定結果。「隠す」のではなく「なぜ選べないか」を返す */
 export interface EligibilityVerdict {
   allowed: boolean;
