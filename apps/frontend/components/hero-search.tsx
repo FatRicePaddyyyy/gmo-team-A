@@ -57,12 +57,18 @@ export function HeroSearch({
     if (query.trim()) onSearch?.(query.trim());
   };
 
-  /** 人気TLDのチップ。入力欄を置き換えるのではなく、末尾のTLDだけを差し替える */
+  /**
+   * TLDプルダウンの選択。入力欄を置き換えるのではなく、末尾のTLDだけを差し替える。
+   * 空文字（「すべて」）を選んだときは、既存のTLDを外して選び直せるようにする。
+   */
   const handleSelectTld = (tld: string) => {
     const base = stripKnownTld(query.trim());
-    setQuery(base ? `${base}${tld}` : "");
+    setQuery(tld ? `${base}${tld}` : base);
     inputRef.current?.focus();
   };
+
+  /** 現在の入力値の末尾が候補TLDのどれかに一致していれば、プルダウンにも反映する */
+  const currentTld = popularTlds.find((tld) => query.toLowerCase().endsWith(tld)) ?? "";
 
   return (
     <section
@@ -92,6 +98,19 @@ export function HeroSearch({
               placeholder="manabi-blog"
               className="h-11 text-gray-900 placeholder:text-gray-400"
             />
+            <select
+              aria-label="末尾（TLD）を選ぶ"
+              value={currentTld}
+              onChange={(e) => handleSelectTld(e.target.value)}
+              className="h-11 w-full shrink-0 rounded-lg border border-input bg-white px-2.5 text-base text-gray-900 outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 sm:w-28 md:text-sm"
+            >
+              <option value="">すべて</option>
+              {popularTlds.map((tld) => (
+                <option key={tld} value={tld}>
+                  {tld}
+                </option>
+              ))}
+            </select>
             <Button
               type="submit"
               className="h-11 shrink-0 px-6"
@@ -102,28 +121,11 @@ export function HeroSearch({
             </Button>
           </div>
           <p id={hintId} className="mt-2 text-xs leading-relaxed text-gray-600">
-            半角英数字とハイフンで入力します。「.com」などの末尾は後から選べます（例: manabi-blog）。
+            半角英数字とハイフンで入力します。末尾（TLD）は横のプルダウンから選べます（例: manabi-blog）。
           </p>
         </form>
 
         {footer}
-
-        <div
-          role="group"
-          aria-label="末尾（TLD）を入力欄に反映する"
-          className="mt-4 flex flex-wrap justify-center gap-2"
-        >
-          {popularTlds.map((tld) => (
-            <button
-              key={tld}
-              type="button"
-              onClick={() => handleSelectTld(tld)}
-              className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-full border border-white/40 bg-white/20 px-4 text-xs font-medium text-white transition-colors hover:bg-white/30 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
-            >
-              {tld}
-            </button>
-          ))}
-        </div>
       </div>
     </section>
   );

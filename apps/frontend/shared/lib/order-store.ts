@@ -30,6 +30,14 @@ export function saveConfirmedOrder(order: ConfirmedOrder): void {
   }
 }
 
+export function clearConfirmedOrder(): void {
+  try {
+    localStorage.removeItem(STORAGE_KEY);
+  } catch (error) {
+    console.error("申し込み内容の削除に失敗しました:", error);
+  }
+}
+
 export function loadConfirmedOrder(): ConfirmedOrder | null {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);

@@ -4,6 +4,7 @@ import { z } from "zod";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { signIn } from "@/auth-client";
+import { completeCartPurchase } from "@/shared/lib/complete-cart-purchase";
 
 const loginSchema = z.object({
   email: z
@@ -24,6 +25,7 @@ export const usePasswordLogin = () => {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [domainFailures, setDomainFailures] = useState<string[]>([]);
 
   const {
     register,
@@ -36,6 +38,7 @@ export const usePasswordLogin = () => {
   const onSubmit = async (data: LoginFormData) => {
     setIsLoading(true);
     setError(null);
+    setDomainFailures([]);
 
     try {
       await signIn.email(
@@ -44,18 +47,24 @@ export const usePasswordLogin = () => {
           password: data.password,
         },
         {
-          onSuccess: () => {
+          onSuccess: async () => {
+            const failures = await completeCartPurchase();
+            setIsLoading(false);
+            if (failures.length > 0) {
+              setDomainFailures(failures);
+              return;
+            }
             router.push("/dashboard");
           },
           onError: () => {
+            setIsLoading(false);
             setError(LOGIN_FAILED_MESSAGE);
           },
         }
       );
     } catch {
-      setError(UNEXPECTED_MESSAGE);
-    } finally {
       setIsLoading(false);
+      setError(UNEXPECTED_MESSAGE);
     }
   };
 
@@ -66,5 +75,6 @@ export const usePasswordLogin = () => {
     onSubmit,
     isLoading,
     error,
+    domainFailures,
   };
 };

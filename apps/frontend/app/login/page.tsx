@@ -10,7 +10,8 @@ import { SiteHeader } from "@/components/site-header";
 import { usePasswordLogin } from "./_hooks/use-password-login.hook";
 
 export default function LoginPage() {
-  const { register, handleSubmit, errors, onSubmit, isLoading, error } = usePasswordLogin();
+  const { register, handleSubmit, errors, onSubmit, isLoading, error, domainFailures } =
+    usePasswordLogin();
   const [showPassword, setShowPassword] = useState(false);
   const emailErrorId = useId();
   const passwordErrorId = useId();
@@ -108,13 +109,29 @@ export default function LoginPage() {
               </Button>
             </form>
 
-            <div className="mt-6 space-y-2 border-t border-border pt-6 text-sm">
-              <p className="text-gray-700">
-                アカウントをお持ちでない方は{" "}
-                <Link href="/signup" className="font-semibold underline text-[var(--brand)]">
-                  新規登録
+            {domainFailures.length > 0 && (
+              <div
+                role="alert"
+                className="mt-6 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900"
+              >
+                <p className="font-semibold">
+                  ログインは完了しましたが、一部のドメインの登録に失敗しました。
+                </p>
+                <ul className="mt-1 list-disc space-y-1 pl-5">
+                  {domainFailures.map((failure) => (
+                    <li key={failure}>{failure}</li>
+                  ))}
+                </ul>
+                <Link
+                  href="/dashboard"
+                  className="mt-2 inline-block font-semibold underline underline-offset-2"
+                >
+                  ダッシュボードへ進む
                 </Link>
-              </p>
+              </div>
+            )}
+
+            <div className="mt-6 space-y-2 border-t border-border pt-6 text-sm">
               <p className="text-gray-600">
                 パスワードをお忘れの場合は、サポートまでご連絡ください（再設定機能は準備中です）。
               </p>
