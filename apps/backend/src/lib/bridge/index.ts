@@ -33,6 +33,26 @@ function extractResData<T>(
   return { success: true, data: body.resData, error: null };
 }
 
+// 「その状態ではその操作はできない」(EPP result.code 2304) を判定する。
+//
+// 実機は **HTTP 409 + result.code 2304** で返す（実測）。
+//   restore … `Domain xxx is not pending delete`
+//   delete  … `Domain xxx is pending delete`
+// ところが仕様書(issue #7)も Swagger も「HTTP 200 で 2304」と書いており、資料が実機と食い違う。
+//
+// openapi-fetch は HTTP が非 2xx だと body を error 側に入れるため、
+// `if (error)` で打ち切る前にここで拾わないと invalid_registry_response になり、
+// ハンドラが 500 を返してしまう（実際 restore と delete がそうなっていた）。
+// 資料どおり 200 + 2304 に戻っても拾えるよう、HTTP と result.code の両方を見る。
+// body には成功時の data と失敗時の error のどちらが来てもよい（HTTP により入る側が変わるため）。
+function isOperationProhibited(response: Response, body: unknown): boolean {
+  if (response.status === 409) {return true;}
+  if (typeof body !== "object" || body === null || !("result" in body)) {return false;}
+  const result = body.result;
+  if (typeof result !== "object" || result === null || !("code" in result)) {return false;}
+  return result.code === 2304;
+}
+
 // hello の resData shape 差を吸収して共通形 GreetingResponse に normalize する。
 // resData はレジストリごとに shape が違ううえ、Kitaqnic の Swagger は中身を定義していない
 // ので、`unknown` として受け、実データを見てフィールドを取り出す。
@@ -376,8 +396,11 @@ export class RegistryBridge {
         params: { path: { name } },
       });
       if (response.status === 404) {return { success: false, data: null, error: "domain_not_found" };}
+      // すでに pendingDelete のドメインを再度廃止しようとした場合など
+      if (isOperationProhibited(response, error ?? data)) {
+        return { success: false, data: null, error: "operation_prohibited" };
+      }
       if (error) {return { success: false, data: null, error: "invalid_registry_response" };}
-      if (data.result.code === 2304) {return { success: false, data: null, error: "operation_prohibited" };}
       const extracted = extractResData(data);
       if (!extracted.success) {return extracted;}
       return { success: true, data: {}, error: null };
@@ -402,8 +425,11 @@ export class RegistryBridge {
       });
       if (response.status === 403) {return { success: false, data: null, error: "forbidden" };}
       if (response.status === 404) {return { success: false, data: null, error: "domain_not_found" };}
+      // pendingDelete でないドメインを復旧しようとした場合など
+      if (isOperationProhibited(response, error ?? data)) {
+        return { success: false, data: null, error: "operation_prohibited" };
+      }
       if (error) {return { success: false, data: null, error: "invalid_registry_response" };}
-      if (data.result.code === 2304) {return { success: false, data: null, error: "operation_prohibited" };}
       const extracted = extractResData(data);
       if (!extracted.success) {return extracted;}
       return { success: true, data: {}, error: null };
