@@ -8,9 +8,16 @@ import { Button } from "@/components/ui/button";
 import { FeedbackBanner } from "@/components/feedback-banner";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
-import { canRenew, canUpdateSettings, isTransferLocked } from "../_lib/domain-status";
+import {
+  canDelete,
+  canRenew,
+  canRestore,
+  canUpdateSettings,
+  isTransferLocked,
+} from "../_lib/domain-status";
 import { DomainOverview } from "./_parts/domain-overview";
 import { NameServerForm } from "./_components/name-server-form";
+import { LifecycleCard } from "./_components/lifecycle-card";
 import { RenewCard } from "./_components/renew-card";
 import { TransferOutCard } from "./_components/transfer-out-card";
 import { useDomainDetail } from "./_hooks/use-domain-detail.hook";
@@ -129,6 +136,23 @@ export default function DomainDetailPage() {
                     feedback?.source === "nameServers" ? feedback : null
                   }
                   onSubmit={state.updateNameServers}
+                />
+
+                <LifecycleCard
+                  domainName={domain.name}
+                  canDelete={canDelete(domain.status)}
+                  canRestore={canRestore(domain.status)}
+                  disabled={busy}
+                  runningDelete={running === "delete"}
+                  runningRestore={running === "restore"}
+                  feedback={
+                    feedback?.source === "delete" ||
+                    feedback?.source === "restore"
+                      ? feedback
+                      : null
+                  }
+                  onDelete={state.remove}
+                  onRestore={state.restore}
                 />
 
                 <TransferOutCard

@@ -2,8 +2,10 @@
 
 import { useCallback, useEffect, useState } from "react";
 import {
+  $deleteDomain,
   $getDomain,
   $renewDomain,
+  $restoreDomain,
   $updateDomain,
   type GetDomainResponse,
 } from "@/clients";
@@ -24,6 +26,8 @@ export interface DetailFeedback {
 /** 実行中の操作。ボタンの「保存中...」表示と二重送信防止に使う */
 export type RunningDetailAction =
   | "renew"
+  | "delete"
+  | "restore"
   | "nameServers"
   | "authInfo"
   | "transferLock"
@@ -168,6 +172,57 @@ export function useDomainDetail(domainId: string, enabled: boolean) {
     [domainId, refresh, running],
   );
 
+  /**
+   * 廃止と復旧。renew と同じく PUT ではないので update() は通さない。
+   * どちらも status が変わるので、詳細を取り直してカードの出し分けを更新する。
+   */
+  const runLifecycle = useCallback(
+    async (
+      kind: "delete" | "restore",
+      successMessage: string,
+    ): Promise<boolean> => {
+      if (running) return false;
+      setRunning(kind);
+      setFeedback(null);
+
+      const param = { param: { "domain-id": domainId } };
+      const result = await callApi(
+        kind === "delete" ? $deleteDomain(param) : $restoreDomain(param),
+      );
+
+      if (!result.success) {
+        setFeedback({
+          tone: "error",
+          message: result.error,
+          unauthorized: result.unauthorized,
+          source: kind,
+        });
+        setRunning(null);
+        return false;
+      }
+
+      await refresh();
+      setFeedback({ tone: "success", message: successMessage, source: kind });
+      setRunning(null);
+      return true;
+    },
+    [domainId, refresh, running],
+  );
+
+  const remove = useCallback(
+    () =>
+      runLifecycle(
+        "delete",
+        "このドメインを廃止しました。しばらくの間は復旧できます。",
+      ),
+    [runLifecycle],
+  );
+
+  const restore = useCallback(
+    () => runLifecycle("restore", "このドメインを復旧しました。"),
+    [runLifecycle],
+  );
+
   const updateNameServers = useCallback(
     (nameServers: string[]) =>
       update(
@@ -220,6 +275,8 @@ export function useDomainDetail(domainId: string, enabled: boolean) {
     feedback,
     refresh,
     renew,
+    remove,
+    restore,
     updateNameServers,
     updateAuthInfo,
     setTransferLock,
