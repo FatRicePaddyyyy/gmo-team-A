@@ -1,5 +1,6 @@
-import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
+import { createRoute, z } from "@hono/zod-openapi";
 import { auth } from "../../lib/better-auth";
+import { createOpenAPIHono } from "../../lib/openapi-hono";
 
 const CreateSeedUserRequestSchema = z
   .object({
@@ -112,9 +113,7 @@ const createSeedUserRouteSchema = createRoute({
   },
 });
 
-const app = new OpenAPIHono<{
-  Bindings: CloudflareBindings;
-}>();
+const app = createOpenAPIHono();
 
 
 export const createSeedUserRouteHandler = app.openapi(

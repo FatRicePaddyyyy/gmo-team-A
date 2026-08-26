@@ -1,72 +1,42 @@
 import type { TransferPollMessage } from "../../types/queue";
-import { TransferPollRepository } from "./repository";
-import { POLL_RETRY_DELAY_SECONDS, TransferPollService } from "./service";
+import { TransferPollService } from "./service";
 
+// transfer-poll consumer。
+// Cloudflare Queues の max_retries と retry_delay は wrangler.jsonc で管理する
+// (max_retries=3, retry_delay=600 秒 → 初回 20 分 + 3×10 分 = 総 50 分の poll 予算)。
+// 上限を超えたメッセージは transfer-poll-dlq に自動的に送られ、DLQ consumer が
+// レジストリ info を叩いてから transfer を expired or serverApproved に確定させる。
 export async function handleTransferPollQueue(
   batch: MessageBatch<TransferPollMessage>,
   env: CloudflareBindings,
 ): Promise<void> {
   for (const message of batch.messages) {
-    const attempt = message.body.attempt;
-    const transferId = message.body.transferId;
+    // どんな例外が飛んでも ack/retry を必ず呼び、メッセージが暗黙 ack される事故を防ぐ。
+    try {
+      const transferId = message.body.transferId;
+      const result = await TransferPollService.process({ transferId, env });
 
-    const result = await TransferPollService.process({
-      transferId,
-      attempt,
-      env,
-    });
+      if (!result.success) {
+        // Bridge / DB エラー。Cloudflare Queues に retry させて再試行する。
+        console.error(`TransferPollQueue: process error for transferId=${transferId}`, result.error);
+        message.retry();
+        continue;
+      }
 
-    if (!result.success) {
-      // Bridge / DB エラー。Queue のリトライに任せる。
-      console.error(`TransferPollQueue: process error for transferId=${transferId}`, result.error);
-      message.retry();
-      continue;
-    }
-
-    switch (result.data.kind) {
-      case "done":
-      case "invalid":
-        // 対象が確定 or もう存在しない。ack。
-        message.ack();
-        break;
-      case "still_pending":
-        // レジストリ側でまだ処理中。attempt++ して再エンキュー。
-        try {
-          if (env.TRANSFER_QUEUE) {
-            await env.TRANSFER_QUEUE.send(
-              { transferId, attempt: attempt + 1 },
-              { delaySeconds: POLL_RETRY_DELAY_SECONDS },
-            );
-          }
+      switch (result.data.kind) {
+        case "done":
+          // 対象 transfer が確定した or もう存在しない。ack。
           message.ack();
-        } catch (e) {
-          console.error(`TransferPollQueue: re-enqueue failed for transferId=${transferId}`, e);
+          break;
+        case "still_pending":
+          // レジストリ側でまだ処理中 or 別 transfer 用メッセージを dispatch しただけ。
+          // retry_delay 秒後に再配信させる。max_retries 超過で DLQ 送り。
           message.retry();
-        }
-        break;
-      case "expired":
-        // 上限超え。transfer を expired 状態にして諦める。
-        {
-          const exp = await TransferPollRepository.updateTransferStatus({
-            id: transferId,
-            status: "expired",
-            env,
-          });
-          if (!exp.success) {
-            console.error(`TransferPollQueue: failed to mark expired for transferId=${transferId}`, exp.error);
-            message.retry();
-            break;
-          }
-          // 対応するドメインの status を ok に戻す (レジストリ側 pendingTransfer は
-          // タイムアウトで自動解除されるはず)。
-          // domain.id は transfer から再取得する。
-          const t = await TransferPollRepository.findTransferById({ id: transferId, env });
-          if (t.success && t.data) {
-            await TransferPollRepository.updateDomainStatus({ id: t.data.domainId, status: "ok", env });
-          }
-          message.ack();
-        }
-        break;
+          break;
+      }
+    } catch (e) {
+      console.error(`TransferPollQueue: unexpected exception while processing message`, e);
+      try { message.retry(); } catch (_e) { /* retry 自体が失敗する場合は諦める */ }
     }
   }
 }

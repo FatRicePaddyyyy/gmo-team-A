@@ -1,5 +1,6 @@
 import { eq } from "drizzle-orm";
 import { createDBClient } from "../../lib/db";
+import { classifyDbError } from "../../lib/db-error";
 import { domains } from "../../lib/schema/general-schema";
 import type { Result } from "../../types/result";
 
@@ -20,7 +21,7 @@ export class DomainRepository {
       return { success: true, data: rows[0] ?? null, error: null };
     } catch (error) {
       console.error("DomainRepository.findById error:", error);
-      return { success: false, data: null, error: error instanceof Error ? error.message : "予期しないエラー" };
+      return { success: false, data: null, error: classifyDbError(error) };
     }
   }
 
@@ -37,7 +38,7 @@ export class DomainRepository {
       return { success: true, data: rows[0] ?? null, error: null };
     } catch (error) {
       console.error("DomainRepository.findByName error:", error);
-      return { success: false, data: null, error: error instanceof Error ? error.message : "予期しないエラー" };
+      return { success: false, data: null, error: classifyDbError(error) };
     }
   }
 
@@ -59,7 +60,7 @@ export class DomainRepository {
       return { success: true, data: created, error: null };
     } catch (error) {
       console.error("DomainRepository.create error:", error);
-      return { success: false, data: null, error: error instanceof Error ? error.message : "予期しないエラー" };
+      return { success: false, data: null, error: classifyDbError(error) };
     }
   }
 
@@ -78,7 +79,7 @@ export class DomainRepository {
       return { success: true, data: undefined, error: null };
     } catch (error) {
       console.error("DomainRepository.updateStatus error:", error);
-      return { success: false, data: null, error: error instanceof Error ? error.message : "予期しないエラー" };
+      return { success: false, data: null, error: classifyDbError(error) };
     }
   }
 
@@ -99,7 +100,7 @@ export class DomainRepository {
       return { success: true, data: undefined, error: null };
     } catch (error) {
       console.error("DomainRepository.updateExpiresAtAndStatus error:", error);
-      return { success: false, data: null, error: error instanceof Error ? error.message : "予期しないエラー" };
+      return { success: false, data: null, error: classifyDbError(error) };
     }
   }
 
@@ -118,7 +119,7 @@ export class DomainRepository {
       return { success: true, data: undefined, error: null };
     } catch (error) {
       console.error("DomainRepository.updateExpiresAt error:", error);
-      return { success: false, data: null, error: error instanceof Error ? error.message : "予期しないエラー" };
+      return { success: false, data: null, error: classifyDbError(error) };
     }
   }
 
@@ -137,7 +138,7 @@ export class DomainRepository {
       return { success: true, data: undefined, error: null };
     } catch (error) {
       console.error("DomainRepository.updateAuthInfo error:", error);
-      return { success: false, data: null, error: error instanceof Error ? error.message : "予期しないエラー" };
+      return { success: false, data: null, error: classifyDbError(error) };
     }
   }
 
@@ -156,7 +157,7 @@ export class DomainRepository {
       return { success: true, data: undefined, error: null };
     } catch (error) {
       console.error("DomainRepository.updateAutoRenew error:", error);
-      return { success: false, data: null, error: error instanceof Error ? error.message : "予期しないエラー" };
+      return { success: false, data: null, error: classifyDbError(error) };
     }
   }
 
@@ -175,7 +176,7 @@ export class DomainRepository {
       return { success: true, data: undefined, error: null };
     } catch (error) {
       console.error("DomainRepository.updateOwner error:", error);
-      return { success: false, data: null, error: error instanceof Error ? error.message : "予期しないエラー" };
+      return { success: false, data: null, error: classifyDbError(error) };
     }
   }
 
@@ -192,7 +193,7 @@ export class DomainRepository {
       return { success: true, data: rows, error: null };
     } catch (error) {
       console.error("DomainRepository.listByUserId error:", error);
-      return { success: false, data: null, error: error instanceof Error ? error.message : "予期しないエラー" };
+      return { success: false, data: null, error: classifyDbError(error) };
     }
   }
 }

@@ -16,13 +16,19 @@ type EmptyResData = Record<string, never>;
 // レジストリ側 EPP レスポンスの result コード判定と resData 取り出しの共通化。
 // - HTTP 非 200 系は上流で早期リターンしているので、ここでは result.code のみ見る。
 // - resData が undefined の場合は上位で個別に扱う（メソッドによって許容の可否が違うため）。
+// - 失敗時は必ず内部エラーコード "registry_error" に normalize して返す。
+//   result.message はレジストリ由来の生文字列 (英語 or 内部情報) なので、ユーザー応答に載せず
+//   console.error でログに残すのみ (toUserMessage の map miss で情報がドロップされるのを避ける)。
 function extractResData<T>(
   body: { result: { code: number; message: string }; resData?: T } | undefined,
   successCodes: readonly number[] = [1000],
 ): Result<T | undefined> {
   if (!body) {return { success: false, data: null, error: "invalid_registry_response" };}
   if (!successCodes.includes(body.result.code)) {
-    return { success: false, data: null, error: body.result.message || "registry_error" };
+    console.error(
+      `Registry returned non-success code=${body.result.code}, message="${body.result.message}"`,
+    );
+    return { success: false, data: null, error: "registry_error" };
   }
   return { success: true, data: body.resData, error: null };
 }
@@ -408,9 +414,9 @@ export class RegistryBridge {
           : action === "reject"
           ? await client.POST("/api/v1/epp/domains/{name}/transfer/reject", { params: { path: { name } } })
           : await client.POST("/api/v1/epp/domains/{name}/transfer/cancel", { params: { path: { name } } });
-      // B12: 401 (レジストリの認証エラー) を明示的に authInfo_mismatch として扱う。
-      // これまでは invalid_registry_response に丸まって 500 化していた。
-      if (response.status === 401) {return { success: false, data: null, error: "authInfo_mismatch" };}
+      // R5: approve/reject/cancel は authInfo を送らないので、401 は authInfo 不一致ではなく
+      // 「レジストリ認証失敗 = 権限不備」として forbidden にマップする。
+      if (response.status === 401) {return { success: false, data: null, error: "forbidden" };}
       if (response.status === 403) {return { success: false, data: null, error: "forbidden" };}
       if (response.status === 404) {return { success: false, data: null, error: "transfer_not_found" };}
       if (response.status === 409) {return { success: false, data: null, error: "transfer_not_found" };}

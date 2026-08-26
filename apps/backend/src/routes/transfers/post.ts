@@ -1,18 +1,18 @@
-import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
+import { createRoute, z } from "@hono/zod-openapi";
 import { toUserMessage } from "../../lib/error-messages";
-import { detectRegistry } from "../../lib/registry-policy";
-import type { Variables } from "../../types";
+import { createOpenAPIHono } from "../../lib/openapi-hono";
+import { detectRegistry, FQDN_REGEX } from "../../lib/registry-policy";
 import { TransferService } from "./service";
 
 // Issue #25: registry は省略可能。省略時は TLD から自動判定する。
-// B15: name は FQDN 形式に絞る (ラベル + ドット + TLD)。IDN は今のところ扱わない。
+// B15/NB-4: name は FQDN 形式に絞る (RFC 1035)。regex は lib/registry-policy に一元化。
 const RequestSchema = z.object({
   name: z.string()
     .trim()
     .toLowerCase()
     .min(1)
     .max(253)
-    .regex(/^([a-z0-9-]+\.)+[a-z]{2,}$/, "FQDN 形式で入力してください")
+    .regex(FQDN_REGEX, "FQDN 形式で入力してください")
     .openapi({ example: "example.com" }),
   authInfo: z.string().min(1).max(64).openapi({ example: "s3cr3t-pass" }),
   registry: z.enum(["kitaqsign", "kitaqnic"]).optional().openapi({
@@ -53,10 +53,11 @@ const route = createRoute({
     404: { content: { "application/json": { schema: ErrorSchema } }, description: "ドメイン不在" },
     409: { content: { "application/json": { schema: ErrorSchema } }, description: "authInfo不一致 / 既に処理中 / 状態不可" },
     500: { content: { "application/json": { schema: ErrorSchema } }, description: "サーバーエラー" },
+    503: { content: { "application/json": { schema: ErrorSchema } }, description: "Queue バインディング欠落" },
   },
 });
 
-const app = new OpenAPIHono<{ Bindings: CloudflareBindings; Variables: Variables }>();
+const app = createOpenAPIHono();
 
 export const requestTransferRouteHandler = app.openapi(route, async (ctx) => {
   const { name, authInfo, registry: explicitRegistry } = ctx.req.valid("json");
@@ -85,6 +86,9 @@ export const requestTransferRouteHandler = app.openapi(route, async (ctx) => {
     }
     if (result.error === "invalid_domain_name" || result.error === "invalid_domain_registry") {
       return ctx.json({ success: false as const, data: null, error: toUserMessage(result.error) }, 400);
+    }
+    if (result.error === "queue_unavailable") {
+      return ctx.json({ success: false as const, data: null, error: toUserMessage(result.error) }, 503);
     }
     return ctx.json({ success: false as const, data: null, error: toUserMessage(result.error) }, 500);
   }

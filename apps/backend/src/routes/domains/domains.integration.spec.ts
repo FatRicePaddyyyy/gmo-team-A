@@ -63,7 +63,7 @@ describe("結合: POST /api/v1/public/domains/check", () => {
       mockEnv,
     );
     expect(res.status).toBe(200);
-    const json = await res.json();
+    const json = await res.json() as any;
     expect(json.data.avail).toBe(true);
   });
 
@@ -78,7 +78,7 @@ describe("結合: POST /api/v1/public/domains/check", () => {
       mockEnv,
     );
     expect(res.status).toBe(200);
-    const json = await res.json();
+    const json = await res.json() as any;
     expect(json.data.avail).toBe(false);
   });
 
@@ -101,7 +101,7 @@ describe("結合: POST /api/v1/public/domains/check", () => {
       mockEnv,
     );
     expect(res.status).toBe(500);
-    const json = await res.json();
+    const json = await res.json() as any;
     expect(json.error).not.toBe("network_error"); // エラーコードがそのまま出ていない
     expect(json.error).toContain("再試行");
   });
@@ -111,7 +111,7 @@ describe("結合: POST /api/v1/public/domains/check", () => {
 
 describe("結合: POST /api/v1/secure/domains", () => {
   test("[正常系] 登録成功 → 201 + Domain レスポンス", async () => {
-    vi.spyOn(RegistryBridge, "hello").mockResolvedValue({ success: true, data: { svID: "sv", svDate: "", tlds: ["com"] }, error: null });
+    vi.spyOn(RegistryBridge, "hello").mockResolvedValue({ success: true, data: { registryCode: "kitaqsign", message: "hello", tlds: ["com"] }, error: null });
     vi.spyOn(DomainUserRepository, "findById").mockResolvedValue({ success: true, data: mockContactUser, error: null });
     vi.spyOn(RegistryBridge, "createContact").mockResolvedValue({ success: true, data: { contactId: "c-001" }, error: null });
     vi.spyOn(RegistryBridge, "create").mockResolvedValue({
@@ -125,13 +125,13 @@ describe("結合: POST /api/v1/secure/domains", () => {
       mockEnv,
     );
     expect(res.status).toBe(201);
-    const json = await res.json();
+    const json = await res.json() as any;
     expect(json.success).toBe(true);
     expect(json.data.name).toBe("example.com");
   });
 
   test("[異常系] domain_exists → 409 + ユーザー向けメッセージ", async () => {
-    vi.spyOn(RegistryBridge, "hello").mockResolvedValue({ success: true, data: { svID: "sv", svDate: "", tlds: ["com"] }, error: null });
+    vi.spyOn(RegistryBridge, "hello").mockResolvedValue({ success: true, data: { registryCode: "kitaqsign", message: "hello", tlds: ["com"] }, error: null });
     vi.spyOn(DomainUserRepository, "findById").mockResolvedValue({ success: true, data: mockContactUser, error: null });
     vi.spyOn(RegistryBridge, "createContact").mockResolvedValue({ success: true, data: { contactId: "c-001" }, error: null });
     vi.spyOn(RegistryBridge, "create").mockResolvedValue({ success: false, data: null, error: "domain_exists" });
@@ -142,13 +142,13 @@ describe("結合: POST /api/v1/secure/domains", () => {
       mockEnv,
     );
     expect(res.status).toBe(409);
-    const json = await res.json();
+    const json = await res.json() as any;
     expect(json.error).toContain("すでに登録");
   });
 
   test("[異常系] invalid_tld → 422 + ユーザー向けメッセージ", async () => {
     // レジストリの hello は成功するが、hello.tlds に "xyz" を返さない → service 側で unsupported_tld として弾かれ 422 になる。
-    vi.spyOn(RegistryBridge, "hello").mockResolvedValue({ success: true, data: { svID: "sv", svDate: "", tlds: ["com"] }, error: null });
+    vi.spyOn(RegistryBridge, "hello").mockResolvedValue({ success: true, data: { registryCode: "kitaqsign", message: "hello", tlds: ["com"] }, error: null });
     vi.spyOn(DomainUserRepository, "findById").mockResolvedValue({ success: true, data: mockContactUser, error: null });
     vi.spyOn(RegistryBridge, "createContact").mockResolvedValue({ success: true, data: { contactId: "c-001" }, error: null });
     vi.spyOn(RegistryBridge, "create").mockResolvedValue({ success: false, data: null, error: "invalid_tld" });
@@ -159,7 +159,7 @@ describe("結合: POST /api/v1/secure/domains", () => {
       mockEnv,
     );
     expect(res.status).toBe(422);
-    const json = await res.json();
+    const json = await res.json() as any;
     expect(json.error).toContain("対応していません");
   });
 
@@ -190,7 +190,7 @@ describe("結合: GET /api/v1/secure/domains", () => {
 
     const res = await listDomainsRouteHandler.request("/api/v1/secure/domains", { method: "GET" }, mockEnv);
     expect(res.status).toBe(200);
-    const json = await res.json();
+    const json = await res.json() as any;
     expect(json.data).toHaveLength(1);
     expect(json.data[0].name).toBe("example.com");
   });
@@ -200,7 +200,7 @@ describe("結合: GET /api/v1/secure/domains", () => {
 
     const res = await listDomainsRouteHandler.request("/api/v1/secure/domains", { method: "GET" }, mockEnv);
     expect(res.status).toBe(200);
-    const json = await res.json();
+    const json = await res.json() as any;
     expect(json.data).toHaveLength(0);
   });
 });
@@ -223,7 +223,7 @@ describe("結合: GET /api/v1/secure/domains/{id}", () => {
       mockEnv,
     );
     expect(res.status).toBe(200);
-    const json = await res.json();
+    const json = await res.json() as any;
     expect(json.data.expiresAt).toBe("2028-08-25T00:00:00.000Z"); // Bridge の最新値
   });
 
@@ -240,7 +240,7 @@ describe("結合: GET /api/v1/secure/domains/{id}", () => {
       mockEnv,
     );
     expect(res.status).toBe(404);
-    const json = await res.json();
+    const json = await res.json() as any;
     expect(json.error).toContain("見つかりません");
   });
 });
@@ -259,7 +259,7 @@ describe("結合: POST /api/v1/secure/domains/{id}/renew", () => {
       mockEnv,
     );
     expect(res.status).toBe(200);
-    const json = await res.json();
+    const json = await res.json() as any;
     expect(json.data.expiresAt).toBe("2028-08-25T00:00:00.000Z");
   });
 
@@ -274,7 +274,7 @@ describe("結合: POST /api/v1/secure/domains/{id}/renew", () => {
       mockEnv,
     );
     expect(res.status).toBe(409);
-    const json = await res.json();
+    const json = await res.json() as any;
     expect(json.error).toContain("移管手続き中");
   });
 
@@ -333,7 +333,7 @@ describe("結合: PUT /api/v1/secure/domains/{id}", () => {
       mockEnv,
     );
     expect(res.status).toBe(409);
-    const json = await res.json();
+    const json = await res.json() as any;
     expect(json.error).toContain("できません");
   });
 });
@@ -352,7 +352,7 @@ describe("結合: DELETE /api/v1/secure/domains/{id}", () => {
       mockEnv,
     );
     expect(res.status).toBe(200);
-    const json = await res.json();
+    const json = await res.json() as any;
     expect(json.data.status).toBe("pendingDelete");
   });
 
@@ -366,7 +366,7 @@ describe("結合: DELETE /api/v1/secure/domains/{id}", () => {
       mockEnv,
     );
     expect(res.status).toBe(409);
-    const json = await res.json();
+    const json = await res.json() as any;
     expect(json.error).toContain("できません");
   });
 
@@ -400,7 +400,7 @@ describe("結合: POST /api/v1/secure/domains/{id}/restore", () => {
       mockEnv,
     );
     expect(res.status).toBe(200);
-    const json = await res.json();
+    const json = await res.json() as any;
     expect(json.data.status).toBe("ok");
   });
 
@@ -416,7 +416,7 @@ describe("結合: POST /api/v1/secure/domains/{id}/restore", () => {
       mockEnv,
     );
     expect(res.status).toBe(409);
-    const json = await res.json();
+    const json = await res.json() as any;
     expect(json.error).toContain("できません");
   });
 
@@ -432,7 +432,7 @@ describe("結合: POST /api/v1/secure/domains/{id}/restore", () => {
       mockEnv,
     );
     expect(res.status).toBe(403);
-    const json = await res.json();
+    const json = await res.json() as any;
     expect(json.error).toContain("権限");
   });
 });

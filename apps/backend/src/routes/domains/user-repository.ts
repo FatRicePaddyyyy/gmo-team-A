@@ -1,5 +1,6 @@
 import { eq } from "drizzle-orm";
 import { createDBClient } from "../../lib/db";
+import { classifyDbError } from "../../lib/db-error";
 import { user } from "../../lib/schema/auth-schema";
 import type { Result } from "../../types/result";
 
@@ -21,7 +22,7 @@ export class DomainUserRepository {
       return { success: true, data: rows[0] ?? null, error: null };
     } catch (error) {
       console.error("DomainUserRepository.findById error:", error);
-      return { success: false, data: null, error: error instanceof Error ? error.message : "予期しないエラー" };
+      return { success: false, data: null, error: classifyDbError(error) };
     }
   }
 }
