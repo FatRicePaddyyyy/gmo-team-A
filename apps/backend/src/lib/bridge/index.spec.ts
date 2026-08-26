@@ -82,6 +82,21 @@ describe("RegistryBridge.hello: 対応TLDの入れ物がレジストリごとに
     expect(res.success).toBe(false);
     expect(res.error).toBe("invalid_registry_response");
   });
+
+  // Kitaqnic の shape で info.registryCode が欠落しているとき、
+  // トップレベルの svID にフォールバックする (normalizeGreeting 側の防御)。
+  test("kitaqnic 形で info.registryCode が無ければ svID を使う", async () => {
+    stubRegistry(200, okEnvelope({
+      svID: "KQNIC",
+      info: { supportedTlds: ["xyz"] },
+    }));
+
+    const res = await RegistryBridge.hello({ registry: "kitaqnic", env: mockEnv });
+
+    expect(res.success).toBe(true);
+    expect(res.data?.registryCode).toBe("KQNIC");
+    expect(res.data?.tlds).toEqual(["xyz"]);
+  });
 });
 
 // ─── restore ─────────────────────────────────────────────────────────────────
@@ -237,6 +252,61 @@ describe("RegistryBridge.update: 403/404 の権限系吸収", () => {
     });
 
     expect(res.error).toBe("domain_not_found");
+  });
+
+  // Kitaqnic の update 成功レスポンスは EppResponseUnit (resData が空 = Record<string, never>) を返す。
+  // 呼び出し側はレスポンスの中身を参照せず info() で取り直す設計だが、bridge 段では
+  // "resData 欠落" を invalid_registry_response に丸めず、空オブジェクトのまま成功で返すこと。
+  test("[正常系] Kitaqnic の Unit (resData なし) 応答でも成功で返す", async () => {
+    // openapi-fetch は 200 + result.code 1000 なら resData 不在でも success 扱い
+    stubRegistry(200, {
+      result: { code: 1000, message: "Command completed successfully" },
+      trID: { clTRID: null, svTRID: "TEST-0001" },
+    });
+
+    const res = await RegistryBridge.update({
+      name: "example.xyz",
+      chg: { registrant: "C-0001" },
+      registry: "kitaqnic",
+      env: mockEnv,
+    });
+
+    expect(res.success).toBe(true);
+    expect(res.data).toEqual({});
+  });
+
+  // update の 2303 は「ドメイン本体不在」と「add/rem で指定した NS/コンタクトが未登録」の
+  // 2 通りが同じコードで返る。reason に対象ドメイン名が含まれるかで区別する。
+  test("[異常系] 2303 + reason に対象ドメイン名を含む → domain_not_found", async () => {
+    stubRegistry(200, {
+      result: { code: 2303, message: "Object does not exist", reason: "Domain example.com not found" },
+      trID: { clTRID: null, svTRID: "TEST-0001" },
+    });
+
+    const res = await RegistryBridge.update({
+      name: "example.com",
+      add: { nameservers: ["ns1.other.com"] },
+      registry: "kitaqsign",
+      env: mockEnv,
+    });
+
+    expect(res.error).toBe("domain_not_found");
+  });
+
+  test("[異常系] 2303 + reason に対象ドメイン名を含まない → referenced_object_not_found", async () => {
+    stubRegistry(200, {
+      result: { code: 2303, message: "Object does not exist", reason: "Host ns1.other.com not found" },
+      trID: { clTRID: null, svTRID: "TEST-0001" },
+    });
+
+    const res = await RegistryBridge.update({
+      name: "example.com",
+      add: { nameservers: ["ns1.other.com"] },
+      registry: "kitaqsign",
+      env: mockEnv,
+    });
+
+    expect(res.error).toBe("referenced_object_not_found");
   });
 });
 
@@ -486,5 +556,95 @@ describe("RegistryBridge.renew", () => {
 
     expect(res.success).toBe(true);
     expect(res.data?.exDate).toBe("2028-08-26T00:00:00.000Z");
+  });
+});
+
+// ─── poll ────────────────────────────────────────────────────────────────────
+
+describe("RegistryBridge.poll: レジストリごとに endpoint が違うが shape は共通", () => {
+  test("[正常系] Kitaqsign から message を取得できる (payload の各種フィールドを保持)", async () => {
+    stubRegistry(200, okEnvelope({
+      count: 1,
+      message: {
+        id: 42,
+        msgType: "transfer",
+        qdate: "2026-08-26T10:00:00Z",
+        payload: {
+          domain: "example.com",
+          status: "serverApproved",
+          op: "approve",
+          counterpartyRegistrar: "teama-2",
+        },
+      },
+    }));
+
+    const res = await RegistryBridge.poll({ registry: "kitaqsign", env: mockEnv });
+
+    expect(res.success).toBe(true);
+    expect(res.data?.id).toBe(42);
+    expect(res.data?.payload.domain).toBe("example.com");
+    expect(res.data?.payload.status).toBe("serverApproved");
+    expect(res.data?.payload.counterpartyRegistrar).toBe("teama-2");
+  });
+
+  test("[正常系] Kitaqnic (GET /messages) も同じ shape で返るので同様に読める", async () => {
+    stubRegistry(200, okEnvelope({
+      count: 1,
+      message: {
+        id: 100,
+        msgType: "transfer",
+        qdate: "2026-08-26T10:00:00Z",
+        payload: { domain: "example.xyz", op: "request", counterpartyRegistrar: "teama-2" },
+      },
+    }));
+
+    const res = await RegistryBridge.poll({ registry: "kitaqnic", env: mockEnv });
+
+    expect(res.success).toBe(true);
+    expect(res.data?.id).toBe(100);
+    expect(res.data?.payload.op).toBe("request");
+  });
+
+  test("[正常系] 204 は queue empty (data=null) で返す", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(null, { status: 204 })));
+
+    const res = await RegistryBridge.poll({ registry: "kitaqsign", env: mockEnv });
+
+    expect(res.success).toBe(true);
+    expect(res.data).toBeNull();
+  });
+
+  // 以前は 5xx を !data ブランチで queue empty として扱っており、cron が空キューと誤認して
+  // drain break していた。5xx は poll_failed で返し、cron 側でリトライ判断させる。
+  test("[異常系] HTTP 500 は poll_failed で返す (空キューと誤認しない)", async () => {
+    stubRegistry(500, { result: { code: 2400, message: "Command failed" } });
+
+    const res = await RegistryBridge.poll({ registry: "kitaqsign", env: mockEnv });
+
+    expect(res.success).toBe(false);
+    expect(res.error).toBe("poll_failed");
+  });
+
+  test("[異常系] 200 + result.code≠1000 は poll_failed で返す", async () => {
+    stubRegistry(200, errEnvelope(2400, "Command failed"));
+
+    const res = await RegistryBridge.poll({ registry: "kitaqsign", env: mockEnv });
+
+    expect(res.success).toBe(false);
+    expect(res.error).toBe("poll_failed");
+  });
+
+  // EPP RFC 5730: 1300 は "no messages in queue"。1000 と同じく空扱いで受け入れる。
+  // Kitaqsign/Kitaqnic の Swagger にはないが、EPP 準拠実装が送っても壊れないようにする。
+  test("[正常系] result.code=1300 (EPP no-messages) は queue empty で返す", async () => {
+    stubRegistry(200, {
+      result: { code: 1300, message: "Command completed successfully; no messages" },
+      trID: { clTRID: null, svTRID: "TEST-0001" },
+    });
+
+    const res = await RegistryBridge.poll({ registry: "kitaqsign", env: mockEnv });
+
+    expect(res.success).toBe(true);
+    expect(res.data).toBeNull();
   });
 });

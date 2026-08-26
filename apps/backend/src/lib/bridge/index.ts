@@ -635,37 +635,68 @@ export class RegistryBridge {
     env: CloudflareBindings;
   }): Promise<Result<PollMessage | null>> {
     try {
-      const { data, response } =
+      const { data, error, response } =
         registry === "kitaqsign"
           ? await getClient("kitaqsign", env).GET("/api/v1/epp/messages/poll")
           : await getKitaqnicClient(env).GET("/api/v1/epp/messages");
 
-      if (response.status === 204 || !data) {return { success: true, data: null, error: null };}
+      // 204 No Content はレジストリの「メッセージなし」規約 (Swagger には無いが実測で来うる)
+      if (response.status === 204) {
+        console.info(`[poll:${registry}] queue empty (status=204)`);
+        return { success: true, data: null, error: null };
+      }
+      // HTTP 5xx / 4xx はレジストリ側の異常。以前は !data で "queue empty" として無視していたが、
+      // それだと cron が空キューと誤認して drain break してしまう。明示的に poll_failed で返す。
+      if (!response.ok) {
+        console.error(
+          `[poll:${registry}] http error status=${response.status} message="${extractResultMessage(error) ?? "-"}"`,
+        );
+        return { success: false, data: null, error: "poll_failed" };
+      }
+      // 200 でも body が空 (仕様不明の実装差) の場合は "空キュー" として扱う。
+      if (!data) {
+        console.info(`[poll:${registry}] queue empty (empty body)`);
+        return { success: true, data: null, error: null };
+      }
 
-      if (data.result.code !== 1000) {
+      // EPP RFC 5730 準拠: 1300 = "no messages in queue"。1000 と同義で空キューを意味する。
+      // Kitaqsign / Kitaqnic の Swagger には未定義だが、EPP 準拠実装なら送りうるので許容する
+      // (誤って poll_failed にすると cron がリトライループに入る)。
+      if (data.result.code !== 1000 && data.result.code !== 1300) {
         // S-6: レジストリ生 message はユーザー応答に載せず、normalized code に固定。
         // 詳細は console.error でログに残す。
         console.error(
-          `RegistryBridge.poll: non-success code=${data.result.code}, message="${data.result.message}"`,
+          `[poll:${registry}] non-success code=${data.result.code}, message="${data.result.message}"`,
         );
         return { success: false, data: null, error: "poll_failed" };
       }
 
       const message = data.resData?.message;
       if (!message || typeof message.id !== "number") {
+        console.info(`[poll:${registry}] queue empty (no message in resData, code=${data.result.code})`);
         return { success: true, data: null, error: null };
       }
 
       // B9: id は int64 だが JS number は 2^53-1 までしか安全に扱えない。
       // 精度が落ちた場合は ack が失敗する可能性があるので、明示的にエラーで返して監視できるようにする。
       if (!Number.isSafeInteger(message.id)) {
-        console.error(`RegistryBridge.poll: message id=${message.id} is outside safe integer range`);
+        console.error(`[poll:${registry}] message id=${message.id} is outside safe integer range`);
         return { success: false, data: null, error: "invalid_registry_response" };
       }
 
-      return { success: true, data: message, error: null };
+      // 生成型の payload は Record<string, never> と過剰に厳しいので、
+      // ここで実データを持つ PollMessage に narrow して観測用ログ + 返却に使う。
+      const narrowed: PollMessage = message;
+
+      // どのようなメッセージが飛んできたか観測できるように 1 行で残す。
+      // payload の全量は残さない (秘匿情報が入り得るため、既知の安全フィールドだけ抜粋)。
+      console.info(
+        `[poll:${registry}] message id=${narrowed.id} msgType="${narrowed.msgType}" domain="${narrowed.payload.domain ?? "-"}" status="${narrowed.payload.status ?? "-"}" op="${narrowed.payload.op ?? "-"}" counterparty="${narrowed.payload.counterpartyRegistrar ?? "-"}"`,
+      );
+
+      return { success: true, data: narrowed, error: null };
     } catch (e) {
-      console.error("RegistryBridge.poll error:", e);
+      console.error(`[poll:${registry}] exception`, e);
       return { success: false, data: null, error: "network_error" };
     }
   }
@@ -690,11 +721,18 @@ export class RegistryBridge {
           : await getKitaqnicClient(env).DELETE("/api/v1/epp/messages/{id}", {
               params: { path: { id: messageId } },
             });
-      if (!response.ok || error) {return { success: false, data: null, error: "ack_failed" };}
-      if (data.result.code !== 1000) {return { success: false, data: null, error: "ack_failed" };}
+      if (!response.ok || error) {
+        console.warn(`[ack:${registry}] failed messageId=${messageId} status=${response.status}`);
+        return { success: false, data: null, error: "ack_failed" };
+      }
+      if (data.result.code !== 1000) {
+        console.warn(`[ack:${registry}] failed messageId=${messageId} code=${data.result.code} message="${data.result.message}"`);
+        return { success: false, data: null, error: "ack_failed" };
+      }
+      console.info(`[ack:${registry}] ok messageId=${messageId}`);
       return { success: true, data: undefined, error: null };
     } catch (e) {
-      console.error("RegistryBridge.ackMessage error:", e);
+      console.error(`[ack:${registry}] exception messageId=${messageId}`, e);
       return { success: false, data: null, error: "network_error" };
     }
   }
