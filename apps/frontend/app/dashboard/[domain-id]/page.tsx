@@ -8,9 +8,10 @@ import { Button } from "@/components/ui/button";
 import { FeedbackBanner } from "@/components/feedback-banner";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
-import { canUpdateSettings, isTransferLocked } from "../_lib/domain-status";
+import { canRenew, canUpdateSettings, isTransferLocked } from "../_lib/domain-status";
 import { DomainOverview } from "./_parts/domain-overview";
 import { NameServerForm } from "./_components/name-server-form";
+import { RenewCard } from "./_components/renew-card";
 import { TransferOutCard } from "./_components/transfer-out-card";
 import { useDomainDetail } from "./_hooks/use-domain-detail.hook";
 
@@ -27,6 +28,9 @@ export default function DomainDetailPage() {
   // 手続き中・廃止済みのドメインはレジストリ側が変更を受け付けない。
   // ボタンを出しても 409 で弾かれるだけなので、その理由を先に見せる。
   const settingsEditable = domain ? canUpdateSettings(domain.status) : false;
+  // 更新は廃止済みでもできない一方、pendingUpdate などの手続き中とは条件が違うので
+  // 設定変更（canUpdateSettings）とは別に判定する。
+  const renewable = domain ? canRenew(domain.status) : false;
   const busy = running !== null;
 
   if (isPending) {
@@ -72,13 +76,6 @@ export default function DomainDetailPage() {
               </p>
             </div>
 
-            {feedback && (
-              <FeedbackBanner
-                tone={feedback.tone}
-                message={feedback.message}
-                unauthorized={feedback.unauthorized}
-              />
-            )}
             {loadError && (
               <FeedbackBanner
                 tone="error"
@@ -114,10 +111,23 @@ export default function DomainDetailPage() {
                   </p>
                 )}
 
+                {renewable && (
+                  <RenewCard
+                    expiresAt={domain.expiresAt}
+                    disabled={busy}
+                    running={running === "renew"}
+                    feedback={feedback?.source === "renew" ? feedback : null}
+                    onRenew={state.renew}
+                  />
+                )}
+
                 <NameServerForm
                   current={domain.nameservers ?? []}
                   disabled={!settingsEditable || busy}
                   running={running === "nameServers"}
+                  feedback={
+                    feedback?.source === "nameServers" ? feedback : null
+                  }
                   onSubmit={state.updateNameServers}
                 />
 
@@ -126,6 +136,12 @@ export default function DomainDetailPage() {
                   disabled={!settingsEditable || busy}
                   runningAuthInfo={running === "authInfo"}
                   runningLock={running === "transferLock"}
+                  authInfoFeedback={
+                    feedback?.source === "authInfo" ? feedback : null
+                  }
+                  lockFeedback={
+                    feedback?.source === "transferLock" ? feedback : null
+                  }
                   onUpdateAuthInfo={state.updateAuthInfo}
                   onSetLock={state.setTransferLock}
                 />

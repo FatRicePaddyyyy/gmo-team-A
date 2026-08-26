@@ -5,6 +5,8 @@ import { Server } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { FeedbackBanner } from "@/components/feedback-banner";
+import type { DetailFeedback } from "../_hooks/use-domain-detail.hook";
 
 /** レジストリの一般的な上限。最低 2 台ないと名前解決が止まりやすい */
 const MAX_NAME_SERVERS = 13;
@@ -17,6 +19,8 @@ interface NameServerFormProps {
   current: string[];
   disabled: boolean;
   running: boolean;
+  /** この操作の結果。押した場所の近くに出したいので、ページ上部ではなくここに置く */
+  feedback: DetailFeedback | null;
   onSubmit: (nameServers: string[]) => Promise<boolean>;
 }
 
@@ -30,6 +34,7 @@ export function NameServerForm({
   current,
   disabled,
   running,
+  feedback,
   onSubmit,
 }: NameServerFormProps) {
   // 最低 2 行は常に出す。空欄は送信時に落とす。
@@ -124,6 +129,14 @@ export function NameServerForm({
         )}
 
         {error && <p className="text-xs text-red-700">{error}</p>}
+
+        {feedback && (
+          <FeedbackBanner
+            tone={feedback.tone}
+            message={feedback.message}
+            unauthorized={feedback.unauthorized}
+          />
+        )}
 
         <div className="border-t border-gray-100 pt-3">
           <Button

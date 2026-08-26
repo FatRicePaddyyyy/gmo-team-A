@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   $getDomain,
+  $renewDomain,
   $updateDomain,
   type GetDomainResponse,
 } from "@/clients";
@@ -16,10 +17,13 @@ export interface DetailFeedback {
   tone: "success" | "error";
   message: string;
   unauthorized?: boolean;
+  /** どの操作の結果か。押したカードの中に帯を出すために使う */
+  source: NonNullable<RunningDetailAction>;
 }
 
 /** 実行中の操作。ボタンの「保存中...」表示と二重送信防止に使う */
 export type RunningDetailAction =
+  | "renew"
   | "nameServers"
   | "authInfo"
   | "transferLock"
@@ -65,12 +69,20 @@ export function useDomainDetail(domainId: string, enabled: boolean) {
     void refresh();
   }, [enabled, refresh]);
 
-  /** PUT の共通処理。成功したら詳細を取り直してからフィードバックを出す */
+  /**
+   * PUT の共通処理。
+   *
+   * レジストリはリクエストを 200 で受理しても、実際には反映しないことがある
+   * （Kitaqsign サンドボックスは client 系ステータスを無視する）。
+   * HTTP 成功だけで「変更しました」と出すと嘘になるので、取り直した内容が
+   * 期待どおりかを `verify` で確かめ、違えば警告として伝える。
+   */
   const update = useCallback(
     async (
       kind: NonNullable<RunningDetailAction>,
       body: Parameters<typeof $updateDomain>[0]["json"],
       successMessage: string,
+      verify?: (updated: DomainDetail) => boolean,
     ): Promise<boolean> => {
       if (running) return false;
       setRunning(kind);
@@ -85,13 +97,71 @@ export function useDomainDetail(domainId: string, enabled: boolean) {
           tone: "error",
           message: result.error,
           unauthorized: result.unauthorized,
+          source: kind,
+        });
+        setRunning(null);
+        return false;
+      }
+
+      // PUT のレスポンスはレジストリから取り直した最新の内容
+      const updated = result.data;
+      setDomain(updated);
+      setLoaded(true);
+
+      if (verify && !verify(updated)) {
+        setFeedback({
+          tone: "error",
+          source: kind,
+          message:
+            "レジストリが変更を受け付けましたが、まだ反映されていません。時間をおいて「最新にする」で確認してください。反映されない場合はレジストリ側の制限が考えられます。",
+        });
+        setRunning(null);
+        return false;
+      }
+
+      setFeedback({ tone: "success", message: successMessage, source: kind });
+      setRunning(null);
+      return true;
+    },
+    [domainId, running],
+  );
+
+  /**
+   * 有効期限の延長。
+   *
+   * PUT ではなく POST /renew なので update() は通さない。レスポンスは一覧形
+   * （詳細フィールドを含まない）なので、詳細を取り直して画面に反映する。
+   */
+  const renew = useCallback(
+    async (years: number): Promise<boolean> => {
+      if (running) return false;
+      setRunning("renew");
+      setFeedback(null);
+
+      const result = await callApi(
+        $renewDomain({
+          param: { "domain-id": domainId },
+          json: { period: { unit: "Y", value: years } },
+        }),
+      );
+
+      if (!result.success) {
+        setFeedback({
+          tone: "error",
+          message: result.error,
+          unauthorized: result.unauthorized,
+          source: "renew",
         });
         setRunning(null);
         return false;
       }
 
       await refresh();
-      setFeedback({ tone: "success", message: successMessage });
+      setFeedback({
+        tone: "success",
+        message: `有効期限を ${years} 年延長しました。`,
+        source: "renew",
+      });
       setRunning(null);
       return true;
     },
@@ -104,6 +174,9 @@ export function useDomainDetail(domainId: string, enabled: boolean) {
         "nameServers",
         { nameServers },
         "ネームサーバーを変更しました。反映まで最大で数時間かかることがあります。",
+        // 送った分がすべて反映されているか（レジストリ側で並び順が変わることはある）
+        (updated) =>
+          nameServers.every((ns) => (updated.nameservers ?? []).includes(ns)),
       ),
     [update],
   );
@@ -114,6 +187,8 @@ export function useDomainDetail(domainId: string, enabled: boolean) {
         "authInfo",
         { chg: { authInfo } },
         "認証コード（AuthCode）を再発行しました。移管先の事業者にこのコードを伝えてください。",
+        // authInfo は info で返ってこない（表示できない値）ので検証しようがない。
+        // レジストリが 200 を返したことをもって成功とする。
       ),
     [update],
   );
@@ -128,6 +203,8 @@ export function useDomainDetail(domainId: string, enabled: boolean) {
         locked
           ? "移管ロックをかけました。他社への移管ができなくなります。"
           : "移管ロックを解除しました。他社への移管ができるようになります。",
+        (updated) =>
+          (updated.statuses ?? []).includes(TRANSFER_LOCK_STATUS) === locked,
       ),
     [update],
   );
@@ -142,6 +219,7 @@ export function useDomainDetail(domainId: string, enabled: boolean) {
     running,
     feedback,
     refresh,
+    renew,
     updateNameServers,
     updateAuthInfo,
     setTransferLock,

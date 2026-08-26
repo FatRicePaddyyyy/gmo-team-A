@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { ConfirmAction } from "@/components/confirm-action";
+import { FeedbackBanner } from "@/components/feedback-banner";
+import type { DetailFeedback } from "../_hooks/use-domain-detail.hook";
 
 /** バックエンド (PUT /secure/domains/:id) の chg.authInfo は 1〜64 文字 */
 const AUTH_INFO_MAX = 64;
@@ -16,6 +18,9 @@ interface TransferOutCardProps {
   disabled: boolean;
   runningAuthInfo: boolean;
   runningLock: boolean;
+  /** それぞれの操作の結果。押したブロックの中に出す */
+  authInfoFeedback: DetailFeedback | null;
+  lockFeedback: DetailFeedback | null;
   onUpdateAuthInfo: (authInfo: string) => Promise<boolean>;
   onSetLock: (locked: boolean) => Promise<boolean>;
 }
@@ -31,6 +36,8 @@ export function TransferOutCard({
   disabled,
   runningAuthInfo,
   runningLock,
+  authInfoFeedback,
+  lockFeedback,
   onUpdateAuthInfo,
   onSetLock,
 }: TransferOutCardProps) {
@@ -105,6 +112,14 @@ export function TransferOutCard({
               : "他社への移管ができる状態です。移管の予定がなければ、ロックをかけておくことをおすすめします。"}
           </p>
 
+          {lockFeedback && (
+            <FeedbackBanner
+              tone={lockFeedback.tone}
+              message={lockFeedback.message}
+              unauthorized={lockFeedback.unauthorized}
+            />
+          )}
+
           {confirmingUnlock && (
             <ConfirmAction
               question="移管ロックを解除しますか？"
@@ -151,6 +166,14 @@ export function TransferOutCard({
             </p>
             {error && <p className="text-xs text-red-700">{error}</p>}
           </div>
+
+          {authInfoFeedback && (
+            <FeedbackBanner
+              tone={authInfoFeedback.tone}
+              message={authInfoFeedback.message}
+              unauthorized={authInfoFeedback.unauthorized}
+            />
+          )}
 
           <Button
             size="sm"
