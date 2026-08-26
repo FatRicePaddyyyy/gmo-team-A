@@ -42,6 +42,9 @@ const eslintConfig = [
       '.wrangler/**',
       'eslint.config.mjs',
       'worker-configuration.d.ts',
+      // scripts/ は開発用のスタンドアロン CLI (mock-registry.mjs 等)。
+      // アプリ本体の tsconfig project に含まれないため lint 対象外にする。
+      'scripts/**',
       // openapi-typescript が Swagger から生成する型定義。
       // 生成器の出力スタイル (index signature 等) を lint で強制するのは意味が無いので除外。
       'src/lib/bridge/generated/**',
