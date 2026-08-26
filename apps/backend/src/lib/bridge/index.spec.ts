@@ -294,3 +294,96 @@ describe("RegistryBridge.resolveRegistry: 片側 hello 失敗時の判定", () =
     expect(res.error).toBe("unsupported_tld");
   });
 });
+
+// ─── createContact ───────────────────────────────────────────────────────────
+
+describe("RegistryBridge.createContact: postalInfo 制約違反の吸収", () => {
+  // 実測: 許可名以外の氏名 / @example 以外のメール / cc: JP US 以外は
+  // HTTP 400 + result.code 2003 で返る。routes 側で 400 (入力不備) として扱えるように
+  // invalid_contact_payload コードにマップする。
+  test("[異常系] 400 + 2003 は invalid_contact_payload にマップされる", async () => {
+    stubRegistry(400, errEnvelope(2003, "Required parameter missing"));
+
+    const res = await RegistryBridge.createContact({
+      name: "Real Person",
+      email: "user@real.com",
+      registry: "kitaqsign",
+      env: mockEnv,
+    });
+
+    expect(res.success).toBe(false);
+    expect(res.error).toBe("invalid_contact_payload");
+  });
+
+  test("[異常系] 409 はコンタクトID既存 (contact_id_conflict) のまま", async () => {
+    stubRegistry(409, errEnvelope(2302, "Object exists"));
+
+    const res = await RegistryBridge.createContact({
+      name: "Taro Test",
+      email: "taro.test@example.com",
+      registry: "kitaqsign",
+      env: mockEnv,
+    });
+
+    expect(res.error).toBe("contact_id_conflict");
+  });
+});
+
+// ─── transferAction (approve/reject/cancel) ──────────────────────────────────
+
+describe("RegistryBridge.transferApprove: 401/403/404/409 の意味分け", () => {
+  // 実測: API キー無効 → 401 + result.code 2200 "Authentication error"。
+  // これは backend 設定不備 = 運用エラー。ユーザーに "権限なし" と誤って伝えないよう
+  // invalid_registry_response に落とす (500 化して運用チームに気付かせる)。
+  test("[異常系] 401 は invalid_registry_response にマップされる (backend 設定不備扱い)", async () => {
+    stubRegistry(401, errEnvelope(2200, "Authentication error"));
+
+    const res = await RegistryBridge.transferApprove({
+      name: "example.com",
+      registry: "kitaqsign",
+      env: mockEnv,
+    });
+
+    expect(res.success).toBe(false);
+    expect(res.error).toBe("invalid_registry_response");
+  });
+
+  // 実測: ドメイン不在 → 404 + 2303 "Object does not exist"。
+  // ドメインは存在するが transfer 中でない → 409 + 2301 "Object not pending transfer"。
+  // ユーザー視点はどちらも「その移管申請は無い」なので transfer_not_found に集約する。
+  test("[異常系] 404 (ドメイン不在) → transfer_not_found", async () => {
+    stubRegistry(404, errEnvelope(2303, "Object does not exist"));
+
+    const res = await RegistryBridge.transferApprove({
+      name: "nope.com",
+      registry: "kitaqsign",
+      env: mockEnv,
+    });
+
+    expect(res.error).toBe("transfer_not_found");
+  });
+
+  test("[異常系] 409 (pending でない) → transfer_not_found", async () => {
+    stubRegistry(409, errEnvelope(2301, "Object not pending transfer"));
+
+    const res = await RegistryBridge.transferApprove({
+      name: "example.com",
+      registry: "kitaqsign",
+      env: mockEnv,
+    });
+
+    expect(res.error).toBe("transfer_not_found");
+  });
+
+  test("[異常系] 403 (sponsoring registrar 以外) → forbidden", async () => {
+    stubRegistry(403, errEnvelope(2201, "Authorization error"));
+
+    const res = await RegistryBridge.transferApprove({
+      name: "example.com",
+      registry: "kitaqsign",
+      env: mockEnv,
+    });
+
+    expect(res.error).toBe("forbidden");
+  });
+});

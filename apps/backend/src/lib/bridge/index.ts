@@ -244,6 +244,11 @@ export class RegistryBridge {
       });
       // 409 = コンタクトID既存（UUID衝突。極めて稀）
       if (response.status === 409) {return { success: false, data: null, error: "contact_id_conflict" };}
+      // 400 = postalInfo バリデーション違反 (実測: name/email/addr の許可値外)。
+      // レジストリは HTTP 400 + result.code 2003 "Required parameter missing" を返す。
+      // Swagger 定義には無いが、backend の user 情報が制約に合っていないケース (許可名以外の氏名や
+      // @example 以外のメール等) はここに落ちる。routes 側で 400 に落として原因を伝えられるようにする。
+      if (response.status === 400) {return { success: false, data: null, error: "invalid_contact_payload" };}
       if (error) {return { success: false, data: null, error: "contact_create_failed" };}
       if (data.result.code !== 1000) {return { success: false, data: null, error: "contact_create_failed" };}
       const returnedId = data.resData?.id ?? contactId;
@@ -544,10 +549,16 @@ export class RegistryBridge {
           : action === "reject"
           ? await client.POST("/api/v1/epp/domains/{name}/transfer/reject", { params: { path: { name } } })
           : await client.POST("/api/v1/epp/domains/{name}/transfer/cancel", { params: { path: { name } } });
-      // R5: approve/reject/cancel は authInfo を送らないので、401 は authInfo 不一致ではなく
-      // 「レジストリ認証失敗 = 権限不備」として forbidden にマップする。
-      if (response.status === 401) {return { success: false, data: null, error: "forbidden" };}
+      // approve/reject/cancel は authInfo を送らないので、実測でも 401 は
+      // 「API キー / レジストラ ID が無効」= backend 設定不備 = 運用エラー。
+      // ユーザーに "権限がない" と誤って伝えず、invalid_registry_response で 500 化して
+      // 運用チームがログで気付けるようにする (実測 401 の body: result.code 2200 "Authentication error")。
+      if (response.status === 401) {return { success: false, data: null, error: "invalid_registry_response" };}
+      // 403 は sponsoring registrar 以外の呼び出し (Kitaqsign Swagger 定義)。
       if (response.status === 403) {return { success: false, data: null, error: "forbidden" };}
+      // 404 は "対象ドメイン不在" (実測: result.code 2303 "Object does not exist")。
+      // 409 は "ドメインは存在するが pendingTransfer でない" (実測: result.code 2301 "Object not pending transfer")。
+      // どちらもユーザー視点では「その移管申請は無い」ので transfer_not_found に集約する。
       if (response.status === 404) {return { success: false, data: null, error: "transfer_not_found" };}
       if (response.status === 409) {return { success: false, data: null, error: "transfer_not_found" };}
       if (error) {return { success: false, data: null, error: "invalid_registry_response" };}
