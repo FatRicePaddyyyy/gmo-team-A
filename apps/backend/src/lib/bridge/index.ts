@@ -33,6 +33,48 @@ function extractResData<T>(
   return { success: true, data: body.resData, error: null };
 }
 
+// 「その状態ではその操作はできない」(EPP result.code 2304) を判定する。
+//
+// 実機は **HTTP 409 + result.code 2304** で返す（実測）。
+//   restore … `Domain xxx is not pending delete`
+//   delete  … `Domain xxx is pending delete`
+// ところが仕様書(issue #7)も Swagger も「HTTP 200 で 2304」と書いており、資料が実機と食い違う。
+//
+// openapi-fetch は HTTP が非 2xx だと body を error 側に入れるため、
+// `if (error)` で打ち切る前にここで拾わないと invalid_registry_response になり、
+// ハンドラが 500 を返してしまう（実際 restore と delete がそうなっていた）。
+// 資料どおり 200 + 2304 に戻っても拾えるよう、HTTP と result.code の両方を見る。
+// body には成功時の data と失敗時の error のどちらが来てもよい（HTTP により入る側が変わるため）。
+function isOperationProhibited(response: Response, body: unknown): boolean {
+  if (response.status === 409) {return true;}
+  if (typeof body !== "object" || body === null || !("result" in body)) {return false;}
+  const result = body.result;
+  if (typeof result !== "object" || result === null || !("code" in result)) {return false;}
+  return result.code === 2304;
+}
+
+// hello の resData から対応 TLD を取り出す。
+// レジストリごとに入れ物が違う（kitaqsign は resData.tlds、kitaqnic は resData.info.supportedTlds）。
+// 生成型は kitaqsign 側を代表にしているため kitaqnic の形は型に出てこない。
+// キャストで押し込むと実際の形と食い違ったときに気づけないので、`in` で存在を確かめながら降りる。
+function readSupportedTlds(resData: unknown): string[] | null {
+  const asStringArray = (value: unknown): string[] | null =>
+    Array.isArray(value) && value.every(v => typeof v === "string") ? value : null;
+
+  if (typeof resData !== "object" || resData === null) {return null;}
+
+  if ("tlds" in resData) {
+    const tlds = asStringArray(resData.tlds);
+    if (tlds) {return tlds;}
+  }
+  if ("info" in resData && typeof resData.info === "object" && resData.info !== null) {
+    if ("supportedTlds" in resData.info) {
+      return asStringArray(resData.info.supportedTlds);
+    }
+  }
+  return null;
+}
+
 export class RegistryBridge {
   // レジストリの疎通確認と対応TLD取得（認証不要のヘルスチェック）
   static async hello({
@@ -49,22 +91,12 @@ export class RegistryBridge {
       if (!extracted.success) {return extracted;}
       if (!extracted.data) {return { success: false, data: null, error: "invalid_registry_response" };}
 
-      // 対応 TLD の入れ物がレジストリごとに違う（実機で確認済み）。
-      //   kitaqsign: resData.tlds               = ["com","net","org","info"]
-      //   kitaqnic : resData.info.supportedTlds = ["xyz","online",...]（tlds は存在しない）
-      // 生成型は kitaqsign 側を代表にしているため kitaqnic の形は型に出てこない。
+      // 対応 TLD の入れ物はレジストリごとに違う（readSupportedTlds を参照）。
       // ここで吸収して、呼び出し側は常に tlds を見ればよい状態にする。
-      const resData = extracted.data as GreetingResponse & {
-        info?: { supportedTlds?: unknown };
-      };
-      const tlds = Array.isArray(resData.tlds)
-        ? resData.tlds
-        : Array.isArray(resData.info?.supportedTlds)
-          ? (resData.info.supportedTlds as string[])
-          : null;
+      const tlds = readSupportedTlds(extracted.data);
       if (!tlds) {return { success: false, data: null, error: "invalid_registry_response" };}
 
-      return { success: true, data: { ...resData, tlds }, error: null };
+      return { success: true, data: { ...extracted.data, tlds }, error: null };
     } catch (e) {
       console.error("RegistryBridge.hello error:", e);
       return { success: false, data: null, error: "network_error" };
@@ -338,17 +370,11 @@ export class RegistryBridge {
         params: { path: { name } },
       });
       if (response.status === 404) {return { success: false, data: null, error: "domain_not_found" };}
-
-      // restore と同じ。廃止できない状態（すでに pendingDelete 等）は 2304 だが、
-      // 実機は **HTTP 409 + 2304** で返す（実測: `Domain xxx is pending delete`）。
-      // 非 2xx だと openapi-fetch が body を error 側に入れるので、`if (error)` より前に拾う。
-      const conflictCode = (error as { result?: { code?: number } } | undefined)?.result?.code;
-      if (response.status === 409 || conflictCode === 2304) {
+      // すでに pendingDelete のドメインを再度廃止しようとした場合など
+      if (isOperationProhibited(response, error ?? data)) {
         return { success: false, data: null, error: "operation_prohibited" };
       }
-
       if (error) {return { success: false, data: null, error: "invalid_registry_response" };}
-      if (data.result.code === 2304) {return { success: false, data: null, error: "operation_prohibited" };}
       const extracted = extractResData(data);
       if (!extracted.success) {return extracted;}
       return { success: true, data: {}, error: null };
@@ -373,19 +399,11 @@ export class RegistryBridge {
       });
       if (response.status === 403) {return { success: false, data: null, error: "forbidden" };}
       if (response.status === 404) {return { success: false, data: null, error: "domain_not_found" };}
-
-      // pendingDelete でないドメインの復旧は 2304。
-      // Swagger の Responses は 200/403/404 しか載っていないが、実機は **HTTP 409 + 2304** で返す
-      // (実測: `Domain xxx is not pending delete`)。HTTP が非 2xx だと openapi-fetch は body を
-      // error 側に入れるので、下の `if (error)` より前に拾わないと invalid_registry_response になり
-      // ハンドラが 500 を返してしまう。仕様変更で 200 に戻っても拾えるよう、両方を見る。
-      const conflictCode = (error as { result?: { code?: number } } | undefined)?.result?.code;
-      if (response.status === 409 || conflictCode === 2304) {
+      // pendingDelete でないドメインを復旧しようとした場合など
+      if (isOperationProhibited(response, error ?? data)) {
         return { success: false, data: null, error: "operation_prohibited" };
       }
-
       if (error) {return { success: false, data: null, error: "invalid_registry_response" };}
-      if (data.result.code === 2304) {return { success: false, data: null, error: "operation_prohibited" };}
       const extracted = extractResData(data);
       if (!extracted.success) {return extracted;}
       return { success: true, data: {}, error: null };

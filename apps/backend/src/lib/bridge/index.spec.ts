@@ -116,6 +116,21 @@ describe("RegistryBridge.restore: 実機は 409 + 2304 を返す", () => {
     expect(res.error).toBe("operation_prohibited");
   });
 
+  // 409 の判定が効いていることの確認。
+  // 上の 409 テストはボディに 2304 が入っているため、HTTP の判定を消しても
+  // result.code 側で拾えてしまい「409 だから拾えた」ことを検証できない。
+  // ボディが読めない 409（プロキシが返す HTML など）でも拾えることをここで担保する。
+  test("[異常系] ボディが読めない 409 でも operation_prohibited", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () =>
+      new Response("<html>Conflict</html>", { status: 409, headers: { "Content-Type": "text/html" } }),
+    ));
+
+    const res = await RegistryBridge.restore({ name: "example.com", registry: "kitaqsign", env: mockEnv });
+
+    expect(res.success).toBe(false);
+    expect(res.error).toBe("operation_prohibited");
+  });
+
   test("[異常系] 404 はドメイン不在", async () => {
     stubRegistry(404, errEnvelope(2303, "Object does not exist"));
 
@@ -148,6 +163,26 @@ describe("RegistryBridge.delete: restore と同じく 409 + 2304", () => {
   // (`Domain xxx is pending delete`)。restore と同じ理由で 500 になっていた。
   test("[異常系] 409 + 2304 は operation_prohibited（500 にしない）", async () => {
     stubRegistry(409, errEnvelope(2304, "Object status prohibits operation"));
+
+    const res = await RegistryBridge.delete({ name: "example.com", registry: "kitaqsign", env: mockEnv });
+
+    expect(res.success).toBe(false);
+    expect(res.error).toBe("operation_prohibited");
+  });
+
+  test("[異常系] 仕様書どおり 200 + 2304 で来ても拾える", async () => {
+    stubRegistry(200, errEnvelope(2304, "Object status prohibits operation"));
+
+    const res = await RegistryBridge.delete({ name: "example.com", registry: "kitaqsign", env: mockEnv });
+
+    expect(res.success).toBe(false);
+    expect(res.error).toBe("operation_prohibited");
+  });
+
+  test("[異常系] ボディが読めない 409 でも operation_prohibited", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () =>
+      new Response("<html>Conflict</html>", { status: 409, headers: { "Content-Type": "text/html" } }),
+    ));
 
     const res = await RegistryBridge.delete({ name: "example.com", registry: "kitaqsign", env: mockEnv });
 

@@ -406,17 +406,20 @@ describe("結合: POST /api/v1/secure/domains/{id}/restore", () => {
       error: null,
     });
 
+  // 復旧の前提（pendingDelete のドメインが自分のもので、レジストリ側の復旧は成功する）を揃える。
+  // DB に何を書いたかを検証したいテストがあるので、updateStatus のスパイを返す。
   const mockRestoreDeps = () => {
     vi.spyOn(DomainRepository, "findById").mockResolvedValue({
       success: true, data: { ...mockDomainRow, status: "pendingDelete" }, error: null,
     });
-    vi.spyOn(DomainRepository, "updateStatus").mockResolvedValue({ success: true, data: undefined, error: null });
     vi.spyOn(RegistryBridge, "restore").mockResolvedValue({ success: true, data: {}, error: null });
+    return vi.spyOn(DomainRepository, "updateStatus")
+      .mockResolvedValue({ success: true, data: undefined, error: null });
   };
 
   test("[正常系] 復旧成功 → 200 + status=ok", async () => {
-    mockRestoreDeps();
-    mockInfo(["ok"]);
+    const updateSpy = mockRestoreDeps();
+    const infoSpy = mockInfo(["ok"]);
 
     const res = await restoreDomainRouteHandler.request(
       "/api/v1/secure/domains/dom-001/restore",
@@ -426,14 +429,18 @@ describe("結合: POST /api/v1/secure/domains/{id}/restore", () => {
     expect(res.status).toBe(200);
     const json = await res.json() as any;
     expect(json.data.status).toBe("ok");
+    expect(updateSpy).toHaveBeenCalledWith(expect.objectContaining({ status: "ok" }));
+    // 別のドメインやレジストリを問い合わせていないことも確かめる
+    expect(infoSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ name: mockDomainRow.name, registry: mockDomainRow.registry }),
+    );
   });
 
   // "ok" 決め打ちにせず、レジストリが返した値をそのまま反映することの確認。
   // pendingDelete から抜けていれば復旧は成功しているので、ok 以外でも 200 を返す。
   test("[正常系] レジストリが inactive を返せばそのまま反映される", async () => {
-    mockRestoreDeps();
+    const updateSpy = mockRestoreDeps();
     mockInfo(["inactive"]);
-    const updateSpy = vi.spyOn(DomainRepository, "updateStatus");
 
     const res = await restoreDomainRouteHandler.request(
       "/api/v1/secure/domains/dom-001/restore",
@@ -447,8 +454,8 @@ describe("結合: POST /api/v1/secure/domains/{id}/restore", () => {
   });
 
   // 復旧そのものは成功しているので、status を確認できなくても 200 を返す。
-  test("[正常系] info が失敗しても復旧は成功扱い（status は ok に倒す）", async () => {
-    mockRestoreDeps();
+  test("[異常系] info が失敗しても復旧は成功扱い（status は ok に倒す）", async () => {
+    const updateSpy = mockRestoreDeps();
     vi.spyOn(RegistryBridge, "info").mockResolvedValue({
       success: false, data: null, error: "network_error",
     });
@@ -461,14 +468,14 @@ describe("結合: POST /api/v1/secure/domains/{id}/restore", () => {
     expect(res.status).toBe(200);
     const json = await res.json() as any;
     expect(json.data.status).toBe("ok");
+    expect(updateSpy).toHaveBeenCalledWith(expect.objectContaining({ status: "ok" }));
   });
 
   // レジストリ側の反映が一瞬遅れて pendingDelete が返ることがある。
   // ここで DB に書き戻すと「復旧したのに廃止中」になるので巻き戻さない。
-  test("[正常系] info がまだ pendingDelete を返しても巻き戻さない", async () => {
-    mockRestoreDeps();
+  test("[異常系] info がまだ pendingDelete を返しても巻き戻さない", async () => {
+    const updateSpy = mockRestoreDeps();
     mockInfo(["pendingDelete"]);
-    const updateSpy = vi.spyOn(DomainRepository, "updateStatus");
 
     const res = await restoreDomainRouteHandler.request(
       "/api/v1/secure/domains/dom-001/restore",
@@ -478,13 +485,16 @@ describe("結合: POST /api/v1/secure/domains/{id}/restore", () => {
     expect(res.status).toBe(200);
     const json = await res.json() as any;
     expect(json.data.status).toBe("ok");
-    expect(updateSpy).not.toHaveBeenCalledWith(expect.objectContaining({ status: "pendingDelete" }));
+    // 「pendingDelete を書かない」だけだと updateStatus 自体が消えても通ってしまうので、
+    // 「ok を書いた」ことを正面から確かめる。
+    expect(updateSpy).toHaveBeenCalledWith(expect.objectContaining({ status: "ok" }));
   });
 
-  test("[異常系] Grace Period 終了 → 409 + ユーザー向けメッセージ", async () => {
-    vi.spyOn(DomainRepository, "findById").mockResolvedValue({
-      success: true, data: { ...mockDomainRow, status: "pendingDelete" }, error: null,
-    });
+  // レジストリが復旧を断るケース。実機で確認できたのは「pendingDelete でない」場合で、
+  // Grace Period 超過は猶予期間(kitaqnic は 45日)を待たないと再現できず未確認。
+  // どちらもレジストリからは同じ 2304 で返るため、bridge から先の扱いは共通。
+  test("[異常系] レジストリが復旧を断る（2304）→ 409 + ユーザー向けメッセージ", async () => {
+    mockRestoreDeps();
     vi.spyOn(RegistryBridge, "restore").mockResolvedValue({ success: false, data: null, error: "operation_prohibited" });
 
     const res = await restoreDomainRouteHandler.request(
@@ -498,9 +508,7 @@ describe("結合: POST /api/v1/secure/domains/{id}/restore", () => {
   });
 
   test("[異常系] 権限なし → 403 + ユーザー向けメッセージ", async () => {
-    vi.spyOn(DomainRepository, "findById").mockResolvedValue({
-      success: true, data: { ...mockDomainRow, status: "pendingDelete" }, error: null,
-    });
+    mockRestoreDeps();
     vi.spyOn(RegistryBridge, "restore").mockResolvedValue({ success: false, data: null, error: "forbidden" });
 
     const res = await restoreDomainRouteHandler.request(

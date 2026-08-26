@@ -533,6 +533,12 @@ export class DomainService {
       registry: domain.registry,
       env,
     });
+    if (!infoResult.success) {
+      // 復旧そのものは成功しているので処理は続ける。ただし status を確認できていないことは残す。
+      console.error(
+        `DomainService.restore: 復旧後の info を取得できなかったため status を "ok" として保存します: ${infoResult.error}`,
+      );
+    }
     const raw = infoResult.success
       ? pickPrimaryStatus(infoResult.data.status ?? [], "ok")
       : "ok";
