@@ -162,9 +162,6 @@ importers:
       '@eslint/js':
         specifier: ^9.39.5
         version: 9.39.5
-      '@playwright/test':
-        specifier: ^1.48.0
-        version: 1.62.1
       '@tailwindcss/postcss':
         specifier: 4.3.3
         version: 4.3.3
@@ -6207,6 +6204,7 @@ snapshots:
   '@playwright/test@1.62.1':
     dependencies:
       playwright: 1.62.1
+    optional: true
 
   '@poppinss/colors@4.1.6':
     dependencies:
@@ -8926,13 +8924,15 @@ snapshots:
     dependencies:
       find-up: 3.0.0
 
-  playwright-core@1.62.1: {}
+  playwright-core@1.62.1:
+    optional: true
 
   playwright@1.62.1:
     dependencies:
       playwright-core: 1.62.1
     optionalDependencies:
       fsevents: 2.3.2
+    optional: true
 
   pluralize@8.0.0: {}
 

@@ -98,10 +98,7 @@ const eslintConfig = [
       "**/.next/**", // より確実にNext.jsのビルドフォルダを無視
       "**/node_modules/**", // より確実にnode_modulesフォルダを無視
       "**/vitest.config.ts", // vitestの設定ファイルを無視
-      "**/playwright.config*.ts", // playwrightの設定ファイルを無視
       "next.config.ts", // next.config.tsを無視
-      "src/tests/e2e/global-setup.ts",
-      "**/playwright-report/**",
       "**/.open-next/**",
       "**/.wrangler/**",
       "**/.vinext/**",
