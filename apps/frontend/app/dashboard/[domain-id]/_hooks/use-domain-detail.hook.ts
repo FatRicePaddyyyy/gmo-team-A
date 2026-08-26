@@ -229,9 +229,16 @@ export function useDomainDetail(domainId: string, enabled: boolean) {
         "nameServers",
         { nameServers },
         "ネームサーバーを変更しました。反映まで最大で数時間かかることがあります。",
-        // 送った分がすべて反映されているか（レジストリ側で並び順が変わることはある）
-        (updated) =>
-          nameServers.every((ns) => (updated.nameservers ?? []).includes(ns)),
+        // 送った集合と一致するか。every だけだと台数を減らしたとき
+        // （[ns1, ns2] → [ns1]）に削除が効いていなくても通ってしまう。
+        // 並び順はレジストリ側で変わりうるので、集合として比べる。
+        (updated) => {
+          const after = new Set(updated.nameservers ?? []);
+          return (
+            after.size === nameServers.length &&
+            nameServers.every((ns) => after.has(ns))
+          );
+        },
       ),
     [update],
   );
