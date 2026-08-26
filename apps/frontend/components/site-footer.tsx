@@ -12,6 +12,7 @@ const footerLinks = [
       { label: "ドメインを検索する", href: "/search" },
       { label: "カートを見る", href: "/cart" },
       { label: "マイドメイン", href: "/dashboard" },
+      { label: "他社ドメインを移管する", href: "/transfer" },
     ],
   },
   {
@@ -24,7 +25,7 @@ const footerLinks = [
   },
 ];
 
-const preparingLinks = ["ドメイン移管", "レンタルサーバー", "SSL証明書", "お問い合わせ"];
+const preparingLinks = ["レンタルサーバー", "SSL証明書", "お問い合わせ"];
 
 export function SiteFooter() {
   return (
