@@ -11,7 +11,9 @@ const DomainSchema = z.object({
   id: z.string(),
   name: z.string(),
   registry: z.string(),
-  status: z.string(),           // DB上の主要ステータス（ok / pendingDelete / pendingTransfer）
+  // DB上の主要ステータス（ok / redemptionPeriod / pendingDelete / pendingTransfer）
+  // redemptionPeriod = 廃止したがまだ復旧できる、pendingDelete = 削除待ちで復旧できない
+  status: z.string(),
   expiresAt: z.string(),
   createdAt: z.string(),
   ownerUserId: z.string(),

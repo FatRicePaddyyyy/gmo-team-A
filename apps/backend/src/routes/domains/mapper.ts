@@ -17,10 +17,16 @@ export interface DomainResponse {
 
 // 詳細表示用（DB + レジストリの info 情報）
 export type DomainDetailResponse = DomainResponse & {
-  statuses: string[];             // Swagger status[] を全て保持
+  // レジストリの status[] をそのまま保持する。
+  // 「復旧できるか」はここに redemptionPeriod が入っているかで判断する。
+  // 廃止直後は pendingDelete と redemptionPeriod の両方が付き、45日を過ぎると
+  // redemptionPeriod が外れて pendingDelete だけが残る（＝復旧できない）。
+  statuses: string[];
   registrant: string;
   contacts: Record<string, string>;
   nameservers: string[];
+  // 実機（kitaqsign / kitaqnic）は RGP の情報を status[] 側に入れており、ここは空配列で返る。
+  // 復旧可否の判断に使わないこと（statuses を見る）。
   rgpStatus: string[];
   upDate: string | null;
   trDate: string | null;
