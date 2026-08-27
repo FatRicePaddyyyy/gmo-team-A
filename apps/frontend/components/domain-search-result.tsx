@@ -13,6 +13,11 @@ import {
 } from "@/components/ui/accordion";
 import { LearningNote } from "@/components/learning-note";
 import {
+  isMaintenanceError,
+  MAINTENANCE_TITLE,
+  maintenanceNoticeOf,
+} from "@/shared/lib/maintenance";
+import {
   checkEligibility,
   findTld,
   LIMITED_OFFER_NOTE,
@@ -68,6 +73,12 @@ interface DomainSearchResultProps {
    * 一覧の先頭に出して目印を付け、「診断で学んだこと」がそのまま次の操作につながるようにする。
    */
   recommendedTld?: string | null;
+  /**
+   * 空き確認ができなかった理由（バックエンドの文言）。
+   * レジストリのメンテナンス中かどうかで、利用者が取るべき行動が変わるため、
+   * 「一時的な問題」で片付けずに理由に応じて書き分ける。
+   */
+  unavailableReason?: string | null;
 }
 
 export function DomainSearchResult({
@@ -78,6 +89,7 @@ export function DomainSearchResult({
   purpose = null,
   onDeclarePurpose,
   recommendedTld = null,
+  unavailableReason = null,
 }: DomainSearchResultProps) {
   // 「なぜ選べないか」を開いている末尾。隠すのではなく、押したら理由を学べるようにする
   const [explainedTld, setExplainedTld] = useState<string | null>(null);
@@ -383,10 +395,14 @@ export function DomainSearchResult({
         <div className="mb-6 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3">
           <p className="flex items-start gap-2 text-sm font-bold text-amber-950">
             <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
-            空き状況を確認できませんでした
+            {isMaintenanceError(unavailableReason)
+              ? MAINTENANCE_TITLE
+              : "空き状況を確認できませんでした"}
           </p>
           <p className="mt-1 text-sm leading-relaxed text-amber-950">
-            通信状況やレジストリ側の一時的な問題により確認できませんでした。実際には取得できる可能性があります。時間をおいて再検索してください。
+            {isMaintenanceError(unavailableReason)
+              ? `${maintenanceNoticeOf("search")}これらのドメインが取得できないという意味ではありません。`
+              : "通信状況やレジストリ側の一時的な問題により確認できませんでした。実際には取得できる可能性があります。時間をおいて再検索してください。"}
           </p>
           <ul className="mt-2 space-y-1">
             {checkFailed.map((result) => (

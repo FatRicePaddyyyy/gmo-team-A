@@ -18,6 +18,7 @@ export function useDomainSearch() {
   const [results, setResults] = useState<DomainResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [unavailableReason, setUnavailableReason] = useState<string | null>(null);
 
   // 連打時に古いレスポンスが新しい結果を上書きしないよう、最新リクエストIDだけを採用する
   const latestRequestIdRef = useRef(0);
@@ -38,11 +39,15 @@ export function useDomainSearch() {
       }
       setLoading(true);
       setError(null);
+      setUnavailableReason(null);
 
       try {
-        const data = await searchDomains(value);
+        const outcome = await searchDomains(value);
         if (latestRequestIdRef.current !== requestId) return;
-        setResults(data);
+        setResults(outcome.results);
+        // 空き確認ができなかったときは理由をそのまま画面へ渡す。
+        // メンテナンス中かどうかで利用者の取るべき行動が変わるため。
+        setUnavailableReason(outcome.failureMessage);
       } catch (caught) {
         if (latestRequestIdRef.current !== requestId) return;
         console.error("Domain search error:", caught);
@@ -57,5 +62,5 @@ export function useDomainSearch() {
     [router],
   );
 
-  return { query, results, loading, error, search };
+  return { query, results, loading, error, unavailableReason, search };
 }

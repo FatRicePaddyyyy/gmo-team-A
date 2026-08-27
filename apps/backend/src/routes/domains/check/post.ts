@@ -1,4 +1,5 @@
 import { createRoute, z } from "@hono/zod-openapi";
+import { toUserMessage } from "../../../lib/error-messages";
 import { createOpenAPIHono } from "../../../lib/openapi-hono";
 import { DomainService } from "../service";
 
@@ -16,6 +17,8 @@ const DomainCheckItemSchema = z.object({
   avail: z.boolean(),
   /** 通信障害・レジストリ障害などで確認自体ができなかった */
   failed: z.boolean(),
+  // 確認できなかった理由。メンテナンス中かどうかで利用者の行動が変わるため返す。
+  reason: z.string().optional(),
 }).openapi("DomainCheckItem");
 
 const SuccessSchema = z.object({
@@ -38,5 +41,9 @@ const app = createOpenAPIHono();
 export const checkDomainRouteHandler = app.openapi(route, async (ctx) => {
   const { names } = ctx.req.valid("json");
   const results = await DomainService.checkBulk({ names, env: ctx.env });
-  return ctx.json({ success: true as const, data: { results }, error: null }, 200);
+  // 内部エラーコードをそのまま外に出さない（error-messages と同じ扱い）
+  const withMessages = results.map((item) =>
+    item.reason ? { ...item, reason: toUserMessage(item.reason) } : item,
+  );
+  return ctx.json({ success: true as const, data: { results: withMessages }, error: null }, 200);
 });
