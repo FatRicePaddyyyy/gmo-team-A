@@ -1,4 +1,4 @@
-import { and, desc, eq, ne } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import type { DBClient } from "../../lib/db";
 import { classifyDbError } from "../../lib/db-error";
 import { domains, transfers } from "../../lib/schema/general-schema";
@@ -16,9 +16,9 @@ export interface InboundPendingTransferRow {
   requestedAt: Date;
 }
 
-// losing 目線の「処理が済んだ移管」1 件。
-// 承認・却下すると pending 一覧から消えるが、誰かが自分のドメインを
-// 取りに来た事実は残したい。status を添えて、どう決着したかまで見せる。
+// losing 目線の「渡さずに終わった移管」1 件。
+// pending 一覧から消えても、誰かが取りに来た事実は残したい。
+// status を添えて、どう決着したかまで見せる。
 export interface InboundTransferHistoryRow extends InboundPendingTransferRow {
   status: string;
 }
@@ -76,14 +76,22 @@ export class DomainTransferRepository {
     }
   }
 
-  // 自分のドメインに対して来た移管申請のうち、処理が済んだもの。
+  // 自分のドメインに対して来た移管申請のうち、渡さずに終わったもの。
   //
-  // 承認・却下すると findInboundPendingByOwner から消えて、どこにも出なくなる。
-  // 「誰かが自分のドメインを取ろうとした」記録が追えないのは、
-  // 身に覚えのない申請が繰り返されていても気づけないということ。
+  // 却下・取消・期限切れで終わった申請は pending 一覧から消えるが、
+  // 「誰かが自分のドメインを取ろうとした」記録は残したい。
+  // 身に覚えのない申請が繰り返されていても気づけないため。
   //
-  // pending は別メソッドが返すので、ここでは除く（同じ申請が 2 か所に出ないように）。
-  // gaining 側の情報は pending 側と同じく含めない。
+  // 承認済み（clientApproved / serverApproved）は意図的に除く。理由は 2 つ。
+  //
+  // 1. 他レジストラへ渡した場合、transfers も domains も削除される
+  //    （TransferStatusRepository.commitApprovedAndDropDomain）。そもそも残らない。
+  // 2. 自社ユーザー間の移管では domains.ownerUserId が新しい持ち主に変わる。
+  //    この検索は ownerUserId で絞るので、渡した本人ではなく
+  //    「受け取った人」の履歴として出てしまう。身に覚えのない記録を見せることになる。
+  //
+  // 承認済みも残すには transfers に losing 側の識別子が要る（今は持っていない）。
+  // 履歴として正しく扱えるものだけを返す。
   static async findInboundHistoryByOwner({
     ownerUserId,
     db,
@@ -105,7 +113,12 @@ export class DomainTransferRepository {
         .innerJoin(domains, eq(transfers.domainId, domains.id))
         .where(
           and(
-            ne(transfers.status, "pendingTransfer"),
+            // 手元に残った決着だけ。承認済みは上のコメントのとおり除く。
+            inArray(transfers.status, [
+              "clientRejected",
+              "clientCancelled",
+              "expired",
+            ]),
             eq(domains.ownerUserId, ownerUserId),
           ),
         )

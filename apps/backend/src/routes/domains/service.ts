@@ -657,8 +657,8 @@ export class DomainService {
     };
   }
 
-  // 自分のドメインに来た移管申請のうち、処理が済んだもの。
-  // 承認・却下すると pending 一覧から消えるため、これが無いと
+  // 自分のドメインに来た移管申請のうち、渡さずに終わったもの。
+  // 決着すると pending 一覧から消えるため、これが無いと
   // 「誰かが取りに来た」記録がどこにも残らない。
   static async listInboundTransferHistory({
     userId,

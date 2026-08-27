@@ -756,9 +756,9 @@ describe("結合: 詳細に登録者の氏名を載せる", () => {
 });
 
 describe("結合: 渡す側の移管履歴", () => {
-  // 承認・却下すると pending 一覧から消えてどこにも出なくなっていた。
+  // 決着すると pending 一覧から消えてどこにも出なくなっていた。
   // 「誰かが自分のドメインを取ろうとした」記録が追えないのはセキュリティ上まずい。
-  test("[正常系] 処理が済んだ申請が status 付きで返る", async () => {
+  test("[正常系] 渡さずに終わった申請が status 付きで返る", async () => {
     vi.spyOn(DomainTransferRepository, "findInboundHistoryByOwner").mockResolvedValue({
       success: true,
       data: [

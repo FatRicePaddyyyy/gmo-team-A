@@ -4,11 +4,14 @@ import { toUserMessage } from "../../../lib/error-messages";
 import { createOpenAPIHono } from "../../../lib/openapi-hono";
 import { DomainService } from "../service";
 
-// losing (現オーナー) 目線: 自分のドメインに来た移管申請のうち、処理が済んだもの。
+// losing (現オーナー) 目線: 自分のドメインに来た移管申請のうち、渡さずに終わったもの。
 //
-// pending-inbound-transfers は承認・却下すると一覧から消えるため、
-// これが無いと「誰かが自分のドメインを取ろうとした」記録がどこにも残らない。
+// pending-inbound-transfers は決着すると一覧から消えるため、これが無いと
+// 「誰かが自分のドメインを取ろうとした」記録がどこにも残らない。
 // 身に覚えのない申請が繰り返されていても気づけないので、履歴として残す。
+//
+// 承認済みは含まない (repository のコメント参照)。渡したあとは
+// ドメインごと手元から消えるか、所有者が変わって別人の履歴になってしまうため。
 //
 // gainingUserId は含めない (pending 側と同じ方針: 情報漏洩防止)。
 const InboundTransferHistorySchema = z.object({
@@ -17,7 +20,7 @@ const InboundTransferHistorySchema = z.object({
   domainName: z.string(),
   registry: z.enum(["kitaqsign", "kitaqnic"]),
   requestedAt: z.string(),
-  // clientApproved / clientRejected / serverApproved / clientCancelled / expired
+  // clientRejected / clientCancelled / expired
   status: z.string(),
 }).openapi("InboundTransferHistory");
 
