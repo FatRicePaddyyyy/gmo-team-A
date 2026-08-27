@@ -94,6 +94,21 @@ export function canUpdateSettings(status: string): boolean {
   return !isDeleted(status) && !status.startsWith("pending");
 }
 
+/** 一覧の絞り込み用の3分類（issue #83）。ロック中・利用停止中は「使えるもの」に含める */
+export type DomainStatusCategory = "usable" | "pending" | "deleted";
+
+export function domainStatusCategoryOf(status: string): DomainStatusCategory {
+  if (isDeleted(status)) return "deleted";
+  if (status.startsWith("pending")) return "pending";
+  return "usable";
+}
+
+export const DOMAIN_STATUS_CATEGORY_LABELS: Record<DomainStatusCategory, string> = {
+  usable: "使えるもの",
+  pending: "手続き中",
+  deleted: "廃止済み",
+};
+
 
 /**
  * 廃止したドメインが復旧できなくなるまでの残り日数。
