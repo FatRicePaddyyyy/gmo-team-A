@@ -2,6 +2,8 @@ import { TransferStatusRepository } from "../../domains/transfer/repository";
 import { RegistryBridge } from "../../lib/bridge";
 import type { Registry } from "../../lib/bridge/types";
 import type { DBClient } from "../../lib/db";
+import { toUserMessage } from "../../lib/error-messages";
+import { isValidFqdn } from "../../lib/registry-policy";
 import type { Result } from "../../types/result";
 import { DomainMapper   } from "./mapper";
 import type {DomainDetailResponse, DomainResponse} from "./mapper";
@@ -50,10 +52,34 @@ function pickPrimaryStatus(statuses: string[], fallback: string): string {
 }
 
 export interface DomainCheckItem {
+  /**
+   * 確認できなかった理由（`failed: true` のときだけ入る）。
+   *
+   * これまで理由を捨てていたため、レジストリのメンテナンス中でも画面には
+   * 「一時的な問題」としか出せず、利用者は何度も検索し直すことになっていた。
+   * 内部エラーコード（registry_maintenance など）をそのまま載せず、
+   * ハンドラで日本語に変換してから返す。
+   */
+  reason?: string;
   name: string;
   avail: boolean;
   /** 通信障害・レジストリ障害などで確認自体ができなかった */
   failed: boolean;
+}
+
+/**
+ * レジストリに届かなかった（＝相手側の都合）エラーかどうか。
+ *
+ * これらは「このドメインが変」なのではなく「いま問い合わせられない」だけなので、
+ * 手元にある情報を返す判断ができる。ドメイン不在や権限エラーとは扱いを分ける。
+ */
+function isRegistryUnreachable(error: string): boolean {
+  const code = error.split(":")[0]?.trim();
+  return (
+    code === "registry_maintenance" ||
+    code === "network_error" ||
+    code === "invalid_registry_response"
+  );
 }
 
 export class DomainService {
@@ -64,15 +90,22 @@ export class DomainService {
    * TLD_CATALOG 全件を確認すると通信回数が膨らんでいた。ここでは hello を1回ずつだけ呼び、
    * 名前を registry ごとにグルーピングしてから、registry ごとに1回の check にまとめる。
    */
-  // 項目ごとに avail/failed を持つため、この処理自体が全体として失敗することはない
-  // （Result<T> でラップしない。呼び出し側は常に results をそのまま使える）。
+  // レジストリ由来の失敗は項目ごとの avail/failed で表す。一方、名前の形式が不正なケースは
+  // 項目に載せると「すでに使われています」と誤って見えてしまうため、処理全体の失敗として返す
+  // （Issue #76。avail/failed の2フラグには「そもそも不正な名前」を表す状態が無い）。
   static async checkBulk({
     names,
     env,
   }: {
     names: string[];
     env: CloudflareBindings;
-  }): Promise<DomainCheckItem[]> {
+  }): Promise<Result<DomainCheckItem[]>> {
+    // Issue #76: 形式は Zod でも検証しているが、service 層でも先に見る（transfers と同じ二段構え）。
+    // handler を経由しない呼び出しが将来入っても、レジストリへ送らずここで止められる。
+    if (names.some(name => !isValidFqdn(name.trim().toLowerCase()))) {
+      return { success: false, data: null, error: "invalid_domain_name" };
+    }
+
     const [ks, kn] = await Promise.all([
       RegistryBridge.hello({ registry: "kitaqsign", env }),
       RegistryBridge.hello({ registry: "kitaqnic", env }),
@@ -102,7 +135,12 @@ export class DomainService {
         groups.kitaqnic.push(name);
       } else if (!ks.success || !kn.success) {
         // 片方でも hello に失敗している場合は「非対応」と断定できない（疎通エラーの可能性）
-        results.push({ name, avail: false, failed: true });
+        results.push({
+          name,
+          avail: false,
+          failed: true,
+          reason: (ks.success ? kn.error : ks.error) ?? undefined,
+        });
       } else {
         // 両方 hello 成功 + どちらの対応TLDにも無い → 非対応TLDとして確定（障害ではない）
         results.push({ name, avail: false, failed: false });
@@ -114,7 +152,9 @@ export class DomainService {
       if (groupNames.length === 0) {continue;}
       const checkResult = await RegistryBridge.check({ names: groupNames, registry, env });
       if (!checkResult.success) {
-        for (const name of groupNames) {results.push({ name, avail: false, failed: true });}
+        for (const name of groupNames) {
+          results.push({ name, avail: false, failed: true, reason: checkResult.error });
+        }
         continue;
       }
       for (const name of groupNames) {
@@ -123,7 +163,7 @@ export class DomainService {
       }
     }
 
-    return results;
+    return { success: true, data: results, error: null };
   }
 
   static async create({
@@ -143,6 +183,12 @@ export class DomainService {
     db: DBClient;
     env: CloudflareBindings;
   }): Promise<Result<DomainResponse>> {
+    // Issue #76: FQDN 形式は Zod でも検証しているが、service 層でも念のためチェックする
+    // (transfers と同じ二段構え)。handler を経由しない呼び出しが将来入っても弾けるようにする。
+    if (!isValidFqdn(name.trim().toLowerCase())) {
+      return { success: false, data: null, error: "invalid_domain_name" };
+    }
+
     // 1. 疎通確認: レジストリの hello を叩き、認証ヘッダ・応答・TLD 対応を確認する。
     const helloResult = await RegistryBridge.hello({ registry, env });
     if (!helloResult.success) {return helloResult;}
@@ -236,7 +282,26 @@ export class DomainService {
     const domain = domainResult.data;
 
     const infoResult = await RegistryBridge.info({ name: domain.name, registry: domain.registry, env });
-    if (!infoResult.success) {return infoResult;}
+    if (!infoResult.success) {
+      // レジストリが落ちていても、ドメイン名・有効期限・状態は自社 DB にある。
+      // ここで打ち切ると詳細ページの中身が丸ごと消えるので、DB の分だけ返す。
+      // 「取得できなかった」ことは registryAvailable: false で伝える。
+      //
+      // ただし通信できないこと自体が異常なケース（認証切れ・不正なドメイン）は
+      // そのまま失敗として返す。メンテナンス・疎通不良だけを対象にする。
+      if (isRegistryUnreachable(infoResult.error)) {
+        console.warn(`DomainService.info: registry unreachable (${infoResult.error}); returning DB-only detail for ${domain.name}`);
+        return {
+          success: true,
+          data: DomainMapper.toDetailResponseWithoutRegistry(
+            domain,
+            toUserMessage(infoResult.error),
+          ),
+          error: null,
+        };
+      }
+      return infoResult;
+    }
 
     // exDate は Swagger 上 ISO8601 文字列だが、レジストリ実装によっては非 ISO を返しうる。
     // Invalid Date のまま DB に流すと NaN epoch で保存されるので明示的に検証する。

@@ -60,6 +60,7 @@ export function LifecycleCard({
 
         {feedback && (
           <FeedbackBanner
+              context="lifecycle"
             tone={feedback.tone}
             message={feedback.message}
             unauthorized={feedback.unauthorized}

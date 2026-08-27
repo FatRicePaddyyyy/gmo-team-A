@@ -1,21 +1,16 @@
 import { createRoute, z } from "@hono/zod-openapi";
 import { RegistryBridge } from "../../lib/bridge";
 import { createDBClient } from "../../lib/db";
+import { domainNameSchema } from "../../lib/domain-name-schema";
 import { toUserMessage } from "../../lib/error-messages";
 import { createOpenAPIHono } from "../../lib/openapi-hono";
-import { FQDN_REGEX } from "../../lib/registry-policy";
 import { TransferService } from "./service";
 
 // Issue #25: registry は省略可能。省略時は TLD から自動判定する。
-// B15/NB-4: name は FQDN 形式に絞る (RFC 1035)。regex は lib/registry-policy に一元化。
+// B15/NB-4: name は FQDN 形式に絞る (RFC 1035)。
+// Issue #76: 検証は他のドメイン系エンドポイントと同じ domainNameSchema に統一。
 const RequestSchema = z.object({
-  name: z.string()
-    .trim()
-    .toLowerCase()
-    .min(1)
-    .max(253)
-    .regex(FQDN_REGEX, "FQDN 形式で入力してください")
-    .openapi({ example: "example.com" }),
+  name: domainNameSchema().openapi({ example: "example.com" }),
   authInfo: z.string().min(1).max(64).openapi({ example: "s3cr3t-pass" }),
   registry: z.enum(["kitaqsign", "kitaqnic"]).optional().openapi({
     example: "kitaqsign",

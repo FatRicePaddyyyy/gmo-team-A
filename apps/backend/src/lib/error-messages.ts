@@ -1,6 +1,8 @@
 // サービス・ブリッジ層の内部エラーコードをユーザー向けメッセージに変換する
 // 技術的なエラーコードをそのままAPIレスポンスに出さない
 
+import { DOMAIN_NAME_RULE_MESSAGE } from "./registry-policy";
+
 const errorMessages: Record<string, string> = {
   // ドメイン
   domain_not_found: "ドメインが見つかりませんでした。ドメイン名を確認してください。",
@@ -11,7 +13,7 @@ const errorMessages: Record<string, string> = {
   invalid_tld: "このドメインの拡張子（TLD）には対応していません。別のドメイン名をお試しください。",
   invalid_period: "登録期間の指定が正しくありません。1〜10年の範囲で指定してください。",
   invalid_expires_at: "有効期限の取得に失敗しました。しばらく待ってから再試行してください。",
-  invalid_domain_name: "ドメイン名の形式が正しくありません。TLD（.com など）を含めて入力してください。",
+  invalid_domain_name: `${DOMAIN_NAME_RULE_MESSAGE}末尾（.com など）まで含めて入力してください。`,
   unsupported_tld: "このドメインの拡張子（TLD）には対応していません。別のドメインをお試しください。",
 
   // 操作制限
@@ -54,6 +56,9 @@ const errorMessages: Record<string, string> = {
   ack_failed: "通知の処理中に問題が発生しました。しばらく待ってから再試行してください。",
   invalid_registry_response: "レジストリから予期しない応答がありました。しばらく待ってから再試行してください。",
   registry_error: "レジストリでエラーが発生しました。しばらく待ってから再試行してください。",
+  // メンテナンスは「予期しない応答」ではなく予期できる状態。原因と、利用者が
+  // 取れる行動（待つしかない）がはっきり分かる文言にする。
+  registry_maintenance: "ただいまドメイン登録機関がメンテナンス中のため、この操作は行えません。時間をおいてからお試しください。",
   referenced_object_not_found: "指定したネームサーバーやコンタクトがレジストリに登録されていません。内容を確認してください。",
   poll_failed: "通知の取得に失敗しました。しばらく待ってから再試行してください。",
 };
@@ -70,4 +75,12 @@ export function toUserMessage(error: string): string {
     return detail ? `${base} (理由: ${detail})` : base;
   }
   return errorMessages[error] ?? "予期しないエラーが発生しました。しばらく待ってから再試行してください。";
+}
+
+// Zod のバリデーション失敗を「どの入力がなぜ駄目なのか」まで伝えるための判定。
+// スキーマ側は message にこのファイルのエラーコード (例: "invalid_domain_name") を書き、
+// defaultHook がそれを拾って定型文言に変換する。
+// 詳細は lib/openapi-hono.ts の defaultHook を参照。
+export function hasUserMessage(code: string): boolean {
+  return code in errorMessages;
 }

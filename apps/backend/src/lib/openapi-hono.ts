@@ -1,6 +1,6 @@
 import { OpenAPIHono } from "@hono/zod-openapi";
 import type { Variables } from "../types";
-import { toUserMessage } from "./error-messages";
+import { hasUserMessage, toUserMessage } from "./error-messages";
 
 // アプリ標準の OpenAPIHono ファクトリ。
 // Zod バリデーション失敗時に統一的な日本語 ErrorSchema 形式を返す defaultHook を設定する。
@@ -19,13 +19,17 @@ export function createOpenAPIHono(): OpenAPIHono<{
   }>({
     defaultHook: (result, ctx) => {
       if (!result.success) {
-        // Zod issue 配列は console.error でログに残しつつ、ユーザーには汎用日本語で返す。
+        // Zod issue 配列は console.warn でログに残しつつ、ユーザーには日本語で返す。
         console.warn("Zod validation error:", JSON.stringify(result.error.issues));
+        // スキーマ側が message にエラーコード (例: "invalid_domain_name") を書いている場合は
+        // そのコードの定型文言を返す。汎用の「入力内容に誤りがあります」だけだと
+        // 「どの入力がなぜ駄目なのか」が伝わらないため (Issue #76)。
+        const coded = result.error.issues.find(issue => hasUserMessage(issue.message));
         return ctx.json(
           {
             success: false as const,
             data: null,
-            error: toUserMessage("validation_error"),
+            error: toUserMessage(coded?.message ?? "validation_error"),
           },
           400,
         );

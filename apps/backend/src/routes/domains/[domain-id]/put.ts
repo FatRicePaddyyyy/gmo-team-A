@@ -1,5 +1,6 @@
 import { createRoute, z } from "@hono/zod-openapi";
 import { createDBClient } from "../../../lib/db";
+import { domainNameSchema } from "../../../lib/domain-name-schema";
 import { toUserMessage } from "../../../lib/error-messages";
 import { createOpenAPIHono } from "../../../lib/openapi-hono";
 import { DomainService } from "../service";
@@ -9,7 +10,10 @@ const ParamsSchema = z.object({
 }).openapi("DomainUpdateParams");
 
 const RequestSchema = z.object({
-  nameServers: z.array(z.string()).optional(),
+  // Issue #76: ネームサーバーもホスト名なので、ドメイン名と同じ形式で検証する。
+  // ここだけ素通りだと、日本語や打ち間違いがレジストリまで届いて
+  // referenced_object_not_found など理由の分かりにくいエラーになる。
+  nameServers: z.array(domainNameSchema()).optional(),
   addStatuses: z.array(z.string()).optional(),
   remStatuses: z.array(z.string()).optional(),
   chg: z.object({
@@ -42,6 +46,9 @@ const DomainSchema = z.object({
   createdAt: z.string(),
   ownerUserId: z.string(),
   autoRenew: z.boolean(),
+  // GET と同じ形。update 直後は必ずレジストリに届いているので常に true。
+  registryAvailable: z.boolean(),
+  registryUnavailableReason: z.string().nullable(),
   statuses: z.array(z.string()),
   registrant: z.string(),
   contacts: z.record(z.string(), z.string()),

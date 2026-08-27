@@ -20,8 +20,14 @@ test.describe(
       await page.goto(`/?q=${name}`);
       await expect(page.getByRole("region", { name: "検索結果" })).toBeVisible();
 
-      // 「空き状況を確認できませんでした」見出しが出ている
-      await expect(page.getByText("空き状況を確認できませんでした")).toBeVisible();
+      // 確認できなかったことが伝わる見出しが出ている。
+      // 落ちている理由によって文言が変わる（メンテナンス中はそう明示する）ので、
+      // どちらかが出ていればよい。
+      await expect(
+        page
+          .getByText("空き状況を確認できませんでした")
+          .or(page.getByText("ドメイン登録機関がメンテナンス中です")),
+      ).toBeVisible();
 
       // kitaqnic 管轄 (.xyz) が失敗枠に載っている
       await expect(page.getByText(`${name}.xyz`)).toBeVisible();

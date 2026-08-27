@@ -3,6 +3,7 @@
 import { useCallback, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { DomainResult } from "@/components/domain-search-result";
+import { validateSearchInput } from "@/shared/lib/domain-name";
 import { searchDomains } from "../client";
 
 const SEARCH_ERROR_MESSAGE = "検索に失敗しました。時間をおいてもう一度お試しください。";
@@ -18,6 +19,7 @@ export function useDomainSearch() {
   const [results, setResults] = useState<DomainResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [unavailableReason, setUnavailableReason] = useState<string | null>(null);
 
   // 連打時に古いレスポンスが新しい結果を上書きしないよう、最新リクエストIDだけを採用する
   const latestRequestIdRef = useRef(0);
@@ -36,13 +38,28 @@ export function useDomainSearch() {
       if (options?.syncUrl !== false) {
         router.replace(`/?q=${encodeURIComponent(value)}`, { scroll: false });
       }
+      // 検索フォームは送信前に弾いているが、URL の ?q= から直接来る経路は
+      // フォームを通らない。ここでも止めないと日本語入力がレジストリまで届き、
+      // 422 が failed に化けて「通信に失敗しました」と出てしまう（Issue #76）。
+      const invalidReason = validateSearchInput(value);
+      if (invalidReason) {
+        setResults([]);
+        setError(invalidReason);
+        setLoading(false);
+        return;
+      }
+
       setLoading(true);
       setError(null);
+      setUnavailableReason(null);
 
       try {
-        const data = await searchDomains(value);
+        const outcome = await searchDomains(value);
         if (latestRequestIdRef.current !== requestId) return;
-        setResults(data);
+        setResults(outcome.results);
+        // 空き確認ができなかったときは理由をそのまま画面へ渡す。
+        // メンテナンス中かどうかで利用者の取るべき行動が変わるため。
+        setUnavailableReason(outcome.failureMessage);
       } catch (caught) {
         if (latestRequestIdRef.current !== requestId) return;
         console.error("Domain search error:", caught);
@@ -57,5 +74,5 @@ export function useDomainSearch() {
     [router],
   );
 
-  return { query, results, loading, error, search };
+  return { query, results, loading, error, unavailableReason, search };
 }

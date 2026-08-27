@@ -12,6 +12,8 @@ interface SearchResultSectionProps {
   results: DomainResult[];
   loading: boolean;
   error: string | null;
+  /** 空き確認ができなかった理由。メンテナンス中かどうかを書き分けるために使う */
+  unavailableReason?: string | null;
   /** 診断（/plan-finder）が勧めた末尾。結果の中で目印を付けるために使う */
   recommendedTld?: string | null;
 }
@@ -44,6 +46,7 @@ export function SearchResultSection({
   results,
   loading,
   error,
+  unavailableReason = null,
   recommendedTld = null,
 }: SearchResultSectionProps) {
   const router = useRouter();
@@ -54,7 +57,8 @@ export function SearchResultSection({
     <>
       {error && (
         <div className="mx-auto max-w-4xl px-4 pt-6">
-          <FeedbackBanner tone="error" message={error} />
+          <FeedbackBanner
+              context="search" tone="error" message={error} />
         </div>
       )}
 
@@ -66,7 +70,7 @@ export function SearchResultSection({
             : !hasSearched
               ? "まだ検索されていません"
               : error
-                ? "検索に失敗しました"
+                ? error
                 : `「${query}」の検索結果 ${results.filter((r) => r.available).length}件が取得可能です`}
         </p>
 
@@ -78,6 +82,7 @@ export function SearchResultSection({
             results={results}
             purpose={state.purpose}
             recommendedTld={recommendedTld}
+            unavailableReason={unavailableReason}
             onDeclarePurpose={setPurpose}
             onProceed={(domain) => {
               // 選んだ1件を購入フローに引き渡す。
