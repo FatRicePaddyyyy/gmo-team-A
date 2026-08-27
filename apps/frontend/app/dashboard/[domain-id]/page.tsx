@@ -122,7 +122,10 @@ export default function DomainDetailPage() {
                   {domain?.name ?? "ドメインの詳細"}
                 </h1>
                 <p className="mt-1 text-sm text-gray-600">
-                  ネームサーバーの変更と、他の
+                  <GlossaryTerm description={GLOSSARY.nameServer.description}>
+                    {GLOSSARY.nameServer.term}
+                  </GlossaryTerm>
+                  の変更と、他の
                   <GlossaryTerm
                     description={GLOSSARY.registrar.description}
                   >

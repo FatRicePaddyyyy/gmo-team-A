@@ -1,6 +1,8 @@
 import { CalendarClock, ShieldAlert, User } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { formatDate } from "@/shared/lib/format-date";
+import { GlossaryTerm } from "@/components/glossary-term";
+import { GLOSSARY } from "@/shared/lib/glossary";
 import { StatusBadge } from "../../_parts/status-badge";
 import {
   redemptionDaysLeft,
@@ -21,7 +23,8 @@ function Row({
   value,
   unavailable = false,
 }: {
-  label: string;
+  // 用語に説明を添えられるよう ReactNode を受ける（Issue #102）
+  label: React.ReactNode;
   value: React.ReactNode;
   /**
    * レジストリに問い合わせられていない項目。
@@ -139,7 +142,14 @@ export function DomainOverview({ domain }: DomainOverviewProps) {
               label="取得日"
               value={domain.createdAt ? formatDate(domain.createdAt) : null}
             />
-            <Row label="レジストリ" value={domain.registry || null} />
+            <Row
+              label={
+                <GlossaryTerm description={GLOSSARY.registry.description}>
+                  {GLOSSARY.registry.term}
+                </GlossaryTerm>
+              }
+              value={domain.registry || null}
+            />
             {/* 値は自社 DB 由来なので、レジストリが落ちていても出せる。
                 unavailable を渡さないのはそのため。 */}
             <Row

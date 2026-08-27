@@ -25,7 +25,11 @@ export function DomainList({ state }: DomainListProps) {
             取得済みのドメイン
           </h2>
           <p className="mt-1 text-sm text-gray-600">
-            それぞれのドメインを開くと、期限の延長・ネームサーバーの変更・他の
+            それぞれのドメインを開くと、期限の延長・
+            <GlossaryTerm description={GLOSSARY.nameServer.description}>
+              {GLOSSARY.nameServer.term}
+            </GlossaryTerm>
+            の変更・他の
             <GlossaryTerm
               description={GLOSSARY.registrar.description}
             >
