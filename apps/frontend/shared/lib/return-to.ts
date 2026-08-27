@@ -42,7 +42,6 @@ function isInternalPath(value: string): boolean {
 /** 戻り先のパスから、押す前に行き先が分かる文言を決める */
 function labelFor(path: string): string {
   if (path.startsWith("/search")) return "検索結果に戻る";
-  if (path.startsWith("/cart")) return "確認画面に戻る";
   if (path === "/" || path.startsWith("/?") || path.startsWith("/#")) return "トップに戻る";
   return "前のページに戻る";
 }

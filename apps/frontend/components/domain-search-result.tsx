@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Check, X, ShoppingCart, SearchX, AlertTriangle, Info, Sparkles } from "lucide-react";
+import { Check, X, ArrowRight, SearchX, AlertTriangle, Info, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
@@ -56,10 +56,9 @@ export interface DomainResult {
 interface DomainSearchResultProps {
   query: string;
   results: DomainResult[];
-  onAddCart?: (domain: DomainResult) => void;
-  /** すでにカートに入っているか。押した結果をその場で返すために使う */
-  isAdded?: (domain: DomainResult) => boolean;
-  /** 選ばれた用途。取得条件を満たさない末尾をカートに入れさせないために使う */
+  /** このドメインを選んで購入フローに進む */
+  onProceed?: (domain: DomainResult) => void;
+  /** 選ばれた用途。取得条件を満たさない末尾を選ばせないために使う */
   purpose?: Purpose | null;
   /** 「登記した会社として取得する」を選んだときに用途を切り替える */
   onDeclarePurpose?: (purpose: Purpose) => void;
@@ -73,8 +72,7 @@ interface DomainSearchResultProps {
 export function DomainSearchResult({
   query,
   results,
-  onAddCart,
-  isAdded,
+  onProceed,
   purpose = null,
   onDeclarePurpose,
   recommendedTld = null,
@@ -174,7 +172,6 @@ export function DomainSearchResult({
       {available.length > 0 && (
         <ul className="mb-6 space-y-3">
           {available.map((result) => {
-            const added = isAdded?.(result) ?? false;
             const info = findTld(result.tld);
             const verdict = info ? checkEligibility(info, purpose) : { allowed: true as const };
             const explaining = explainedTld === result.tld;
@@ -292,7 +289,7 @@ export function DomainSearchResult({
                     className="mt-3 rounded-lg border border-amber-300 bg-amber-50 px-3 py-3"
                   >
                     <p className="text-sm font-bold text-amber-950">
-                      {result.tld} はカートに入れられません
+                      {result.tld} は選べません
                     </p>
                     <p className="mt-1 text-sm leading-relaxed text-amber-950">{verdict.reason}</p>
                     {verdict.suggestion && (
@@ -333,22 +330,17 @@ export function DomainSearchResult({
                   {verdict.allowed ? (
                     <Button
                       className="h-11 min-w-11 px-4 text-white"
-                      style={{ background: added ? "var(--brand-dark)" : "var(--brand)" }}
-                      onClick={() => onAddCart?.(result)}
-                      disabled={added}
+                      style={{ background: "var(--brand)" }}
+                      onClick={() => onProceed?.(result)}
                     >
-                      {added ? (
-                        <Check className="mr-1 size-4" aria-hidden="true" />
-                      ) : (
-                        <ShoppingCart className="mr-1 size-4" aria-hidden="true" />
-                      )}
                       <span>
-                        {added ? "カートに追加済み" : "カートに追加する"}
+                        このドメインで進む
                         <span className="sr-only">
                           （{result.name}
                           {result.tld}）
                         </span>
                       </span>
+                      <ArrowRight className="ml-1 size-4" aria-hidden="true" />
                     </Button>
                   ) : (
                     <Button

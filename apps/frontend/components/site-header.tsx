@@ -3,11 +3,10 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
-import { Menu, X, ShoppingCart } from "lucide-react";
+import { Menu, X } from "lucide-react";
 import { useSession } from "@/auth-client";
 import { AccountMenu } from "@/components/account-menu";
 import { Button } from "@/components/ui/button";
-import { useCart } from "@/shared/hooks/use-cart.hook";
 
 /**
  * 実在するページだけをナビに載せる。
@@ -28,7 +27,6 @@ function isNavItemActive(pathname: string, href: string): boolean {
 export function SiteHeader() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const pathname = usePathname();
-  const { count } = useCart();
   const { data: session, isPending } = useSession();
   const signedInName = session?.user
     ? session.user.name || session.user.email
@@ -70,26 +68,9 @@ export function SiteHeader() {
 
         {/* Actions */}
         <div className="flex items-center gap-2">
-          {/* カートは主要導線なのでモバイルでもヘッダーに残す */}
-          <Link
-            href="/cart"
-            className="relative inline-flex h-11 min-w-11 items-center justify-center rounded-lg px-3 text-gray-700 transition-colors hover:bg-red-50 hover:text-[var(--brand)]"
-          >
-            <ShoppingCart className="size-5" aria-hidden="true" />
-            <span className="sr-only">カートを見る（{count}件）</span>
-            {count > 0 && (
-              <span
-                aria-hidden="true"
-                className="absolute right-1 top-1 flex size-4 items-center justify-center rounded-full text-[10px] font-bold text-white"
-                style={{ background: "var(--brand)" }}
-              >
-                {count}
-              </span>
-            )}
-          </Link>
           {/*
             幅を固定した枠に入れる。中身（判定中の空 → ログイン or ユーザー名）で
-            横幅が変わっても、枠の外にあるカートやナビが動かない。
+            横幅が変わっても、枠の外にあるナビが動かない。
             名前が長い場合は枠の中で truncate される。
           */}
           <div className="flex w-32 justify-end">
