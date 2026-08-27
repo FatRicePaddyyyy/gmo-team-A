@@ -19,14 +19,14 @@ const HOME_TARGET: ReturnTarget = { href: "/", label: "トップに戻る" };
 /** 検索結果 URL を組み立てる */
 export function searchHref(query: string | null | undefined): string {
   const trimmed = query?.trim();
-  return trimmed ? `/search?q=${encodeURIComponent(trimmed)}` : "/search";
+  return trimmed ? `/?q=${encodeURIComponent(trimmed)}` : "/";
 }
 
 /**
  * 寄り道リンクに付ける `?from=` 付きの URL を作る。
  *
  * @param to 寄り道先のパス（例: `/learn`）
- * @param from 戻り先のサイト内パス（例: `/search?q=manabi`）
+ * @param from 戻り先のサイト内パス（例: `/?q=manabi`）
  */
 export function withReturnTo(to: string, from: string): string {
   return `${to}?from=${encodeURIComponent(from)}`;
@@ -41,8 +41,8 @@ function isInternalPath(value: string): boolean {
 
 /** 戻り先のパスから、押す前に行き先が分かる文言を決める */
 function labelFor(path: string): string {
-  if (path.startsWith("/search")) return "検索結果に戻る";
-  if (path === "/" || path.startsWith("/?") || path.startsWith("/#")) return "トップに戻る";
+  if (path.startsWith("/?")) return "検索結果に戻る";
+  if (path === "/" || path.startsWith("/#")) return "トップに戻る";
   return "前のページに戻る";
 }
 

@@ -15,16 +15,9 @@ import { callApi } from "@/shared/lib/api-result";
 import { loadConfirmedOrder, type ConfirmedOrder } from "@/shared/lib/order-store";
 import { buildFlowSteps } from "@/shared/lib/progress-store";
 import { findTld } from "@/shared/lib/tld-catalog";
+import { PAYMENT_METHODS, type PaymentMethod } from "@/shared/lib/payment-methods";
 
 const PAYMENT_STEPS = buildFlowSteps("payment");
-
-type PaymentMethod = "credit-card" | "konbini" | "bank-transfer";
-
-const PAYMENT_METHODS: { id: PaymentMethod; label: string; description: string }[] = [
-  { id: "credit-card", label: "クレジットカード", description: "主要ブランドに対応（デモのため実際の入力欄はありません）" },
-  { id: "konbini", label: "コンビニ払い", description: "発行された番号でコンビニのレジからお支払い" },
-  { id: "bank-transfer", label: "銀行振込", description: "指定口座への振込確認後に手続きが進みます" },
-];
 
 /**
  * ログイン後のお支払い方法選択画面。
@@ -125,7 +118,7 @@ export default function CartPaymentPage() {
                   <GlossaryTerm
                     description={
                       findTld(item.tld)?.summary ??
-                      "インターネット上の住所（ドメイン名）の末尾につく「拡張子」です。"
+                      "インターネット上の住所（ドメイン名）の末尾につく「TLD」です。"
                     }
                   >
                     <span style={{ color: "var(--brand)" }}>{item.tld}</span>

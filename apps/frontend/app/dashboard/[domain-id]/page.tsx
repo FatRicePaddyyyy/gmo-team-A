@@ -178,6 +178,7 @@ export default function DomainDetailPage() {
                 <TabsContent value="renew" className="space-y-4">
                   {renewable ? (
                     <RenewCard
+                      domainName={domain.name}
                       expiresAt={domain.expiresAt}
                       disabled={busy}
                       running={running === "renew"}
