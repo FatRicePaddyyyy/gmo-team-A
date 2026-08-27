@@ -128,12 +128,14 @@ export function useInboundTransfers(
     onTick: () => refresh({ silent: true }),
   });
 
+  // 成功したら true を返す。呼び出し側が「承認が終わった」ことをフックできるように。
+  // 例: ドメイン詳細ページは true のときだけ完了画面を出す。
   const runAction = useCallback(
     async (
       transfer: InboundTransfer,
       kind: RunningTransferAction["kind"],
-    ) => {
-      if (running) return;
+    ): Promise<boolean> => {
+      if (running) return false;
       setRunning({ domainId: transfer.domainId, kind });
       setFeedback(null);
 
@@ -149,18 +151,20 @@ export function useInboundTransfers(
           message: result.error,
           unauthorized: result.unauthorized,
         });
-      } else {
-        setFeedback({
-          tone: "success",
-          message:
-            kind === "approve"
-              ? `${transfer.domainName} の移管を承認しました。まもなく移管先へ引き渡されます。`
-              : `${transfer.domainName} の移管を却下しました。ドメインは引き続きあなたのものです。`,
-        });
-        await refresh();
-        await onDomainsChanged();
+        setRunning(null);
+        return false;
       }
+      setFeedback({
+        tone: "success",
+        message:
+          kind === "approve"
+            ? `${transfer.domainName} の移管を承認しました。まもなく移管先へ引き渡されます。`
+            : `${transfer.domainName} の移管を却下しました。ドメインは引き続きあなたのものです。`,
+      });
+      await refresh();
+      await onDomainsChanged();
       setRunning(null);
+      return true;
     },
     [onDomainsChanged, refresh, running],
   );

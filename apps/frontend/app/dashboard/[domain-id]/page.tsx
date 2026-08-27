@@ -29,8 +29,10 @@ import { NameServerForm } from "./_components/name-server-form";
 import { IncomingTransferCard } from "./_components/incoming-transfer-card";
 import { LifecycleCard } from "./_components/lifecycle-card";
 import { RenewCard } from "./_components/renew-card";
+import { TransferApprovedCelebration } from "./_components/transfer-approved-celebration";
 import { TransferOutCard } from "./_components/transfer-out-card";
 import { useDomainDetail } from "./_hooks/use-domain-detail.hook";
+import type { InboundTransfer } from "../_hooks/use-inbound-transfers.hook";
 
 export default function DomainDetailPage() {
   const params = useParams<{ "domain-id": string }>();
@@ -45,6 +47,17 @@ export default function DomainDetailPage() {
   const { domain, loading, loadError, loadUnauthorized, running, feedback } =
     state;
   const [activeTab, setActiveTab] = useState<string>("overview");
+
+  // 承認直後の「完了しました！」画面を出しっぱなしにするための状態。
+  // 承認が完了すると refresh が動いて incoming が消えるため、消えた後もカードを
+  // 残しておく必要がある。ドメイン名をここに残しておいて、その間だけ完了画面を出す。
+  const [approvedDomainName, setApprovedDomainName] = useState<string | null>(null);
+
+  const handleApproveIncoming = async (transfer: InboundTransfer) => {
+    const ok = await inbound.approve(transfer);
+    // 成功したときだけ完了画面を出す。エラーは既存の FeedbackBanner が担う
+    if (ok) setApprovedDomainName(transfer.domainName);
+  };
 
   // レジストリに問い合わせられなかったとき（メンテナンス・疎通不良）。
   // DB の情報だけが返ってきているので、表示は続けつつ操作は止める。
@@ -263,14 +276,21 @@ export default function DomainDetailPage() {
                     />
                   )}
 
-                  {incoming && (
-                    <IncomingTransferCard
-                      transfer={incoming}
-                      running={inbound.running}
-                      feedback={inbound.feedback}
-                      onApprove={inbound.approve}
-                      onReject={inbound.reject}
+                  {approvedDomainName ? (
+                    <TransferApprovedCelebration
+                      domainName={approvedDomainName}
+                      onDismiss={() => setApprovedDomainName(null)}
                     />
+                  ) : (
+                    incoming && (
+                      <IncomingTransferCard
+                        transfer={incoming}
+                        running={inbound.running}
+                        feedback={inbound.feedback}
+                        onApprove={handleApproveIncoming}
+                        onReject={inbound.reject}
+                      />
+                    )
                   )}
 
                   {!settingsEditable && !incoming && !registryDown && (
