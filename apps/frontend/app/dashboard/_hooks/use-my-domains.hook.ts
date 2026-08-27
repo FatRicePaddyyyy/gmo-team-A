@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { $listDomains, type ListDomainsResponse } from "@/clients";
+import { $listDomains, $refreshMyDomains, type ListDomainsResponse } from "@/clients";
 import { callApi } from "@/shared/lib/api-result";
 
 type ListDomainsSuccess = Extract<ListDomainsResponse, { success: true }>;
@@ -26,6 +26,15 @@ export function useMyDomains(enabled: boolean) {
     setLoading(true);
     setLoadError(null);
     setLoadUnauthorized(false);
+    // 一覧を GET する前に、レジストリと突き合わせて消えているドメインを DB から掃除する。
+    // 「最新にする」を押すユーザーは「今の実態を反映してほしい」と思っているので、
+    // GET だけ叩いても古い DB の残骸が返ってしまう問題を防ぐ。
+    // 失敗は best effort — レジストリが落ちていれば掃除できないだけで、続く GET は普通に返す。
+    try {
+      await callApi($refreshMyDomains());
+    } catch {
+      // no-op: refresh は best effort
+    }
     const result = await callApi<MyDomain[]>($listDomains());
     if (!result.success) {
       // 直前の一覧は消さない。消すと「廃止しました」と「まだ取得していません」が同時に出る

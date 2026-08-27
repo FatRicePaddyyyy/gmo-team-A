@@ -284,6 +284,68 @@ export class DomainService {
     return { success: true, data: result.data.map(row => DomainMapper.toResponse(row)), error: null };
   }
 
+  /**
+   * 自分のドメインをまとめてレジストリと突き合わせ、消滅しているものを DB から掃除する。
+   *
+   * ユーザー操作 (マイドメインの「最新にする」ボタン) から明示的に叩かれることを想定した
+   * 副作用ありの同期処理。 GET /domains は DB のみの読み取りに保つため、この処理は
+   * 別の POST エンドポイントに切り出す。
+   *
+   * 対象: 呼び出し元 userId が owner のドメイン全件。
+   * 判定:
+   *  - RegistryBridge.info が domain_not_found (2303) を返せば「消滅した」→ deleteById
+   *  - 通信断・メンテ (registry_unreachable 系) は残す (一時障害で一覧が空になる方が困る)
+   *  - pendingTransfer は transfer-cron-poll に委ね、ここでは触らない (FK 制約でも失敗する)
+   *  - status 遷移や有効期限のずれはここでは同期しない — 詳細ページの info が担当する
+   */
+  static async refreshMyDomains({
+    userId,
+    db,
+    env,
+  }: {
+    userId: string;
+    db: DBClient;
+    env: CloudflareBindings;
+  }): Promise<Result<{ deleted: string[] }>> {
+    const listResult = await DomainRepository.listByUserId({ userId, db });
+    if (!listResult.success) {return listResult;}
+
+    const deleted: string[] = [];
+    await Promise.all(
+      listResult.data.map(async (row) => {
+        if (row.status === "pendingTransfer") {return;}
+
+        const infoResult = await RegistryBridge.info({
+          name: row.name,
+          registry: row.registry,
+          env,
+        });
+        if (infoResult.success) {return;}
+        if (isRegistryUnreachable(infoResult.error)) {return;}
+        if (infoResult.error !== "domain_not_found") {
+          console.warn(
+            `DomainService.refreshMyDomains: info failed for ${row.name}: ${infoResult.error}`,
+          );
+          return;
+        }
+
+        // レジストリで完全に消滅している → DB から掃除。
+        // pending 移管が残っていた場合の FK 失敗はログして残す (次の cron / 操作で解決)。
+        const delResult = await DomainRepository.deleteById({ id: row.id, db });
+        if (!delResult.success) {
+          console.warn(
+            `DomainService.refreshMyDomains: could not delete stale ${row.name} (likely FK):`,
+            delResult.error,
+          );
+          return;
+        }
+        deleted.push(row.name);
+      }),
+    );
+
+    return { success: true, data: { deleted }, error: null };
+  }
+
   static async info({
     domainId,
     userId,

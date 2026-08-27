@@ -21,6 +21,13 @@ export const $listDomains = client(
 ).secure.domains.$get;
 export type ListDomainsResponse = InferResponseType<typeof $listDomains>;
 
+// マイドメインの「最新にする」で叩く同期エンドポイント。
+// 消滅済みのドメインを DB から掃除する副作用があるため、GET とは別に POST で切っている。
+export const $refreshMyDomains = client(
+  process.env.NEXT_PUBLIC_BACKEND_URL!,
+).secure.domains.refresh.$post;
+export type RefreshMyDomainsResponse = InferResponseType<typeof $refreshMyDomains>;
+
 export const $createDomain = client(
   process.env.NEXT_PUBLIC_BACKEND_URL!,
 ).secure.domains.$post;

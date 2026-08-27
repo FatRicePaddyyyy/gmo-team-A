@@ -20,6 +20,7 @@ import { listDomainsRouteHandler } from "./routes/domains/get";
 import { listInboundTransferHistoryRouteHandler } from "./routes/domains/inbound-transfer-history/get";
 import { listInboundPendingTransfersRouteHandler } from "./routes/domains/pending-inbound-transfers/get";
 import { createDomainRouteHandler } from "./routes/domains/post";
+import { refreshDomainsRouteHandler } from "./routes/domains/refresh/post";
 import { cancelTransferRouteHandler } from "./routes/transfers/[transfer-id]/cancel/post";
 import { listTransfersRouteHandler } from "./routes/transfers/get";
 import { pollNowTransferRouteHandler } from "./routes/transfers/poll-now/post";
@@ -62,6 +63,8 @@ export const routes = app
   // /pending-inbound-transfers が {domain-id}="pending-inbound-transfers" として吸われる可能性がある。
   .route("/", listInboundPendingTransfersRouteHandler)
   .route("/", listInboundTransferHistoryRouteHandler)
+  // 静的パス /domains/refresh は {domain-id} より先。 pending-inbound-transfers と同じ理由。
+  .route("/", refreshDomainsRouteHandler)
   .route("/", getDomainRouteHandler)
   .route("/", renewDomainRouteHandler)
   .route("/", updateDomainRouteHandler)

@@ -154,6 +154,28 @@ export class DomainRepository {
   }
 
 
+  /**
+   * 物理削除。
+   * transfers.domain_id は ON DELETE restrict なので、pendingTransfer 行が残っている
+   * ドメインを削除しようとすると FK エラーで失敗する。呼び出し側 (service) が
+   * 「pending 移管があるドメインは削除対象外」の前提で使うこと。
+   */
+  static async deleteById({
+    id,
+    db,
+  }: {
+    id: string;
+    db: DBClient;
+  }): Promise<Result<void>> {
+    try {
+      await db.delete(domains).where(eq(domains.id, id));
+      return { success: true, data: undefined, error: null };
+    } catch (error) {
+      console.error("DomainRepository.deleteById error:", error);
+      return { success: false, data: null, error: classifyDbError(error) };
+    }
+  }
+
   static async listByUserId({
     userId,
     db,
