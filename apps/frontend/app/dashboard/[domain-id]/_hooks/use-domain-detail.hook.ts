@@ -29,6 +29,7 @@ export type RunningDetailAction =
   | "restore"
   | "nameServers"
   | "authInfo"
+  | "autoRenew"
   | null;
 
 /**
@@ -253,6 +254,19 @@ export function useDomainDetail(domainId: string, enabled: boolean) {
     [update],
   );
 
+  const updateAutoRenew = useCallback(
+    (autoRenew: boolean) =>
+      update(
+        "autoRenew",
+        { autoRenew },
+        autoRenew
+          ? "自動更新をオンにしました。"
+          : "自動更新をオフにしました。",
+        (updated) => updated.autoRenew === autoRenew,
+      ),
+    [update],
+  );
+
   return {
     domain,
     // enabled が後から true になる（セッション解決後）ケースを含めて、
@@ -268,5 +282,6 @@ export function useDomainDetail(domainId: string, enabled: boolean) {
     restore,
     updateNameServers,
     updateAuthInfo,
+    updateAutoRenew,
   };
 }
