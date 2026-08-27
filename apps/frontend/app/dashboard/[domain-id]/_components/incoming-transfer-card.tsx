@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { ConfirmAction } from "@/components/confirm-action";
 import { FeedbackBanner } from "@/components/feedback-banner";
+import { GlossaryTerm } from "@/components/glossary-term";
+import { GLOSSARY } from "@/shared/lib/glossary";
 import { formatDate } from "@/shared/lib/format-date";
 import type {
   DomainFeedback,
@@ -22,7 +24,7 @@ interface IncomingTransferCardProps {
 }
 
 /**
- * 「このドメインを他社へ渡してよいか」を決めるカード。
+ * 「このドメインを他のレジストラへ渡してよいか」を決めるカード。
  *
  * これまで一覧にしか無く、詳細ページを開いた人は
  * 「手続き中のため設定を変更できません」としか見えなかった。
@@ -50,7 +52,14 @@ export function IncomingTransferCard({
           />
           <div>
             <h2 className="font-heading text-lg font-bold text-gray-900">
-              他社への引き渡しを求められています
+              他の
+              <GlossaryTerm
+                description={GLOSSARY.registrar.description}
+                className="underline decoration-dotted underline-offset-4"
+              >
+                {GLOSSARY.registrar.term}
+              </GlossaryTerm>
+              への引き渡しを求められています
             </h2>
             <p className="mt-1 text-sm text-gray-600">
               このドメインを他の事業者へ移したい、という申請が {formatDate(transfer.requestedAt)} に届きました。

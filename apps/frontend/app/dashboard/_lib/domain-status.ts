@@ -10,8 +10,8 @@ export const DOMAIN_STATUS_LABELS: Record<string, string> = {
   ok: "使えます",
   pendingCreate: "登録手続き中",
   // 「移管」だけでは渡す側か受け取る側か分からない。自分のドメインに対して
-  // 起きている以上、必ず「他社へ渡す」側なのでそう書く。
-  pendingTransfer: "他社へ渡す手続き中",
+  // 起きている以上、必ず「他のレジストラへ渡す」側なのでそう書く。
+  pendingTransfer: "他のレジストラへ渡す手続き中",
   pendingUpdate: "変更手続き中",
   redemptionPeriod: "廃止済み（まだ戻せます）",
   pendingDelete: "削除待ち（もう戻せません）",
@@ -29,7 +29,7 @@ export const DOMAIN_STATUS_HINTS: Record<string, string> = {
   ok: "サイトやメールに使えます。",
   pendingCreate: "登録が終わるまで少し待ってください。",
   pendingTransfer:
-    "他社から引き渡しの申請が来ています。承認するか却下するか決めてください。放置すると自動で承認されます。",
+    "他のレジストラから引き渡しの申請が来ています。承認するか却下するか決めてください。放置すると自動で承認されます。",
   pendingUpdate: "変更が反映されるまで少し待ってください。",
   redemptionPeriod:
     "廃止しましたが、猶予期間のうちなら元に戻せます。過ぎると他の人が取得できるようになります。",
