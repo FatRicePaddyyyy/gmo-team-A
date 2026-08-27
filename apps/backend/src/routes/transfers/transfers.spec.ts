@@ -406,3 +406,60 @@ describe("移管フロー統合テスト（check → create → transfer request
     expect(cancelRes.status).toBe(200);
   });
 });
+
+// ─── メンテナンス中のステータスコード（Issue #87）────────────────────────────
+//
+// 移管の申請・取消もレジストリに届かないと成立しない。domains 側と同じく、
+// メンテナンス中は 500（内部異常）ではなく 503（一時的に使えない）を返す。
+describe("メンテナンス中は 503 を返す", () => {
+  const MAINTENANCE = "registry_maintenance";
+
+  test("[異常系] 移管申請は 503", async () => {
+    vi.spyOn(TransferService, "request").mockResolvedValue({
+      success: false, data: null, error: MAINTENANCE,
+    });
+
+    const res = await requestTransferRouteHandler.request(
+      "/api/v1/secure/transfers",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: "example.com", authInfo: "pass-1234", registry: "kitaqsign" }),
+      },
+      mockEnv,
+    );
+
+    expect(res.status).toBe(503);
+    const json = await res.json() as any;
+    expect(json.error).toContain("メンテナンス");
+  });
+
+  test("[異常系] 移管の取消は 503", async () => {
+    vi.spyOn(TransferService, "cancel").mockResolvedValue({
+      success: false, data: null, error: MAINTENANCE,
+    } as any);
+
+    const res = await cancelTransferRouteHandler.request(
+      "/api/v1/secure/transfers/tr-001/cancel",
+      { method: "POST" },
+      mockEnv,
+    );
+
+    expect(res.status).toBe(503);
+  });
+
+  // 503 にするのはメンテナンスだけ。本物の障害まで「待てば直る」に見せない。
+  test("[異常系] メンテナンス以外のエラーは従来どおり 500", async () => {
+    vi.spyOn(TransferService, "cancel").mockResolvedValue({
+      success: false, data: null, error: "registry_error",
+    } as any);
+
+    const res = await cancelTransferRouteHandler.request(
+      "/api/v1/secure/transfers/tr-001/cancel",
+      { method: "POST" },
+      mockEnv,
+    );
+
+    expect(res.status).toBe(500);
+  });
+});
