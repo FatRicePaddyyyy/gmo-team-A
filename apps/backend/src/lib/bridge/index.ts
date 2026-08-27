@@ -835,6 +835,14 @@ export class RegistryBridge {
           { params: { path: { name } }, body: { op: "request", authInfo } },
         ),
       );
+      // Issue #107: clientTransferProhibited などのロック中は operation_prohibited に写像する。
+      // 実測 (kitaqnic 2026-08-27): ロック付きドメインへの transferRequest は HTTP 500 + result.code 2304
+      // "Object status prohibits operation" で返る (Swagger 上は 200/404 想定)。
+      // renew / update / delete / restore と同じく、5xx でも body に 2304 が入っていれば
+      // 「一時障害」ではなく「フラグが立っているので永久に受理されない」と伝える。
+      if (isOperationProhibited(response, error ?? data)) {
+        return { success: false, data: null, error: "operation_prohibited" };
+      }
       // authInfo 不一致の伝え方がレジストリで違う (bridge で共通コードに集約する):
       //   Kitaqnic  … Swagger 定義通り HTTP 401
       //   Kitaqsign … 実測は HTTP 403 + result.code 2202 (Swagger は 202/404 のみ定義)、

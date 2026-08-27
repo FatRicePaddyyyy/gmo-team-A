@@ -79,6 +79,18 @@ export class TransferService {
       return { success: false, data: null, error: "domain_not_transferable" };
     }
 
+    // Issue #107: clientTransferProhibited の事前チェック。
+    // DB.status は pickPrimaryStatus が client 系フラグを丸めて "ok" にしているため、
+    // ロック中でもここまで到達してしまう。レジストリに投げれば 2304 で弾かれるが、
+    // その前に DB に pendingTransfer 排他行を INSERT する副作用があるうえ、
+    // ロールバック後の失敗メッセージが「一時障害」に見えて誤って再試行されてしまう。
+    // info で statuses[] を取って明示的にロック検出し、operation_prohibited で早期に返す。
+    const infoResult = await RegistryBridge.info({ name: normalizedName, registry, env });
+    if (!infoResult.success) {return infoResult;}
+    if (infoResult.data.status?.includes("clientTransferProhibited")) {
+      return { success: false, data: null, error: "operation_prohibited" };
+    }
+
     // NB-9: 並列 request 対策として、bridge を叩く前に DB に排他確保する。
     // partial UNIQUE index (domainId WHERE status='pendingTransfer') により、
     // 同時実行の 2 件目は DB insert 時に落ちる。

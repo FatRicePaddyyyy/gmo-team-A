@@ -9,13 +9,25 @@ const ParamsSchema = z.object({
   "domain-id": z.string().openapi({ example: "dom-123" }),
 }).openapi("DomainUpdateParams");
 
+// Issue #107: Swagger の DomainChangeSet.statuses は 5 種類の enum のみ許可。
+// `ok` / `inactive` / `pending*` は自動導出、`server*` 系はレジストリのみ設定可なので、
+// クライアント (会員 API) から指定できるのはこの 5 つだけに絞る。
+// 過去は `z.array(z.string())` で任意文字列を受けていた (Issue #107 の (2))。
+const ClientProhibitedStatus = z.enum([
+  "clientHold",
+  "clientTransferProhibited",
+  "clientUpdateProhibited",
+  "clientDeleteProhibited",
+  "clientRenewProhibited",
+]);
+
 const RequestSchema = z.object({
   // Issue #76: ネームサーバーもホスト名なので、ドメイン名と同じ形式で検証する。
   // ここだけ素通りだと、日本語や打ち間違いがレジストリまで届いて
   // referenced_object_not_found など理由の分かりにくいエラーになる。
   nameServers: z.array(domainNameSchema()).optional(),
-  addStatuses: z.array(z.string()).optional(),
-  remStatuses: z.array(z.string()).optional(),
+  addStatuses: z.array(ClientProhibitedStatus).optional(),
+  remStatuses: z.array(ClientProhibitedStatus).optional(),
   chg: z.object({
     registrant: z.string().optional(),
     // B18: Swagger 上 authInfo は 1〜64 文字

@@ -27,6 +27,9 @@ const errorMessages: Record<string, string> = {
   self_transfer: "自分が所有するドメインには移管申請できません。",
   transfer_already_pending: "このドメインには既に処理中の移管申請があります。取消してから再申請してください。",
   transfer_expired: "移管申請の待機時間が上限を超えました。もう一度申請してください。",
+  // Issue #107: clientTransferProhibited が付いているケース。
+  // 「一時障害」ではなくロックを外すまで永久に受理されないので、再試行を促さない文言にする。
+  transfer_prohibited: "このドメインは移管が禁止されています。設定画面で移管ロックを解除してから再度お試しください。",
   queue_unavailable: "システムが一時的に応答できません。しばらくしてから再試行してください。",
   invalid_domain_registry: "ドメイン名とレジストリの組み合わせが正しくありません。",
 

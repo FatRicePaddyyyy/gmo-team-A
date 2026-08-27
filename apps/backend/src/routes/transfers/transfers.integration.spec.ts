@@ -69,6 +69,18 @@ describe("結合: POST /api/v1/secure/transfers", () => {
     vi.spyOn(TransferDomainRepository, "findByName").mockResolvedValue({ success: true, data: otherOwnerDomain, error: null });
     vi.spyOn(TransferDomainRepository, "updateStatus").mockResolvedValue({ success: true, data: undefined, error: null });
     vi.spyOn(TransferRepository, "create").mockResolvedValue({ success: true, data: mockTransferRow, error: null });
+    // Issue #107: TransferService.request が bridge を叩く前に info で clientTransferProhibited を確認する。
+    // ここではロック無し (ok のみ) を返して先に進めさせる。
+    vi.spyOn(RegistryBridge, "info").mockResolvedValue({
+      success: true,
+      data: {
+        domain: "example.com", status: ["ok"], registrant: "C-0001",
+        contacts: {}, nameservers: [],
+        crDate: "2026-08-25T00:00:00.000Z", exDate: "2027-08-25T00:00:00.000Z",
+        rgpStatus: [],
+      },
+      error: null,
+    });
     vi.spyOn(RegistryBridge, "transferRequest").mockResolvedValue({
       success: true,
       data: { domain: "example.com", status: "pendingTransfer", gainingRegistrar: "R2", losingRegistrar: "R1" },
@@ -83,6 +95,41 @@ describe("結合: POST /api/v1/secure/transfers", () => {
     expect(res.status).toBe(202);
     const json = await res.json() as any;
     expect(json.data.status).toBe("pendingTransfer");
+  });
+
+  // Issue #107: clientTransferProhibited が付いているドメインへの移管申請。
+  // 現状の DB.status は pickPrimaryStatus が client 系フラグを丸めて "ok" にしているため
+  // ここまで到達してしまう。service が事前に info で statuses[] を確認して弾き、
+  // handler は 409 + transfer_prohibited のユーザーメッセージを返す。
+  test("[異常系] clientTransferProhibited が付いていたら 409 + 移管禁止メッセージ", async () => {
+    vi.spyOn(TransferDomainRepository, "findByName").mockResolvedValue({ success: true, data: otherOwnerDomain, error: null });
+    vi.spyOn(RegistryBridge, "info").mockResolvedValue({
+      success: true,
+      data: {
+        domain: "example.com",
+        // レジストリは ok と clientTransferProhibited を並べて返す (実測)
+        status: ["ok", "clientTransferProhibited"],
+        registrant: "C-0001",
+        contacts: {},
+        nameservers: [],
+        crDate: "2026-08-25T00:00:00.000Z",
+        exDate: "2027-08-25T00:00:00.000Z",
+        rgpStatus: [],
+      },
+      error: null,
+    });
+    // bridge の transferRequest が呼ばれてはいけない (事前チェックで弾くのが本テストの目的)
+    const transferRequestSpy = vi.spyOn(RegistryBridge, "transferRequest");
+
+    const res = await requestTransferRouteHandler.request(
+      "/api/v1/secure/transfers",
+      { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: "example.com", authInfo: "test-auth", registry: "kitaqsign" }) },
+      mockEnv,
+    );
+    expect(res.status).toBe(409);
+    const json = await res.json() as any;
+    expect(json.error).toContain("移管が禁止");
+    expect(transferRequestSpy).not.toHaveBeenCalled();
   });
 
   test("[異常系] pendingDelete ドメインは移管不可 → 409 + ユーザー向けメッセージ", async () => {
@@ -105,6 +152,17 @@ describe("結合: POST /api/v1/secure/transfers", () => {
     // NB-9 対応で bridge を叩く前に DB insert する順序に変わったので、create も mock する
     vi.spyOn(TransferRepository, "create").mockResolvedValue({ success: true, data: mockTransferRow, error: null });
     vi.spyOn(TransferRepository, "updateStatus").mockResolvedValue({ success: true, data: undefined, error: null });
+    // Issue #107: 事前 info チェック用。ロック無しで bridge の authInfo 判定まで進める。
+    vi.spyOn(RegistryBridge, "info").mockResolvedValue({
+      success: true,
+      data: {
+        domain: "example.com", status: ["ok"], registrant: "C-0001",
+        contacts: {}, nameservers: [],
+        crDate: "2026-08-25T00:00:00.000Z", exDate: "2027-08-25T00:00:00.000Z",
+        rgpStatus: [],
+      },
+      error: null,
+    });
     vi.spyOn(RegistryBridge, "transferRequest").mockResolvedValue({ success: false, data: null, error: "authInfo_mismatch" });
 
     const res = await requestTransferRouteHandler.request(
