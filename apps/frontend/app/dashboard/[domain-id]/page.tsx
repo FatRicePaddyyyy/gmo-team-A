@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
+import { useMemo, useState } from "react";
 import { useSession } from "@/auth-client";
 import { useInboundTransfers } from "../_hooks/use-inbound-transfers.hook";
 import { BackLink } from "@/components/back-link";
@@ -10,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { FeedbackBanner } from "@/components/feedback-banner";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   canDelete,
   canRenew,
@@ -18,6 +20,7 @@ import {
   statusHintOf,
 } from "../_lib/domain-status";
 import { DomainOverview } from "./_parts/domain-overview";
+import { TransferOutSteps, type TransferOutStepKey } from "./_parts/transfer-out-steps";
 import { NameServerForm } from "./_components/name-server-form";
 import { IncomingTransferCard } from "./_components/incoming-transfer-card";
 import { LifecycleCard } from "./_components/lifecycle-card";
@@ -38,6 +41,7 @@ export default function DomainDetailPage() {
   const incoming = inbound.transfers.find((t) => t.domainId === domainId) ?? null;
   const { domain, loading, loadError, loadUnauthorized, running, feedback } =
     state;
+  const [activeTab, setActiveTab] = useState<string>("overview");
 
   // レジストリに問い合わせられなかったとき（メンテナンス・疎通不良）。
   // DB の情報だけが返ってきているので、表示は続けつつ操作は止める。
@@ -55,6 +59,22 @@ export default function DomainDetailPage() {
   // メンテのたびに画面の形が変わると「機能が無くなった」と誤解されるため。
   const renewable = domain ? canRenew(domain.status) : false;
   const busy = running !== null;
+
+  // 他社へ渡すステップの現在位置。
+  //   - authInfo 未設定 → ① 発行
+  //   - authInfo 設定成功後・移管先申請前 → ② 移管先に伝える
+  //   - status が pendingTransfer → ③ 移管先が申請済み・承認待ち
+  //   - status が clientTransferProhibited 系や serverApproved は表示範囲外だが、
+  //     基本的に status="pendingTransfer" になるまでの間は ② で扱う
+  const transferOutStep: TransferOutStepKey = useMemo(() => {
+    if (!domain) return "issue";
+    if (domain.status === "pendingTransfer") return "wait";
+    // authInfoFeedback (成功) が出ている間はステップ②に進める
+    if (feedback?.source === "authInfo" && feedback.tone === "success") {
+      return "hand-over";
+    }
+    return "issue";
+  }, [domain, feedback]);
 
 
   if (isPending) {
@@ -140,88 +160,129 @@ export default function DomainDetailPage() {
             )}
 
             {domain && (
-              <>
-                <DomainOverview domain={domain} />
+              <Tabs
+                value={activeTab}
+                onValueChange={(v) => setActiveTab(String(v))}
+                className="gap-4"
+              >
+                {/*
+                  タブは 5 つ:
+                    - overview: 現在の状態 (dl 一覧)
+                    - renew:    有効期限を延ばす
+                    - ns:       ネームサーバー
+                    - transfer: 他社へ渡す (ステップインジケーター付き)
+                    - lifecycle: 廃止・復旧
+                */}
+                <TabsList className="h-auto w-full flex-wrap gap-1 sm:flex-nowrap">
+                  <TabsTrigger value="overview">現在の状態</TabsTrigger>
+                  <TabsTrigger value="renew">有効期限を延ばす</TabsTrigger>
+                  <TabsTrigger value="ns">ネームサーバー</TabsTrigger>
+                  <TabsTrigger value="transfer">他社へ渡す</TabsTrigger>
+                  <TabsTrigger value="lifecycle">廃止・復旧</TabsTrigger>
+                </TabsList>
 
-                {incoming && (
-                  <IncomingTransferCard
-                    transfer={incoming}
-                    running={inbound.running}
-                    feedback={inbound.feedback}
-                    onApprove={inbound.approve}
-                    onReject={inbound.reject}
-                  />
-                )}
+                <TabsContent value="overview" className="space-y-4">
+                  <DomainOverview domain={domain} />
+                </TabsContent>
 
-                {/* レジストリが落ちているときは理由が違うので、状態ヒントより先に出す */}
-                {registryDown && (
-                  /* 理由はバックエンドが返す。メンテナンスなら帯がそう出し、
-                     通信不良ならその文言のまま出る。こちらで決めつけない。 */
-                  <FeedbackBanner
-                    tone="error"
-                    context="detail"
-                    message={
-                      domain.registryUnavailableReason ??
-                      "レジストリから最新の情報を取得できませんでした。"
+                <TabsContent value="renew" className="space-y-4">
+                  {renewable ? (
+                    <RenewCard
+                      domainName={domain.name}
+                      expiresAt={domain.expiresAt}
+                      disabled={busy || registryDown}
+                      running={running === "renew"}
+                      feedback={feedback?.source === "renew" ? feedback : null}
+                      onRenew={state.renew}
+                    />
+                  ) : (
+                    <p className="rounded-lg border border-gray-200 bg-white p-4 text-sm text-gray-600">
+                      {statusHintOf(domain.status) ??
+                        "このドメインはいま延長できない状態です。"}
+                    </p>
+                  )}
+                </TabsContent>
+
+                <TabsContent value="ns" className="space-y-4">
+                  {!settingsEditable && !registryDown && (
+                    <p className="rounded-lg border border-gray-200 bg-white p-3 text-sm text-gray-600">
+                      {statusHintOf(domain.status) ??
+                        "このドメインはいま手続き中のため、設定を変更できません。"}
+                    </p>
+                  )}
+                  <NameServerForm
+                    current={domain.nameservers ?? []}
+                    unavailable={registryDown}
+                    disabled={!settingsEditable || busy}
+                    running={running === "nameServers"}
+                    feedback={
+                      feedback?.source === "nameServers" ? feedback : null
                     }
+                    onSubmit={state.updateNameServers}
                   />
-                )}
+                </TabsContent>
 
-                {!settingsEditable && !incoming && !registryDown && (
-                  <p className="rounded-lg border border-gray-200 bg-white p-3 text-sm text-gray-600">
-                    {statusHintOf(domain.status) ??
-                      "このドメインはいま手続き中のため、設定を変更できません。"}
-                  </p>
-                )}
+                <TabsContent value="transfer" className="space-y-4">
+                  <TransferOutSteps current={transferOutStep} />
 
-                {renewable && (
-                  <RenewCard
+                  {/* レジストリが落ちているときは理由が違うので、状態ヒントより先に出す */}
+                  {registryDown && (
+                    <FeedbackBanner
+                      tone="error"
+                      context="detail"
+                      message={
+                        domain.registryUnavailableReason ??
+                        "レジストリから最新の情報を取得できませんでした。"
+                      }
+                    />
+                  )}
+
+                  {incoming && (
+                    <IncomingTransferCard
+                      transfer={incoming}
+                      running={inbound.running}
+                      feedback={inbound.feedback}
+                      onApprove={inbound.approve}
+                      onReject={inbound.reject}
+                    />
+                  )}
+
+                  {!settingsEditable && !incoming && !registryDown && (
+                    <p className="rounded-lg border border-gray-200 bg-white p-3 text-sm text-gray-600">
+                      {statusHintOf(domain.status) ??
+                        "このドメインはいま手続き中のため、設定を変更できません。"}
+                    </p>
+                  )}
+
+                  <TransferOutCard
+                    disabled={!settingsEditable || busy}
+                    runningAuthInfo={running === "authInfo"}
+                    authInfoFeedback={
+                      feedback?.source === "authInfo" ? feedback : null
+                    }
+                    onUpdateAuthInfo={state.updateAuthInfo}
+                  />
+                </TabsContent>
+
+                <TabsContent value="lifecycle" className="space-y-4">
+                  <LifecycleCard
                     domainName={domain.name}
-                    expiresAt={domain.expiresAt}
+                    canDelete={canDelete(domain.status)}
+                    canRestore={canRestore(domain.status)}
                     disabled={busy || registryDown}
-                    running={running === "renew"}
-                    feedback={feedback?.source === "renew" ? feedback : null}
-                    onRenew={state.renew}
+                    runningDelete={running === "delete"}
+                    runningRestore={running === "restore"}
+                    feedback={
+                      feedback?.source === "delete" ||
+                      feedback?.source === "restore"
+                        ? feedback
+                        : null
+                    }
+                    onDelete={state.remove}
+                    onRestore={state.restore}
                   />
-                )}
-
-                <NameServerForm
-                  current={domain.nameservers ?? []}
-                  unavailable={registryDown}
-                  disabled={!settingsEditable || busy}
-                  running={running === "nameServers"}
-                  feedback={
-                    feedback?.source === "nameServers" ? feedback : null
-                  }
-                  onSubmit={state.updateNameServers}
-                />
-
-                <TransferOutCard
-                  disabled={!settingsEditable || busy}
-                  runningAuthInfo={running === "authInfo"}
-                  authInfoFeedback={
-                    feedback?.source === "authInfo" ? feedback : null
-                  }
-                  onUpdateAuthInfo={state.updateAuthInfo}
-                />
-
-                <LifecycleCard
-                  domainName={domain.name}
-                  canDelete={canDelete(domain.status)}
-                  canRestore={canRestore(domain.status)}
-                  disabled={busy || registryDown}
-                  runningDelete={running === "delete"}
-                  runningRestore={running === "restore"}
-                  feedback={
-                    feedback?.source === "delete" ||
-                    feedback?.source === "restore"
-                      ? feedback
-                      : null
-                  }
-                  onDelete={state.remove}
-                  onRestore={state.restore}
-                />
-              </>
+                </TabsContent>
+              </Tabs>
             )}
           </>
         )}
