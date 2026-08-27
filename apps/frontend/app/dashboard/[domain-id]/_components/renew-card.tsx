@@ -7,7 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { FeedbackBanner } from "@/components/feedback-banner";
 import { formatDate } from "@/shared/lib/format-date";
 import { formatYen, matchKnownTld } from "@/shared/lib/tld-catalog";
-import { PAYMENT_METHODS, type PaymentMethod } from "@/shared/lib/payment-methods";
+import { PAYMENT_METHOD } from "@/shared/lib/payment-methods";
 import {
   MAX_YEARS_FROM_NOW,
   renewableYears,
@@ -38,9 +38,8 @@ export function RenewCard({
   onRenew,
 }: RenewCardProps) {
   const [years, setYears] = useState(1);
-  // お支払い方法の選択を挟んでから実際に延長する（選ぶ→お支払い方法→確定）
+  // 支払い内容の確認を挟んでから実際に延長する（年数を選ぶ→内容の確認→確定）
   const [phase, setPhase] = useState<"select" | "payment">("select");
-  const [method, setMethod] = useState<PaymentMethod>("credit-card");
   // レジストリの上限（現在 + 10 年）を超える年数は最初から出さない
   const options = renewableYears(expiresAt);
   const capped = options.length === 0;
@@ -50,7 +49,7 @@ export function RenewCard({
 
   const handleConfirm = async () => {
     const success = await onRenew(years);
-    // 成功したら期間選択に戻す。失敗時はお支払い方法を選び直さず、そのまま再試行できるようにする
+    // 成功したら期間選択に戻す。失敗時は確認画面のまま、そのまま再試行できるようにする
     if (success) setPhase("select");
   };
 
@@ -122,29 +121,13 @@ export function RenewCard({
               （税込）
             </p>
 
-            <fieldset className="space-y-2 rounded-lg border border-border p-3">
-              <legend className="px-1 text-xs font-bold text-gray-900">お支払い方法</legend>
-              {PAYMENT_METHODS.map((option) => (
-                <label
-                  key={option.id}
-                  className="flex items-start gap-3 rounded-lg border border-border px-3 py-2 text-sm text-gray-900 has-[:checked]:border-[var(--brand)] has-[:checked]:bg-[var(--brand-light)]"
-                >
-                  <input
-                    type="radio"
-                    name="renew-payment-method"
-                    value={option.id}
-                    checked={method === option.id}
-                    disabled={disabled}
-                    onChange={() => setMethod(option.id)}
-                    className="mt-0.5 size-5 shrink-0 accent-[var(--brand)]"
-                  />
-                  <span>
-                    <span className="font-semibold">{option.label}</span>
-                    <span className="mt-1 block text-gray-600">{option.description}</span>
-                  </span>
-                </label>
-              ))}
-            </fieldset>
+            {/* 支払い方法は 1 つだけなので選ばせない。押しても何も変わらない
+                ラジオボタンを置くと、選び終えていないように見えて手が止まる。 */}
+            <div className="rounded-lg border border-border p-3">
+              <p className="px-1 text-xs font-bold text-gray-900">お支払い方法</p>
+              <p className="mt-1 px-1 text-sm font-semibold text-gray-900">{PAYMENT_METHOD.label}</p>
+              <p className="mt-1 px-1 text-sm text-gray-600">{PAYMENT_METHOD.description}</p>
+            </div>
 
             <div className="flex flex-wrap gap-2">
               <Button

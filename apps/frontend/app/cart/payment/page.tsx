@@ -21,7 +21,7 @@ import {
 } from "@/shared/lib/order-store";
 import { buildFlowSteps } from "@/shared/lib/progress-store";
 import { findTld } from "@/shared/lib/tld-catalog";
-import { PAYMENT_METHODS, type PaymentMethod } from "@/shared/lib/payment-methods";
+import { PAYMENT_METHOD } from "@/shared/lib/payment-methods";
 import { NoOrderNotice } from "../_components/no-order-notice";
 
 const PAYMENT_STEPS = buildFlowSteps("payment");
@@ -30,9 +30,9 @@ const PAYMENT_STEPS = buildFlowSteps("payment");
 const LOGIN_STEPS = buildFlowSteps("login");
 
 /**
- * ログイン後のお支払い方法選択画面。
+ * ログイン後のお支払い内容の確認画面。
  *
- * このデモに決済機能は無いため、選んだ方法は保存も送信もしない。
+ * このデモに決済機能は無いので、支払い方法はクレジットカード固定で表示するだけ。
  * 「確定する」を押した時点で実際にドメインを登録する
  * （ここまでは取り消しやすい選択なので、確定操作の直前に実行する）。
  */
@@ -42,7 +42,6 @@ export default function CartPaymentPage() {
   const isLoggedIn = Boolean(session?.user);
   const [order, setOrder] = useState<ConfirmedOrder | null>(null);
   const [checked, setChecked] = useState(false);
-  const [method, setMethod] = useState<PaymentMethod>("credit-card");
   const [submitting, setSubmitting] = useState(false);
   const [failures, setFailures] = useState<string[]>([]);
   // 401 のときだけログインし直す導線を出すため、理由まで持っておく。
@@ -165,9 +164,9 @@ export default function CartPaymentPage() {
       <CheckoutStepper steps={PAYMENT_STEPS} />
 
       <main className="mx-auto max-w-3xl px-4 py-10">
-        <h1 className="mb-1 text-2xl font-bold text-gray-900">お支払い方法の選択</h1>
+        <h1 className="mb-1 text-2xl font-bold text-gray-900">お支払い内容の確認</h1>
         <p className="mb-6 text-sm leading-relaxed text-gray-600">
-          このデモに決済機能は無いため、選んだ方法にかかわらず料金は発生しません。
+          内容を確認して「確定する」を押すと、ドメインの取得手続きが始まります。
         </p>
 
         {order && (
@@ -196,31 +195,23 @@ export default function CartPaymentPage() {
           </section>
         )}
 
-        <fieldset className="mb-6 space-y-3 rounded-lg border border-border bg-white px-4 py-4 shadow-sm">
-          <legend className="mb-1 flex items-center gap-2 text-base font-bold text-gray-900">
+        {/* 選択肢は 1 つしかないので、ラジオボタンにはしない。
+            押しても何も変わらないものを操作させると、利用者は
+            「まだ選び終えていないのでは」と手を止めてしまう。 */}
+        <section
+          aria-labelledby="payment-method-heading"
+          className="mb-6 rounded-lg border border-border bg-white px-4 py-4 shadow-sm"
+        >
+          <h2
+            id="payment-method-heading"
+            className="mb-1 flex items-center gap-2 text-base font-bold text-gray-900"
+          >
             <CreditCard className="size-5 shrink-0" aria-hidden="true" />
             お支払い方法
-          </legend>
-          {PAYMENT_METHODS.map((option) => (
-            <label
-              key={option.id}
-              className="flex items-start gap-3 rounded-lg border border-border px-3 py-3 text-sm text-gray-900 has-[:checked]:border-[var(--brand)] has-[:checked]:bg-[var(--brand-light)]"
-            >
-              <input
-                type="radio"
-                name="payment-method"
-                value={option.id}
-                checked={method === option.id}
-                onChange={() => setMethod(option.id)}
-                className="mt-0.5 size-5 shrink-0 accent-[var(--brand)]"
-              />
-              <span>
-                <span className="font-semibold">{option.label}</span>
-                <span className="mt-1 block text-gray-600">{option.description}</span>
-              </span>
-            </label>
-          ))}
-        </fieldset>
+          </h2>
+          <p className="font-semibold text-gray-900">{PAYMENT_METHOD.label}</p>
+          <p className="mt-1 text-sm text-gray-600">{PAYMENT_METHOD.description}</p>
+        </section>
 
         {failures.length > 0 && (
           <div className="mb-6">
