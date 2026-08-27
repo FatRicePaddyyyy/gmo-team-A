@@ -2,6 +2,7 @@ import { TransferStatusRepository } from "../../domains/transfer/repository";
 import { RegistryBridge } from "../../lib/bridge";
 import type { Registry } from "../../lib/bridge/types";
 import type { DBClient } from "../../lib/db";
+import { toUserMessage } from "../../lib/error-messages";
 import { isValidFqdn } from "../../lib/registry-policy";
 import type { Result } from "../../types/result";
 import { DomainMapper   } from "./mapper";
@@ -9,7 +10,6 @@ import type {DomainDetailResponse, DomainResponse} from "./mapper";
 import { DomainRepository } from "./repository";
 import { DomainTransferRepository } from "./transfer-repository";
 import { DomainUserRepository } from "./user-repository";
-import { toUserMessage } from "../../lib/error-messages";
 
 // 廃止したドメインが取りうる状態。
 //
