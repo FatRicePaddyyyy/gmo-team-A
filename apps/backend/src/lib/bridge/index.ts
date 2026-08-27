@@ -471,7 +471,20 @@ export class RegistryBridge {
         if (response.status === 400) {return { success: false, data: null, error: "invalid_contact_payload" };}
         // 全 retry を使い切って 409 のままのケース。極めて稀。
         if (response.status === 409) {return { success: false, data: null, error: "contact_id_conflict" };}
-        if (error) {return { success: false, data: null, error: "contact_create_failed" };}
+        // メンテナンス中はここで落ちる（ドメイン作成はコンタクト作成から始まるため）。
+        // contact_create_failed に丸めると「接続中に問題が発生しました」としか出せず、
+        // 待てば直るのか設定が悪いのか伝わらない。
+        if (error) {
+          const mapped = mapRegistryError(error, response.status);
+          return {
+            success: false,
+            data: null,
+            error: mapped.startsWith("registry_maintenance") ? mapped : "contact_create_failed",
+          };
+        }
+        if (data.result.code === EPP_MAINTENANCE_CODE) {
+          return { success: false, data: null, error: "registry_maintenance" };
+        }
         if (data.result.code !== 1000) {return { success: false, data: null, error: "contact_create_failed" };}
         const returnedId = data.resData?.id ?? contactId;
         return { success: true, data: { contactId: returnedId }, error: null };

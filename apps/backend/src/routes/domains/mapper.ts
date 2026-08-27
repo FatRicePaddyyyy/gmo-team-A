@@ -17,6 +17,14 @@ export interface DomainResponse {
 
 // 詳細表示用（DB + レジストリの info 情報）
 export type DomainDetailResponse = DomainResponse & {
+  /**
+   * レジストリに問い合わせて最新情報を取れたか。
+   *
+   * false のとき、statuses / registrant / contacts / nameservers / rgpStatus は
+   * 「空」ではなく「取得できていない」。画面はこのフラグを見て、
+   * 値ではなく「いま取得できません」と出し、操作も止めること。
+   */
+  registryAvailable: boolean;
   // レジストリの status[] をそのまま保持する。
   // 「復旧できるか」はここに redemptionPeriod が入っているかで判断する。
   // 廃止直後は pendingDelete と redemptionPeriod の両方が付き、45日を過ぎると
@@ -52,6 +60,7 @@ export class DomainMapper {
   static toDetailResponse(row: DomainRow, registryData: RegistryDomainResponse): DomainDetailResponse {
     return {
       ...DomainMapper.toResponse(row),
+      registryAvailable: true,
       statuses: registryData.status ?? [],
       registrant: registryData.registrant ?? "",
       contacts: registryData.contacts ?? {},
@@ -59,6 +68,30 @@ export class DomainMapper {
       rgpStatus: registryData.rgpStatus ?? [],
       upDate: registryData.upDate ?? null,
       trDate: registryData.trDate ?? null,
+    };
+  }
+
+  /**
+   * レジストリに問い合わせられなかったときの詳細レスポンス。
+   *
+   * ドメイン名・有効期限・状態は自社 DB にあるので、レジストリが落ちていても出せる。
+   * これを返さないと、メンテナンス中に詳細ページの中身が丸ごと消えてしまう。
+   *
+   * レジストリ由来の項目（ネームサーバー・登録者・連絡先・RGP）は
+   * 「無い」ではなく「取得できていない」なので、空配列と registryAvailable: false の
+   * 組み合わせで区別する。画面側はこのフラグを見て、値ではなく状態を出す。
+   */
+  static toDetailResponseWithoutRegistry(row: DomainRow): DomainDetailResponse {
+    return {
+      ...DomainMapper.toResponse(row),
+      registryAvailable: false,
+      statuses: [],
+      registrant: "",
+      contacts: {},
+      nameservers: [],
+      rgpStatus: [],
+      upDate: null,
+      trDate: null,
     };
   }
 }

@@ -673,3 +673,42 @@ describe("結合: POST /api/v1/secure/domains/{id}/restore", () => {
     expect(json.error).toContain("権限");
   });
 });
+
+describe("結合: メンテナンス中でも詳細は DB の分だけ返す", () => {
+  // レジストリが落ちると詳細ページの中身が丸ごと消えていた。
+  // ドメイン名・有効期限・状態は自社 DB にあるので、そこは返す。
+  test("[正常系] registry_maintenance のとき 200 + registryAvailable: false", async () => {
+    vi.spyOn(DomainRepository, "findById").mockResolvedValue({ success: true, data: mockDomainRow, error: null });
+    vi.spyOn(RegistryBridge, "info").mockResolvedValue({ success: false, data: null, error: "registry_maintenance" });
+
+    const res = await getDomainRouteHandler.request(
+      "/api/v1/secure/domains/dom-001",
+      {},
+      mockEnv,
+    );
+
+    expect(res.status).toBe(200);
+    const json = await res.json() as { data: { registryAvailable: boolean; name: string; nameservers: string[] } };
+    expect(json.data.registryAvailable).toBe(false);
+    // DB にある情報は出る
+    expect(json.data.name).toBe(mockDomainRow.name);
+    // レジストリ由来は「取得できていない」として空
+    expect(json.data.nameservers).toEqual([]);
+  });
+
+  test("[正常系] network_error でも同じく DB の分を返す", async () => {
+    vi.spyOn(DomainRepository, "findById").mockResolvedValue({ success: true, data: mockDomainRow, error: null });
+    vi.spyOn(RegistryBridge, "info").mockResolvedValue({ success: false, data: null, error: "network_error" });
+
+    const res = await getDomainRouteHandler.request("/api/v1/secure/domains/dom-001", {}, mockEnv);
+    expect(res.status).toBe(200);
+  });
+
+  test("[異常系] ドメイン不在など相手都合でないエラーは従来どおり失敗させる", async () => {
+    vi.spyOn(DomainRepository, "findById").mockResolvedValue({ success: true, data: mockDomainRow, error: null });
+    vi.spyOn(RegistryBridge, "info").mockResolvedValue({ success: false, data: null, error: "domain_not_found" });
+
+    const res = await getDomainRouteHandler.request("/api/v1/secure/domains/dom-001", {}, mockEnv);
+    expect(res.status).not.toBe(200);
+  });
+});

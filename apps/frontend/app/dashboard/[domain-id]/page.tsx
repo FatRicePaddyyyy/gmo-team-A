@@ -8,6 +8,7 @@ import { BackLink } from "@/components/back-link";
 import { RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { FeedbackBanner } from "@/components/feedback-banner";
+import { MAINTENANCE_TITLE } from "@/shared/lib/maintenance";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import {
@@ -39,12 +40,19 @@ export default function DomainDetailPage() {
   const { domain, loading, loadError, loadUnauthorized, running, feedback } =
     state;
 
+  // レジストリに問い合わせられなかったとき（メンテナンス・疎通不良）。
+  // DB の情報だけが返ってきているので、表示は続けつつ操作は止める。
+  // 古い前提のまま操作を送ると、実際の状態と食い違ったまま実行されてしまう。
+  const registryDown = domain ? !domain.registryAvailable : false;
+
   // 手続き中・廃止済みのドメインはレジストリ側が変更を受け付けない。
   // ボタンを出しても 409 で弾かれるだけなので、その理由を先に見せる。
-  const settingsEditable = domain ? canUpdateSettings(domain.status) : false;
+  const settingsEditable = domain
+    ? canUpdateSettings(domain.status) && !registryDown
+    : false;
   // 更新は廃止済みでもできない一方、pendingUpdate などの手続き中とは条件が違うので
   // 設定変更（canUpdateSettings）とは別に判定する。
-  const renewable = domain ? canRenew(domain.status) : false;
+  const renewable = domain ? canRenew(domain.status) && !registryDown : false;
   const busy = running !== null;
 
 
@@ -144,7 +152,16 @@ export default function DomainDetailPage() {
                   />
                 )}
 
-                {!settingsEditable && !incoming && (
+                {/* レジストリが落ちているときは理由が違うので、状態ヒントより先に出す */}
+                {registryDown && (
+                  <FeedbackBanner
+                    tone="error"
+                    context="detail"
+                    message={MAINTENANCE_TITLE}
+                  />
+                )}
+
+                {!settingsEditable && !incoming && !registryDown && (
                   <p className="rounded-lg border border-gray-200 bg-white p-3 text-sm text-gray-600">
                     {statusHintOf(domain.status) ??
                       "このドメインはいま手続き中のため、設定を変更できません。"}
@@ -183,9 +200,9 @@ export default function DomainDetailPage() {
 
                 <LifecycleCard
                   domainName={domain.name}
-                  canDelete={canDelete(domain.status)}
-                  canRestore={canRestore(domain.status)}
-                  disabled={busy}
+                  canDelete={canDelete(domain.status) && !registryDown}
+                  canRestore={canRestore(domain.status) && !registryDown}
+                  disabled={busy || registryDown}
                   runningDelete={running === "delete"}
                   runningRestore={running === "restore"}
                   feedback={

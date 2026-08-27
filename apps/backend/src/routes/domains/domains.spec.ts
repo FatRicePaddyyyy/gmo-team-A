@@ -27,6 +27,7 @@ const mockDomain = {
 // info / update 用の詳細レスポンス
 const mockDomainDetail = {
   ...mockDomain,
+  registryAvailable: true,
   statuses: ["ok"],
   registrant: "C-0001",
   contacts: {},

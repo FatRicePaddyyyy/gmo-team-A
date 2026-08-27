@@ -158,7 +158,6 @@ export default function CartPaymentPage() {
         {failures.length > 0 && (
           <div className="mb-6">
             <FeedbackBanner
-              context="purchase"
               tone="error"
               message="お支払いは完了しましたが、一部のドメインの登録に失敗しました。"
             />

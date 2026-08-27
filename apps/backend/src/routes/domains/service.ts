@@ -66,6 +66,21 @@ export interface DomainCheckItem {
   failed: boolean;
 }
 
+/**
+ * レジストリに届かなかった（＝相手側の都合）エラーかどうか。
+ *
+ * これらは「このドメインが変」なのではなく「いま問い合わせられない」だけなので、
+ * 手元にある情報を返す判断ができる。ドメイン不在や権限エラーとは扱いを分ける。
+ */
+function isRegistryUnreachable(error: string): boolean {
+  const code = error.split(":")[0]?.trim();
+  return (
+    code === "registry_maintenance" ||
+    code === "network_error" ||
+    code === "invalid_registry_response"
+  );
+}
+
 export class DomainService {
   /**
    * 複数ドメインの空き確認をまとめて行う（Issue #45 B-3）。
@@ -266,7 +281,19 @@ export class DomainService {
     const domain = domainResult.data;
 
     const infoResult = await RegistryBridge.info({ name: domain.name, registry: domain.registry, env });
-    if (!infoResult.success) {return infoResult;}
+    if (!infoResult.success) {
+      // レジストリが落ちていても、ドメイン名・有効期限・状態は自社 DB にある。
+      // ここで打ち切ると詳細ページの中身が丸ごと消えるので、DB の分だけ返す。
+      // 「取得できなかった」ことは registryAvailable: false で伝える。
+      //
+      // ただし通信できないこと自体が異常なケース（認証切れ・不正なドメイン）は
+      // そのまま失敗として返す。メンテナンス・疎通不良だけを対象にする。
+      if (isRegistryUnreachable(infoResult.error)) {
+        console.warn(`DomainService.info: registry unreachable (${infoResult.error}); returning DB-only detail for ${domain.name}`);
+        return { success: true, data: DomainMapper.toDetailResponseWithoutRegistry(domain), error: null };
+      }
+      return infoResult;
+    }
 
     // exDate は Swagger 上 ISO8601 文字列だが、レジストリ実装によっては非 ISO を返しうる。
     // Invalid Date のまま DB に流すと NaN epoch で保存されるので明示的に検証する。
