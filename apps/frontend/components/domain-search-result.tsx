@@ -26,6 +26,12 @@ export interface DomainResult {
   tld: string;
   name: string;
   available: boolean;
+  /**
+   * 空き確認自体が失敗した（通信障害・レジストリ障害など）。
+   * true のときは `available` の値を信用せず、「確認できませんでした」として
+   * 取得済みとは別扱いで表示する（通信障害を空きなしと誤表示しないため）。
+   */
+  checkFailed?: boolean;
   /** 初年度の価格（表示用の文字列） */
   price: string;
   /** 2年目以降の年額（表示用の文字列） */
@@ -77,11 +83,12 @@ export function DomainSearchResult({
   const [explainedTld, setExplainedTld] = useState<string | null>(null);
   // 勧めた末尾は先頭に出す。下までスクロールしないと見つからないと、診断の結果が死ぬ
   const available = results
-    .filter((r) => r.available)
+    .filter((r) => r.available && !r.checkFailed)
     .sort((a, b) =>
       a.tld === recommendedTld ? -1 : b.tld === recommendedTld ? 1 : 0,
     );
-  const taken = results.filter((r) => !r.available);
+  const taken = results.filter((r) => !r.available && !r.checkFailed);
+  const checkFailed = results.filter((r) => r.checkFailed);
   const recommendedAvailable = available.some((r) => r.tld === recommendedTld);
   const recommendedTaken = taken.some((r) => r.tld === recommendedTld);
 
@@ -101,7 +108,9 @@ export function DomainSearchResult({
       <p className="mb-4 text-sm text-gray-500">
         {results.length === 0
           ? "該当するドメインは見つかりませんでした"
-          : `${available.length}件のドメインが取得可能です`}
+          : checkFailed.length > 0
+            ? `${available.length}件のドメインが取得可能です（${checkFailed.length}件は確認できませんでした）`
+            : `${available.length}件のドメインが取得可能です`}
       </p>
 
       {/* 空状態 */}
@@ -367,6 +376,27 @@ export function DomainSearchResult({
 
       {hasLimitedOffer && (
         <p className="mb-6 text-xs text-gray-600">※ {LIMITED_OFFER_NOTE}</p>
+      )}
+
+      {/* 確認できなかった分。空きなしと混同されないよう別枠で正直に出す */}
+      {checkFailed.length > 0 && (
+        <div className="mb-6 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3">
+          <p className="flex items-start gap-2 text-sm font-bold text-amber-950">
+            <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+            空き状況を確認できませんでした
+          </p>
+          <p className="mt-1 text-sm leading-relaxed text-amber-950">
+            通信状況やレジストリ側の一時的な問題により確認できませんでした。実際には取得できる可能性があります。時間をおいて再検索してください。
+          </p>
+          <ul className="mt-2 space-y-1">
+            {checkFailed.map((result) => (
+              <li key={result.tld} className="font-medium break-all text-amber-950">
+                {result.name}
+                {result.tld}
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
 
       {/* 取得済み */}

@@ -49,23 +49,81 @@ function pickPrimaryStatus(statuses: string[], fallback: string): string {
   return fallback;
 }
 
+export interface DomainCheckItem {
+  name: string;
+  avail: boolean;
+  /** 通信障害・レジストリ障害などで確認自体ができなかった */
+  failed: boolean;
+}
+
 export class DomainService {
-  static async check({
-    name,
+  /**
+   * 複数ドメインの空き確認をまとめて行う（Issue #45 B-3）。
+   *
+   * 以前は1件ごとに resolveRegistry（= 両レジストリへの hello 2回）+ check を呼んでいたため、
+   * TLD_CATALOG 全件を確認すると通信回数が膨らんでいた。ここでは hello を1回ずつだけ呼び、
+   * 名前を registry ごとにグルーピングしてから、registry ごとに1回の check にまとめる。
+   */
+  // 項目ごとに avail/failed を持つため、この処理自体が全体として失敗することはない
+  // （Result<T> でラップしない。呼び出し側は常に results をそのまま使える）。
+  static async checkBulk({
+    names,
     env,
   }: {
-    name: string;
+    names: string[];
     env: CloudflareBindings;
-  }): Promise<Result<{ avail: boolean; registry: Registry }>> {
-    // レジストリを自動解決（両レジストリの hello を並列で叩いて TLD で判定）
-    const registryResult = await RegistryBridge.resolveRegistry({ name, env });
-    if (!registryResult.success) {return registryResult;}
-    const registry = registryResult.data;
+  }): Promise<DomainCheckItem[]> {
+    const [ks, kn] = await Promise.all([
+      RegistryBridge.hello({ registry: "kitaqsign", env }),
+      RegistryBridge.hello({ registry: "kitaqnic", env }),
+    ]);
 
-    const result = await RegistryBridge.check({ name, registry, env });
-    if (!result.success) {return result;}
-    const avail = result.data.results[0]?.avail ?? false;
-    return { success: true, data: { avail, registry }, error: null };
+    // レジストリの tlds は先頭ドット付き（".com"）かドットなし（"com"）か仕様上不明。両方に対応
+    const normalize = (t: string) => t.toLowerCase().replace(/^\./, "");
+    function tldOf(name: string): string | null {
+      const normalized = name.trim().toLowerCase();
+      const lastDot = normalized.lastIndexOf(".");
+      if (lastDot < 0 || lastDot === normalized.length - 1) {return null;}
+      return normalized.slice(lastDot + 1);
+    }
+
+    const groups: Record<Registry, string[]> = { kitaqsign: [], kitaqnic: [] };
+    const results: DomainCheckItem[] = [];
+
+    for (const name of names) {
+      const tld = tldOf(name);
+      if (!tld) {
+        results.push({ name, avail: false, failed: true });
+        continue;
+      }
+      if (ks.success && ks.data.tlds.some(t => normalize(t) === tld)) {
+        groups.kitaqsign.push(name);
+      } else if (kn.success && kn.data.tlds.some(t => normalize(t) === tld)) {
+        groups.kitaqnic.push(name);
+      } else if (!ks.success || !kn.success) {
+        // 片方でも hello に失敗している場合は「非対応」と断定できない（疎通エラーの可能性）
+        results.push({ name, avail: false, failed: true });
+      } else {
+        // 両方 hello 成功 + どちらの対応TLDにも無い → 非対応TLDとして確定（障害ではない）
+        results.push({ name, avail: false, failed: false });
+      }
+    }
+
+    for (const registry of ["kitaqsign", "kitaqnic"] as const) {
+      const groupNames = groups[registry];
+      if (groupNames.length === 0) {continue;}
+      const checkResult = await RegistryBridge.check({ names: groupNames, registry, env });
+      if (!checkResult.success) {
+        for (const name of groupNames) {results.push({ name, avail: false, failed: true });}
+        continue;
+      }
+      for (const name of groupNames) {
+        const found = checkResult.data.results.find(r => r.name === name);
+        results.push({ name, avail: found?.avail ?? false, failed: !found });
+      }
+    }
+
+    return results;
   }
 
   static async create({

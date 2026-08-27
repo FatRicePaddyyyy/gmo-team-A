@@ -52,58 +52,70 @@ beforeEach(() => vi.restoreAllMocks());
 // ─── check ───────────────────────────────────────────────────────────────────
 
 describe("結合: POST /api/v1/public/domains/check", () => {
-  test("[正常系] avail:true → 200", async () => {
-    vi.spyOn(RegistryBridge, "resolveRegistry").mockResolvedValue({ success: true, data: "kitaqsign", error: null });
-    vi.spyOn(RegistryBridge, "check").mockResolvedValue({
-      success: true, data: { results: [{ name: "example.com", avail: true }] }, error: null,
+  test("[正常系] 複数ドメインをまとめて確認できる（同じregistryは1回のcheckにまとまる）", async () => {
+    vi.spyOn(RegistryBridge, "hello").mockImplementation(async ({ registry }) =>
+      registry === "kitaqsign"
+        ? { success: true, data: { registryCode: "KQSGN", tlds: ["com", "net"] }, error: null }
+        : { success: true, data: { registryCode: "KQNIC", tlds: ["xyz"] }, error: null },
+    );
+    const checkSpy = vi.spyOn(RegistryBridge, "check").mockResolvedValue({
+      success: true,
+      data: { results: [{ name: "example.com", avail: true }, { name: "taken.net", avail: false }] },
+      error: null,
     });
+
     const res = await checkDomainRouteHandler.request(
       "/api/v1/public/domains/check",
-      { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: "example.com" }) },
+      { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ names: ["example.com", "taken.net"] }) },
       mockEnv,
     );
+
     expect(res.status).toBe(200);
     const json = await res.json() as any;
-    expect(json.data.avail).toBe(true);
+    expect(json.data.results).toMatchObject([
+      { name: "example.com", avail: true, failed: false },
+      { name: "taken.net", avail: false, failed: false },
+    ]);
+    // kitaqsign 宛の check は1回だけ（2件まとめて）呼ばれる
+    expect(checkSpy).toHaveBeenCalledTimes(1);
+    expect(checkSpy).toHaveBeenCalledWith(expect.objectContaining({ names: ["example.com", "taken.net"], registry: "kitaqsign" }));
   });
 
-  test("[正常系] avail:false → 200", async () => {
-    vi.spyOn(RegistryBridge, "resolveRegistry").mockResolvedValue({ success: true, data: "kitaqsign", error: null });
-    vi.spyOn(RegistryBridge, "check").mockResolvedValue({
-      success: true, data: { results: [{ name: "taken.com", avail: false }] }, error: null,
-    });
+  test("[異常系] 非対応TLD → failed:false・avail:falseで返す（500にはしない）", async () => {
+    vi.spyOn(RegistryBridge, "hello").mockImplementation(async ({ registry }) =>
+      registry === "kitaqsign"
+        ? { success: true, data: { registryCode: "KQSGN", tlds: ["com"] }, error: null }
+        : { success: true, data: { registryCode: "KQNIC", tlds: ["xyz"] }, error: null },
+    );
+
     const res = await checkDomainRouteHandler.request(
       "/api/v1/public/domains/check",
-      { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: "taken.com" }) },
+      { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ names: ["example.zzz"] }) },
       mockEnv,
     );
+
     expect(res.status).toBe(200);
     const json = await res.json() as any;
-    expect(json.data.avail).toBe(false);
+    expect(json.data.results).toMatchObject([{ name: "example.zzz", avail: false, failed: false }]);
   });
 
-  test("[異常系] 非対応TLD → 400", async () => {
-    vi.spyOn(RegistryBridge, "resolveRegistry").mockResolvedValue({ success: false, data: null, error: "unsupported_tld" });
-    const res = await checkDomainRouteHandler.request(
-      "/api/v1/public/domains/check",
-      { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: "example.zzz" }) },
-      mockEnv,
+  test("[異常系] Bridge エラー → 該当項目だけ failed:true で返す（他の項目は道連れにしない）", async () => {
+    vi.spyOn(RegistryBridge, "hello").mockImplementation(async ({ registry }) =>
+      registry === "kitaqsign"
+        ? { success: true, data: { registryCode: "KQSGN", tlds: ["com"] }, error: null }
+        : { success: true, data: { registryCode: "KQNIC", tlds: ["xyz"] }, error: null },
     );
-    expect(res.status).toBe(400);
-  });
-
-  test("[異常系] Bridge エラー → 500 + ユーザー向けメッセージ", async () => {
-    vi.spyOn(RegistryBridge, "resolveRegistry").mockResolvedValue({ success: true, data: "kitaqsign", error: null });
     vi.spyOn(RegistryBridge, "check").mockResolvedValue({ success: false, data: null, error: "network_error" });
+
     const res = await checkDomainRouteHandler.request(
       "/api/v1/public/domains/check",
-      { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: "example.com" }) },
+      { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ names: ["example.com"] }) },
       mockEnv,
     );
-    expect(res.status).toBe(500);
+
+    expect(res.status).toBe(200);
     const json = await res.json() as any;
-    expect(json.error).not.toBe("network_error"); // エラーコードがそのまま出ていない
-    expect(json.error).toContain("再試行");
+    expect(json.data.results).toMatchObject([{ name: "example.com", avail: false, failed: true }]);
   });
 });
 

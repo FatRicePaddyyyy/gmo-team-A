@@ -100,7 +100,7 @@ export function RecommendationCard({
       {/* おすすめのオプション */}
       <h2 className="mt-8 text-lg font-bold text-gray-900">つけておくとよいオプション</h2>
       <p className="mt-1 text-sm text-gray-600">
-        申し込みの確認画面で設定できます。いまは何も購入されません。
+        参考としてご案内しています。今回のお申し込みでは設定できません。
       </p>
       <ul className="mt-3 space-y-2">
         {result.options.map((option) => (

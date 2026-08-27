@@ -1,141 +1,106 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { ArrowRight } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { AcquisitionFlow } from "@/components/acquisition-flow";
-import { DomainBenefits } from "@/components/domain-benefits";
-import { FaqAccordion } from "@/components/faq-accordion";
-import { HeroSearch } from "@/components/hero-search";
-import { PurposePicker } from "@/components/purpose-picker";
-import { SiteFooter } from "@/components/site-footer";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { SiteHeader } from "@/components/site-header";
-import { TldHighlights } from "@/components/tld-highlights";
-import { useCart } from "@/shared/hooks/use-cart.hook";
+import { SiteFooter } from "@/components/site-footer";
+import { HeroSearch } from "@/components/hero-search";
+import { CheckoutStepper } from "@/components/checkout-stepper";
+import { PlanFinderLink } from "./search/_components/plan-finder-link";
+import { SearchResultSection } from "./search/_components/search-result-section";
+import { useDomainSearch } from "./search/_hooks/use-domain-search.hook";
 import { useProgress } from "@/shared/hooks/use-progress.hook";
-import { FAQS } from "@/shared/lib/learning-content";
-import { withReturnTo } from "@/shared/lib/return-to";
+import { buildFlowSteps } from "@/shared/lib/progress-store";
 import { stripKnownTld } from "@/shared/lib/tld-catalog";
 
+const SCROLL_INTENT_KEY = "manabi-domain:search-scroll-intent";
+
 /**
- * トップページ。未ログインでも見られる入口にする。
+ * トップページ＝ドメイン検索画面。
  *
- * 構成は「検索 → 取ると何ができる → 取得までの流れ → 末尾の違い → FAQ（短く）」。
- * 長い解説は `/learn` に集約し、ここには判断に必要なものだけを置く。
- *
- * 進捗表示は置かない。まだ何も始めていない人に「あと何%」を見せても意味が無く、
- * 保存値から出すと古い値が残って「何もしていないのに 60%」になる。
- * 代わりに、**いまカートに入っている／直前に検索した**という消えていない事実がある人にだけ、
- * 1行の再開リンクを出す。
+ * 以前は別に用意していたマーケティング用のランディングページを廃止し、
+ * 「ドメインを探す」をそのままトップにした（3画面構成: 探す／学ぶ／マイドメイン）。
  */
 export default function Home() {
-  const router = useRouter();
+  const { query, results, loading, error, search } = useDomainSearch();
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [inputValue, setInputValue] = useState<string | undefined>(undefined);
-  const { state, setPurpose, update } = useProgress();
-  const { count: cartCount } = useCart();
+  // 診断（/plan-finder）から渡ってくるおすすめの末尾。検索するたびに URL が
+  // `?q=` だけに書き換わるので、URL ではなくここに持っておく
+  const [recommendedTld, setRecommendedTld] = useState<string | null>(null);
+  const { update } = useProgress();
 
-  // 「続きから」はライブな事実だけで出す（カートの中身 → 直前の検索）
-  const resume =
-    cartCount > 0
-      ? { href: "/cart", label: `カートに${cartCount}件あります。内容の確認へ進む` }
-      : state.searchedName
-        ? {
-            href: `/search?q=${encodeURIComponent(state.searchedName)}`,
-            label: `「${state.searchedName}」の検索結果を見る`,
-          }
-        : null;
+  // 検索完了時に結果まで自動でスクロールする。ただし「空き状況を調べる」を
+  // このページで押したときだけ。他画面から ?q= 付きで飛んできた自動検索では
+  // 検索欄の位置のままでよい。
+  //
+  // このスクロール意図はメモリ上のフラグでは持てない。`router.replace` が
+  // このアプリの環境では実行コンテキストを作り直す（実質フルリロードに近い）
+  // ため、押した直後の in-memory な ref は search 完了前に失われる。
+  // そこで sessionStorage に意図を書いておき、リロード後の初期化 useEffect 側で
+  // 読み出す（sessionStorage はリロードをまたいで残る）。
+  const wasLoadingRef = useRef(false);
+  useEffect(() => {
+    if (wasLoadingRef.current && !loading) {
+      let shouldScroll = false;
+      try {
+        shouldScroll = sessionStorage.getItem(SCROLL_INTENT_KEY) === "1";
+        sessionStorage.removeItem(SCROLL_INTENT_KEY);
+      } catch {
+        // プライベートブラウジング等で読めないことがある。その場合はスクロールしない
+      }
+      if (shouldScroll) {
+        document.getElementById("search-results")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+    }
+    wasLoadingRef.current = loading;
+  }, [loading]);
 
   const handleSearch = useCallback(
     (value: string) => {
-      const name = stripKnownTld(value.trim()) || value.trim();
-      update({ searchedName: name });
-      router.push(`/search?q=${encodeURIComponent(value)}`);
+      // 進捗②「名前を決める」は、実際に検索したときだけ進める
+      update({ searchedName: stripKnownTld(value.trim()) || value.trim() });
+      try {
+        sessionStorage.setItem(SCROLL_INTENT_KEY, "1");
+      } catch {
+        // 書けなくてもスクロールが起きないだけで、検索自体は続行する
+      }
+      void search(value);
     },
-    [router, update],
+    [search, update],
   );
 
-  /** 末尾のカードからは、押された末尾を検索欄に入れて入力欄へ戻す */
-  const handleSelectTld = useCallback(
-    (tld: string) => {
-      const base = stripKnownTld((inputValue ?? "").trim()) || "example";
-      setInputValue(`${base}${tld}`);
-
-      const input = searchInputRef.current;
-      if (!input) return;
-      input.scrollIntoView({ behavior: "smooth", block: "center" });
-      input.focus();
-    },
-    [inputValue],
-  );
+  // 他画面から `/?q=...` で飛んでくる（プラン診断のおすすめなど）。
+  // useSearchParams はサスペンス境界が要るため、マウント後に location から読む。
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    setRecommendedTld(params.get("rec"));
+    const initial = params.get("q")?.trim();
+    if (!initial) return;
+    setInputValue(initial);
+    void search(initial, { syncUrl: false });
+  }, [search]);
 
   return (
     <div className="min-h-screen bg-gray-50">
       <SiteHeader />
-
-      {/* 途中まで進めた人にだけ出す1行。進捗バーもパーセントも出さない */}
-      {resume && (
-        <div className="border-b border-border bg-[var(--brand-light)]">
-          <div className="mx-auto max-w-4xl px-4 py-2">
-            <Link
-              href={resume.href}
-              className="inline-flex min-h-11 items-center gap-1 text-sm font-medium text-[var(--brand-dark)] underline underline-offset-2"
-            >
-              続きから: {resume.label}
-              <ArrowRight className="size-4 shrink-0" aria-hidden="true" />
-            </Link>
-          </div>
-        </div>
-      )}
+      <CheckoutStepper steps={buildFlowSteps("select")} />
 
       <HeroSearch
         onSearch={handleSearch}
         inputRef={searchInputRef}
         initialQuery={inputValue}
-        footer={
-          <PurposePicker
-            value={state.purpose}
-            onChange={setPurpose}
-            className="mt-4"
-            showQuizLink
-          />
-        }
+        heading="使いたい名前が空いているか、調べてみましょう。"
+        description="空き状況と一緒に、その末尾（TLD）が何なのか・いくらかかり続けるのかも表示します。"
+        footer={<PlanFinderLink className="mt-4" />}
       />
 
-      <DomainBenefits />
-
-      <AcquisitionFlow id="flow" />
-
-      <TldHighlights id="learn" purpose={state.purpose} onSearchTld={handleSelectTld} />
-
-      {/* FAQ は短く。全文は /learn に置く */}
-      <div id="faq" className="scroll-mt-16">
-        <FaqAccordion heading="よくある質問" items={FAQS.slice(0, 3)} />
-      </div>
-
-      <section className="bg-gray-50 pb-12">
-        <div className="mx-auto flex max-w-3xl flex-col justify-center gap-2 px-4 sm:flex-row">
-          <Button
-            className="h-11 px-5"
-            variant="brand"
-            nativeButton={false}
-            render={<Link href="/search" />}
-          >
-            ドメインを検索する
-            <ArrowRight className="ml-1 size-4" aria-hidden="true" />
-          </Button>
-          <Button
-            variant="outline"
-            className="h-11 px-5"
-            nativeButton={false}
-            render={<Link href={withReturnTo("/learn", "/")} />}
-          >
-            料金表とくわしい解説を見る
-          </Button>
-        </div>
-      </section>
+      <SearchResultSection
+        query={query}
+        results={results}
+        loading={loading}
+        error={error}
+        recommendedTld={recommendedTld}
+      />
 
       <SiteFooter />
     </div>

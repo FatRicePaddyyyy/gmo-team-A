@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { Menu, X, ShoppingCart } from "lucide-react";
 import { useSession } from "@/auth-client";
@@ -13,13 +14,20 @@ import { useCart } from "@/shared/hooks/use-cart.hook";
  * 行き止まり（404）を作らないため、未実装の項目はナビに置かない。
  */
 const navItems = [
-  { label: "ドメインを探す", href: "/search" },
+  { label: "ドメインを探す", href: "/" },
   { label: "ドメインを学ぶ", href: "/learn" },
   { label: "マイドメイン", href: "/dashboard" },
 ];
 
+/** 今いる画面がこのナビ項目に該当するか。「/」は完全一致、それ以外は配下も含める */
+function isNavItemActive(pathname: string, href: string): boolean {
+  if (href === "/") return pathname === "/";
+  return pathname === href || pathname.startsWith(`${href}/`);
+}
+
 export function SiteHeader() {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const pathname = usePathname();
   const { count } = useCart();
   const { data: session, isPending } = useSession();
   const signedInName = session?.user
@@ -41,15 +49,23 @@ export function SiteHeader() {
 
         {/* Desktop nav */}
         <nav className="hidden items-center gap-1 md:flex">
-          {navItems.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className="rounded px-3 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-red-50 hover:text-[var(--brand)]"
-            >
-              {item.label}
-            </Link>
-          ))}
+          {navItems.map((item) => {
+            const active = isNavItemActive(pathname, item.href);
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                aria-current={active ? "page" : undefined}
+                className={`rounded px-3 py-2 text-sm font-medium transition-colors ${
+                  active
+                    ? "bg-red-50 font-bold text-[var(--brand)]"
+                    : "text-gray-700 hover:bg-red-50 hover:text-[var(--brand)]"
+                }`}
+              >
+                {item.label}
+              </Link>
+            );
+          })}
         </nav>
 
         {/* Actions */}
@@ -106,16 +122,24 @@ export function SiteHeader() {
       {/* Mobile nav */}
       {mobileOpen && (
         <nav className="border-t border-border bg-white md:hidden">
-          {navItems.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className="block px-4 py-3 text-sm font-medium text-gray-700 hover:bg-red-50 hover:text-[var(--brand)]"
-              onClick={() => setMobileOpen(false)}
-            >
-              {item.label}
-            </Link>
-          ))}
+          {navItems.map((item) => {
+            const active = isNavItemActive(pathname, item.href);
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                aria-current={active ? "page" : undefined}
+                className={`block px-4 py-3 text-sm font-medium ${
+                  active
+                    ? "border-l-4 border-[var(--brand)] bg-red-50 font-bold text-[var(--brand)]"
+                    : "text-gray-700 hover:bg-red-50 hover:text-[var(--brand)]"
+                }`}
+                onClick={() => setMobileOpen(false)}
+              >
+                {item.label}
+              </Link>
+            );
+          })}
         </nav>
       )}
     </header>

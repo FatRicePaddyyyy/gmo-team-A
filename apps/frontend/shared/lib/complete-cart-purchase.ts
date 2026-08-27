@@ -1,8 +1,6 @@
 import { $createDomain } from "@/clients";
+import { callApi } from "@/shared/lib/api-result";
 import { clearConfirmedOrder, loadConfirmedOrder } from "@/shared/lib/order-store";
-
-const DOMAIN_CREATE_UNEXPECTED_MESSAGE =
-  "ドメインの登録に失敗しました。時間をおいて再試行してください。";
 
 /**
  * カート確認済みの内容があれば、その場で実際にドメインを登録する。
@@ -18,16 +16,11 @@ export async function completeCartPurchase(): Promise<string[]> {
   const failures = await Promise.all(
     order.items.map(async (item) => {
       const fullName = `${item.name}${item.tld}`;
-      try {
-        const response = await $createDomain({
-          json: { name: fullName, period: { unit: "Y", value: 1 } },
-        });
-        if (response.ok) return null;
-        const body = await response.json();
-        return `${fullName}: ${body.error}`;
-      } catch {
-        return `${fullName}: ${DOMAIN_CREATE_UNEXPECTED_MESSAGE}`;
-      }
+      const result = await callApi(
+        $createDomain({ json: { name: fullName, period: { unit: "Y", value: 1 } } }),
+      );
+      if (result.success) return null;
+      return `${fullName}: ${result.error}`;
     }),
   );
 
