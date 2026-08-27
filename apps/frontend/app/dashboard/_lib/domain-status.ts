@@ -79,18 +79,50 @@ export function isDeleted(status: string): boolean {
   return status === "redemptionPeriod" || status === "pendingDelete";
 }
 
-/** 更新（期間延長）できるか。移管手続き中と廃止済みは不可 */
-export function canRenew(status: string): boolean {
-  return !isDeleted(status) && status !== "pendingTransfer";
+/**
+ * client*Prohibited ロックが立っているか判定するヘルパ。
+ *
+ * domain.status (DB カラム) は pickPrimaryStatus が「復旧できる猶予状態を優先」した
+ * 業務ステータス 1 個で、client 系フラグは反映されない (backend service.ts のコメント参照)。
+ * 「実際にロックが立っているか」はレジストリの生 statuses 配列にしか出てこないので、
+ * ボタンの押下可否判定には statuses[] を必ず添えて渡す。
+ */
+function hasLock(statuses: readonly string[] | undefined, lock: string): boolean {
+  return (statuses ?? []).includes(lock);
 }
 
-/** 廃止できるか。移管手続き中と廃止済みは不可 */
-export function canDelete(status: string): boolean {
-  return !isDeleted(status) && status !== "pendingTransfer";
+/** 更新（期間延長）できるか。移管手続き中・廃止済み・clientRenewProhibited は不可 */
+export function canRenew(status: string, statuses?: readonly string[]): boolean {
+  if (isDeleted(status) || status === "pendingTransfer") return false;
+  return !hasLock(statuses, "clientRenewProhibited");
 }
 
-/** 設定（ネームサーバー・AuthCode・ロック）を変更できるか。手続き中と廃止済みは不可 */
-export function canUpdateSettings(status: string): boolean {
+/** 廃止できるか。移管手続き中・廃止済み・clientDeleteProhibited は不可 */
+export function canDelete(status: string, statuses?: readonly string[]): boolean {
+  if (isDeleted(status) || status === "pendingTransfer") return false;
+  return !hasLock(statuses, "clientDeleteProhibited");
+}
+
+/**
+ * 設定（ネームサーバー・AuthCode）を変更できるか。手続き中・廃止済み・clientUpdateProhibited は不可。
+ *
+ * 注意: clientUpdateProhibited を外す操作 (LocksCard 上のトグル OFF) 自体もこの
+ * 判定を通ってしまうと自分で解除できなくなる。LocksCard は canUpdateLocks (別関数) で
+ * 判定するので、こちらは「一般の設定変更」の可否だけを見る。
+ */
+export function canUpdateSettings(status: string, statuses?: readonly string[]): boolean {
+  if (isDeleted(status) || status.startsWith("pending")) return false;
+  return !hasLock(statuses, "clientUpdateProhibited");
+}
+
+/**
+ * ロック (client*Prohibited) の管理カードで操作できるか。
+ *
+ * 一般の設定変更 (canUpdateSettings) が禁止されていても、
+ * ロックの ON/OFF は「自分で自分を解除する」ためにできなければならない。
+ * 手続き中・廃止済みだけを不可条件とする。
+ */
+export function canUpdateLocks(status: string): boolean {
   return !isDeleted(status) && !status.startsWith("pending");
 }
 
