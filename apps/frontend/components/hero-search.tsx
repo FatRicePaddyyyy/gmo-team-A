@@ -5,9 +5,11 @@ import { Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { validateSearchInput } from "@/shared/lib/domain-name";
-import { stripKnownTld } from "@/shared/lib/tld-catalog";
+import { stripKnownTld, TLD_CATALOG } from "@/shared/lib/tld-catalog";
 
-const popularTlds = [".com", ".net", ".jp", ".co.jp", ".org", ".xyz"];
+// プルダウンの選択肢はカタログ（唯一の出典）から出す。ここで別に一覧を持つと
+// TLDを追加したときにプルダウンにだけ反映されない、という食い違いが起きるため
+const popularTlds = TLD_CATALOG.map((info) => info.tld);
 
 interface HeroSearchProps {
   onSearch?: (query: string) => void;
