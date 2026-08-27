@@ -706,3 +706,51 @@ describe("RegistryBridge.poll: レジストリごとに endpoint が違うが sh
     expect(res.data).toBeNull();
   });
 });
+
+describe("メンテナンス (503 + 2500) を専用コードに分ける", () => {
+  // レジストリはメンテナンス中に HTTP 503 + result.code 2500 を返す (実測 2026-08-27)。
+  // これを invalid_registry_response に丸めると「予期しない応答がありました」と出て、
+  // 待てばよいのか設定が悪いのか利用者に伝わらない。
+  test("[異常系] info の 503 + 2500 は registry_maintenance になる", async () => {
+    stubRegistry(503, {
+      result: { code: 2500, msg: "メンテナンス中です。" },
+      trID: { clTRID: null, svTRID: null },
+    });
+
+    const res = await RegistryBridge.info({
+      name: "example.com",
+      registry: "kitaqsign",
+      env: mockEnv,
+    });
+
+    expect(res.error).toBe("registry_maintenance");
+  });
+
+  test("[異常系] update の 503 + 2500 も同じく registry_maintenance", async () => {
+    stubRegistry(503, {
+      result: { code: 2500, msg: "メンテナンス中です。" },
+      trID: { clTRID: null, svTRID: null },
+    });
+
+    const res = await RegistryBridge.update({
+      name: "example.com",
+      chg: { registrant: "C-0001" },
+      registry: "kitaqsign",
+      env: mockEnv,
+    });
+
+    expect(res.error).toBe("registry_maintenance");
+  });
+
+  test("[異常系] メンテナンス以外の異常応答は従来どおり invalid_registry_response", async () => {
+    stubRegistry(502, { result: { code: 2400, message: "Command failed" }, trID: { clTRID: null, svTRID: null } });
+
+    const res = await RegistryBridge.info({
+      name: "example.com",
+      registry: "kitaqsign",
+      env: mockEnv,
+    });
+
+    expect(res.error?.startsWith("invalid_registry_response")).toBe(true);
+  });
+});
