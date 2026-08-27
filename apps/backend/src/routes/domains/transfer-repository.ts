@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, desc, eq, ne } from "drizzle-orm";
 import type { DBClient } from "../../lib/db";
 import { classifyDbError } from "../../lib/db-error";
 import { domains, transfers } from "../../lib/schema/general-schema";
@@ -14,6 +14,13 @@ export interface InboundPendingTransferRow {
   domainName: string;
   registry: "kitaqsign" | "kitaqnic";
   requestedAt: Date;
+}
+
+// losing 目線の「処理が済んだ移管」1 件。
+// 承認・却下すると pending 一覧から消えるが、誰かが自分のドメインを
+// 取りに来た事実は残したい。status を添えて、どう決着したかまで見せる。
+export interface InboundTransferHistoryRow extends InboundPendingTransferRow {
+  status: string;
 }
 
 // domains スライスが transfer 情報を参照・更新するための専用 repository
@@ -65,6 +72,47 @@ export class DomainTransferRepository {
       return { success: true, data: rows, error: null };
     } catch (error) {
       console.error("DomainTransferRepository.findInboundPendingByOwner error:", error);
+      return { success: false, data: null, error: classifyDbError(error) };
+    }
+  }
+
+  // 自分のドメインに対して来た移管申請のうち、処理が済んだもの。
+  //
+  // 承認・却下すると findInboundPendingByOwner から消えて、どこにも出なくなる。
+  // 「誰かが自分のドメインを取ろうとした」記録が追えないのは、
+  // 身に覚えのない申請が繰り返されていても気づけないということ。
+  //
+  // pending は別メソッドが返すので、ここでは除く（同じ申請が 2 か所に出ないように）。
+  // gaining 側の情報は pending 側と同じく含めない。
+  static async findInboundHistoryByOwner({
+    ownerUserId,
+    db,
+  }: {
+    ownerUserId: string;
+    db: DBClient;
+  }): Promise<Result<InboundTransferHistoryRow[]>> {
+    try {
+      const rows = await db
+        .select({
+          transferId: transfers.id,
+          domainId: domains.id,
+          domainName: domains.name,
+          registry: transfers.registry,
+          requestedAt: transfers.createdAt,
+          status: transfers.status,
+        })
+        .from(transfers)
+        .innerJoin(domains, eq(transfers.domainId, domains.id))
+        .where(
+          and(
+            ne(transfers.status, "pendingTransfer"),
+            eq(domains.ownerUserId, ownerUserId),
+          ),
+        )
+        .orderBy(desc(transfers.createdAt));
+      return { success: true, data: rows, error: null };
+    } catch (error) {
+      console.error("DomainTransferRepository.findInboundHistoryByOwner error:", error);
       return { success: false, data: null, error: classifyDbError(error) };
     }
   }

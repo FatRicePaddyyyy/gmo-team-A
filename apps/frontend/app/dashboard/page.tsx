@@ -12,8 +12,10 @@ import { useAuthStatus } from "@/shared/hooks/use-auth-status.hook";
 import { GLOSSARY } from "@/shared/lib/glossary";
 import { DomainList } from "./_components/domain-list";
 import { InboundTransferList } from "./_components/inbound-transfer-list";
+import { useInboundTransferHistory } from "./_hooks/use-inbound-transfer-history.hook";
 import { useInboundTransfers } from "./_hooks/use-inbound-transfers.hook";
 import { useMyDomains } from "./_hooks/use-my-domains.hook";
+import { InboundTransferHistoryList } from "./_components/inbound-transfer-history-list";
 
 export default function DashboardPage() {
   const { session, isPending, isSignedIn, isConnectionError } = useAuthStatus();
@@ -21,10 +23,18 @@ export default function DashboardPage() {
   const domainsState = useMyDomains(isSignedIn);
   const { refresh: refreshDomains } = domainsState;
 
-  // 移管を承認 / 却下するとドメインの status が変わるので、両方の一覧を取り直す
+  const historyState = useInboundTransferHistory(isSignedIn);
+  const { refresh: refreshHistory } = historyState;
+
+  // 移管を承認 / 却下するとドメインの status が変わるので、両方の一覧を取り直す。
+  // あわせて履歴も取り直す。処理した申請は受信待ちから消えて履歴へ移るため、
+  // ここで取り直さないと「消えただけ」に見えてしまう。
   const onDomainsChanged = useCallback(
-    () => refreshDomains(),
-    [refreshDomains],
+    async () => {
+      await refreshDomains();
+      await refreshHistory();
+    },
+    [refreshDomains, refreshHistory],
   );
   const transfersState = useInboundTransfers(isSignedIn, onDomainsChanged);
 
@@ -94,6 +104,8 @@ export default function DashboardPage() {
 
             <InboundTransferList state={transfersState} />
             <DomainList state={domainsState} />
+            {/* 履歴は急いで見るものではないので、ドメイン一覧より後に置く */}
+            <InboundTransferHistoryList state={historyState} />
           </div>
         ) : (
           <div className="mx-auto max-w-md space-y-4 rounded-xl bg-white p-8 text-center shadow-sm">

@@ -3,6 +3,8 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 import { RegistryBridge } from "../../lib/bridge";
 import { deleteDomainRouteHandler } from "./[domain-id]/delete";
 import { getDomainRouteHandler } from "./[domain-id]/get";
+import { listInboundTransferHistoryRouteHandler } from "./inbound-transfer-history/get";
+import { DomainTransferRepository } from "./transfer-repository";
 import { updateDomainRouteHandler } from "./[domain-id]/put";
 import { renewDomainRouteHandler } from "./[domain-id]/renew/post";
 import { restoreDomainRouteHandler } from "./[domain-id]/restore/post";
@@ -750,5 +752,73 @@ describe("結合: 詳細に登録者の氏名を載せる", () => {
     const json = await res.json() as { data: { ownerName: string; name: string } };
     expect(json.data.ownerName).toBe("");
     expect(json.data.name).toBe(mockDomainRow.name);
+  });
+});
+
+describe("結合: 渡す側の移管履歴", () => {
+  // 承認・却下すると pending 一覧から消えてどこにも出なくなっていた。
+  // 「誰かが自分のドメインを取ろうとした」記録が追えないのはセキュリティ上まずい。
+  test("[正常系] 処理が済んだ申請が status 付きで返る", async () => {
+    vi.spyOn(DomainTransferRepository, "findInboundHistoryByOwner").mockResolvedValue({
+      success: true,
+      data: [
+        {
+          transferId: "tr-001",
+          domainId: "dom-001",
+          domainName: "example.com",
+          registry: "kitaqsign" as const,
+          requestedAt: new Date("2026-08-25T00:00:00.000Z"),
+          status: "clientRejected",
+        },
+      ],
+      error: null,
+    });
+
+    const res = await listInboundTransferHistoryRouteHandler.request(
+      "/api/v1/secure/domains/inbound-transfer-history",
+      {},
+      mockEnv,
+    );
+
+    expect(res.status).toBe(200);
+    const json = await res.json() as { data: { status: string; domainName: string }[] };
+    expect(json.data).toHaveLength(1);
+    // どう決着したかが分からないと履歴の意味がない
+    expect(json.data[0]?.status).toBe("clientRejected");
+    expect(json.data[0]?.domainName).toBe("example.com");
+  });
+
+  test("[正常系] 履歴が無いときは空配列", async () => {
+    vi.spyOn(DomainTransferRepository, "findInboundHistoryByOwner").mockResolvedValue({
+      success: true,
+      data: [],
+      error: null,
+    });
+
+    const res = await listInboundTransferHistoryRouteHandler.request(
+      "/api/v1/secure/domains/inbound-transfer-history",
+      {},
+      mockEnv,
+    );
+
+    expect(res.status).toBe(200);
+    const json = await res.json() as { data: unknown[] };
+    expect(json.data).toEqual([]);
+  });
+
+  test("[異常系] DB エラーは 500", async () => {
+    vi.spyOn(DomainTransferRepository, "findInboundHistoryByOwner").mockResolvedValue({
+      success: false,
+      data: null,
+      error: "db_error",
+    });
+
+    const res = await listInboundTransferHistoryRouteHandler.request(
+      "/api/v1/secure/domains/inbound-transfer-history",
+      {},
+      mockEnv,
+    );
+
+    expect(res.status).toBe(500);
   });
 });

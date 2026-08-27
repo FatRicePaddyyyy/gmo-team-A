@@ -17,6 +17,7 @@ import { approveTransferRouteHandler } from "./routes/domains/[domain-id]/transf
 import { rejectTransferRouteHandler } from "./routes/domains/[domain-id]/transfer/reject/post";
 import { checkDomainRouteHandler } from "./routes/domains/check/post";
 import { listDomainsRouteHandler } from "./routes/domains/get";
+import { listInboundTransferHistoryRouteHandler } from "./routes/domains/inbound-transfer-history/get";
 import { listInboundPendingTransfersRouteHandler } from "./routes/domains/pending-inbound-transfers/get";
 import { createDomainRouteHandler } from "./routes/domains/post";
 import { cancelTransferRouteHandler } from "./routes/transfers/[transfer-id]/cancel/post";
@@ -59,6 +60,7 @@ export const routes = app
   // Hono のルーター実装によっては先勝ちのため、getDomainRouteHandler ({domain-id}) が先だと
   // /pending-inbound-transfers が {domain-id}="pending-inbound-transfers" として吸われる可能性がある。
   .route("/", listInboundPendingTransfersRouteHandler)
+  .route("/", listInboundTransferHistoryRouteHandler)
   .route("/", getDomainRouteHandler)
   .route("/", renewDomainRouteHandler)
   .route("/", updateDomainRouteHandler)
