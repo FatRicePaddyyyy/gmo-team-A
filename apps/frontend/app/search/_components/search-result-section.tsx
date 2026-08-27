@@ -66,7 +66,7 @@ export function SearchResultSection({
             : !hasSearched
               ? "まだ検索されていません"
               : error
-                ? "検索に失敗しました"
+                ? error
                 : `「${query}」の検索結果 ${results.filter((r) => r.available).length}件が取得可能です`}
         </p>
 

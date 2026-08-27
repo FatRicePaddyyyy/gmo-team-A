@@ -2,6 +2,7 @@ import { TransferStatusRepository } from "../../domains/transfer/repository";
 import { RegistryBridge } from "../../lib/bridge";
 import type { Registry } from "../../lib/bridge/types";
 import type { DBClient } from "../../lib/db";
+import { isValidFqdn } from "../../lib/registry-policy";
 import type { Result } from "../../types/result";
 import { DomainMapper   } from "./mapper";
 import type {DomainDetailResponse, DomainResponse} from "./mapper";
@@ -64,15 +65,22 @@ export class DomainService {
    * TLD_CATALOG 全件を確認すると通信回数が膨らんでいた。ここでは hello を1回ずつだけ呼び、
    * 名前を registry ごとにグルーピングしてから、registry ごとに1回の check にまとめる。
    */
-  // 項目ごとに avail/failed を持つため、この処理自体が全体として失敗することはない
-  // （Result<T> でラップしない。呼び出し側は常に results をそのまま使える）。
+  // レジストリ由来の失敗は項目ごとの avail/failed で表す。一方、名前の形式が不正なケースは
+  // 項目に載せると「すでに使われています」と誤って見えてしまうため、処理全体の失敗として返す
+  // （Issue #76。avail/failed の2フラグには「そもそも不正な名前」を表す状態が無い）。
   static async checkBulk({
     names,
     env,
   }: {
     names: string[];
     env: CloudflareBindings;
-  }): Promise<DomainCheckItem[]> {
+  }): Promise<Result<DomainCheckItem[]>> {
+    // Issue #76: 形式は Zod でも検証しているが、service 層でも先に見る（transfers と同じ二段構え）。
+    // handler を経由しない呼び出しが将来入っても、レジストリへ送らずここで止められる。
+    if (names.some(name => !isValidFqdn(name.trim().toLowerCase()))) {
+      return { success: false, data: null, error: "invalid_domain_name" };
+    }
+
     const [ks, kn] = await Promise.all([
       RegistryBridge.hello({ registry: "kitaqsign", env }),
       RegistryBridge.hello({ registry: "kitaqnic", env }),
@@ -123,7 +131,7 @@ export class DomainService {
       }
     }
 
-    return results;
+    return { success: true, data: results, error: null };
   }
 
   static async create({
@@ -143,6 +151,12 @@ export class DomainService {
     db: DBClient;
     env: CloudflareBindings;
   }): Promise<Result<DomainResponse>> {
+    // Issue #76: FQDN 形式は Zod でも検証しているが、service 層でも念のためチェックする
+    // (transfers と同じ二段構え)。handler を経由しない呼び出しが将来入っても弾けるようにする。
+    if (!isValidFqdn(name.trim().toLowerCase())) {
+      return { success: false, data: null, error: "invalid_domain_name" };
+    }
+
     // 1. 疎通確認: レジストリの hello を叩き、認証ヘッダ・応答・TLD 対応を確認する。
     const helloResult = await RegistryBridge.hello({ registry, env });
     if (!helloResult.success) {return helloResult;}
