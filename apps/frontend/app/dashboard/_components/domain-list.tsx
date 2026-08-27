@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { GlossaryTerm } from "@/components/glossary-term";
+import { GLOSSARY } from "@/shared/lib/glossary";
 import type { useMyDomains } from "../_hooks/use-my-domains.hook";
 import { FeedbackBanner } from "@/components/feedback-banner";
 import { DomainRow } from "../_parts/domain-row";
@@ -23,7 +25,14 @@ export function DomainList({ state }: DomainListProps) {
             取得済みのドメイン
           </h2>
           <p className="mt-1 text-sm text-gray-600">
-            それぞれのドメインを開くと、期限の延長・ネームサーバーの変更・他社への引き渡し・廃止ができます。
+            それぞれのドメインを開くと、期限の延長・ネームサーバーの変更・他の
+            <GlossaryTerm
+              description={GLOSSARY.registrar.description}
+              className="underline decoration-dotted underline-offset-4"
+            >
+              {GLOSSARY.registrar.term}
+            </GlossaryTerm>
+            への引き渡し・廃止ができます。
           </p>
         </div>
         <Button
@@ -72,7 +81,7 @@ export function DomainList({ state }: DomainListProps) {
               nativeButton={false}
               render={<Link href="/transfer" />}
             >
-              他社のドメインをここへ移す
+              他のレジストラのドメインをここへ移す
             </Button>
           </div>
         </div>

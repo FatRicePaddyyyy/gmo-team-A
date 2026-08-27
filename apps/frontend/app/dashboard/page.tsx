@@ -5,8 +5,10 @@ import { useCallback } from "react";
 import { ArrowLeftRight, ChevronRight } from "lucide-react";
 import { useSession } from "@/auth-client";
 import { Button } from "@/components/ui/button";
+import { GlossaryTerm } from "@/components/glossary-term";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
+import { GLOSSARY } from "@/shared/lib/glossary";
 import { DomainList } from "./_components/domain-list";
 import { InboundTransferList } from "./_components/inbound-transfer-list";
 import { useInboundTransfers } from "./_hooks/use-inbound-transfers.hook";
@@ -51,9 +53,10 @@ export default function DashboardPage() {
               </p>
             </div>
 
-            {/* 「他社のドメインをこちらへ移せる」ことは、言われないと思いつかない。
+            {/* 「他のレジストラのドメインをこちらへ移せる」ことは、言われないと思いつかない。
                 見出し横の小さなボタンでは気づかれないので、
-                何ができるのかを書いた一枚の案内として置く。 */}
+                何ができるのかを書いた一枚の案内として置く。
+                「レジストラ」は初見では通じないので、その場で読める説明を添える (Issue #91)。 */}
             <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-[var(--brand)]/30 bg-[var(--brand-light)] p-4">
               <div className="flex items-start gap-3">
                 <ArrowLeftRight
@@ -62,7 +65,14 @@ export default function DashboardPage() {
                 />
                 <div>
                   <p className="font-heading text-base font-bold text-gray-900">
-                    他社で持っているドメインを、ここへ移せます
+                    他の
+                    <GlossaryTerm
+                      description={GLOSSARY.registrar.description}
+                      className="underline decoration-dotted underline-offset-4"
+                    >
+                      {GLOSSARY.registrar.term}
+                    </GlossaryTerm>
+                    で持っているドメインを、ここへ移せます
                   </p>
                   <p className="mt-1 text-sm text-gray-700">
                     いま他の事業者で管理しているドメインを、この画面でまとめて管理できるようになります。

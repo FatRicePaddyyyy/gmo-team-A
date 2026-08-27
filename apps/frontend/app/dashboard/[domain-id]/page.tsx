@@ -9,6 +9,8 @@ import { BackLink } from "@/components/back-link";
 import { RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { FeedbackBanner } from "@/components/feedback-banner";
+import { GlossaryTerm } from "@/components/glossary-term";
+import { GLOSSARY } from "@/shared/lib/glossary";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -36,7 +38,7 @@ export default function DomainDetailPage() {
   const isSignedIn = Boolean(session?.user);
 
   const state = useDomainDetail(domainId, isSignedIn);
-  // このドメインに対して他社への引き渡し申請が来ていないか。
+  // このドメインに対して他のレジストラへの引き渡し申請が来ていないか。
   // 一覧と同じ API を使い、対象の 1 件だけを取り出す。
   const inbound = useInboundTransfers(isSignedIn, state.refresh);
   const incoming = inbound.transfers.find((t) => t.domainId === domainId) ?? null;
@@ -118,7 +120,14 @@ export default function DomainDetailPage() {
                   {domain?.name ?? "ドメインの詳細"}
                 </h1>
                 <p className="mt-1 text-sm text-gray-600">
-                  ネームサーバーの変更と、他社へ移管するための設定ができます。
+                  ネームサーバーの変更と、他の
+                  <GlossaryTerm
+                    description={GLOSSARY.registrar.description}
+                    className="underline decoration-dotted underline-offset-4"
+                  >
+                    {GLOSSARY.registrar.term}
+                  </GlossaryTerm>
+                  へ移管するための設定ができます。
                 </p>
               </div>
               {/* レジストリへの反映が遅れることがあるので、取り直す手段を置く。

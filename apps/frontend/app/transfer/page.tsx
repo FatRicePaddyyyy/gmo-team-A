@@ -5,8 +5,10 @@ import { useSession } from "@/auth-client";
 import { BackLink } from "@/components/back-link";
 import { Button } from "@/components/ui/button";
 import { FeedbackBanner } from "@/components/feedback-banner";
+import { GlossaryTerm } from "@/components/glossary-term";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
+import { GLOSSARY } from "@/shared/lib/glossary";
 import { TransferList } from "./_components/transfer-list";
 import { TransferRequestForm } from "./_components/transfer-request-form";
 import { useTransferRequests } from "./_hooks/use-transfer-requests.hook";
@@ -35,8 +37,16 @@ export default function TransferPage() {
         <BackLink href="/dashboard" label="マイドメインに戻る" />
 
         <div>
+          {/* 「レジストラ」は初見では通じないので、その場で読める説明を添える (Issue #91) */}
           <h1 className="font-heading text-2xl font-bold text-gray-900">
-            他社のドメインをここへ移す
+            他の
+            <GlossaryTerm
+              description={GLOSSARY.registrar.description}
+              className="underline decoration-dotted underline-offset-4"
+            >
+              {GLOSSARY.registrar.term}
+            </GlossaryTerm>
+            のドメインをここへ移す
           </h1>
           <p className="mt-2 text-sm text-gray-600">
             いま他の事業者で管理しているドメインを、こちらへ引き取ります。
@@ -44,12 +54,20 @@ export default function TransferPage() {
             現在の管理者が承認するまで完了しません。数日かかることもあります。
           </p>
 
-          {/* 逆向き（自分のドメインを他社へ渡す）はドメインごとの操作なので、
-              ここには置かず設定画面へ案内するだけにする */}
+          {/* 逆向き（自分のドメインを他のレジストラへ渡す）はドメインごとの操作なので、
+              ここには置かず設定画面へ案内するだけにする。
+              同じ画面の中で「他社」と「レジストラ」が混在しないよう、こちらも揃える (Issue #91) */}
           <p className="mt-3 border-l-2 border-gray-300 pl-4 text-sm text-gray-600">
             逆に
             <span className="font-semibold text-gray-900">
-              自分のドメインを他社へ渡したい
+              自分のドメインを他の
+              <GlossaryTerm
+                description={GLOSSARY.registrar.description}
+                className="underline decoration-dotted underline-offset-4"
+              >
+                {GLOSSARY.registrar.term}
+              </GlossaryTerm>
+              へ渡したい
             </span>
             ときは、この画面ではなく
             <Link
