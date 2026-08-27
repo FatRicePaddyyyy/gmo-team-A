@@ -202,6 +202,20 @@ export default function DomainDetailPage() {
                   <TabsTrigger value="lifecycle">廃止・復旧</TabsTrigger>
                 </TabsList>
 
+                {/* レジストリが落ちているときはどのタブを開いても同じ制約 (最新値が取れない・変更が届かない)
+                    がかかるので、Tabs 全体の直下 1 箇所にまとめて出す。以前は tab ごとに個別配置していたが、
+                    抜けや文言差が出るので統一する。 */}
+                {registryDown && (
+                  <FeedbackBanner
+                    tone="error"
+                    context="detail"
+                    message={
+                      domain.registryUnavailableReason ??
+                      "レジストリから最新の情報を取得できませんでした。"
+                    }
+                  />
+                )}
+
                 <TabsContent value="overview" className="space-y-4">
                   <DomainOverview domain={domain} />
                 </TabsContent>
@@ -258,17 +272,7 @@ export default function DomainDetailPage() {
                 <TabsContent value="transfer" className="space-y-4">
                   <TransferOutSteps current={transferOutStep} />
 
-                  {/* レジストリが落ちているときは理由が違うので、状態ヒントより先に出す */}
-                  {registryDown && (
-                    <FeedbackBanner
-                      tone="error"
-                      context="detail"
-                      message={
-                        domain.registryUnavailableReason ??
-                        "レジストリから最新の情報を取得できませんでした。"
-                      }
-                    />
-                  )}
+                  {/* registryDown 時のバナーは Tabs 直下でまとめて表示している */}
 
                   {incoming && (
                     <IncomingTransferCard
@@ -302,7 +306,8 @@ export default function DomainDetailPage() {
                        レジストリが info を返せない状態 (メンテ等) では現状値が読めないので
                        操作は止める。廃止済み・移管中も現在は変更できないので同じ扱い。
                        clientUpdateProhibited が立っていても、このカードだけは自己解除できるように
-                       他の設定変更カード (canUpdateSettings) とは別の canUpdateLocks で判定する。 */}
+                       他の設定変更カード (canUpdateSettings) とは別の canUpdateLocks で判定する。
+                       registryDown 時のバナーは Tabs 直下でまとめて表示している。 */}
                   {!locksEditable && !registryDown && (
                     <p className="rounded-lg border border-gray-200 bg-white p-3 text-sm text-gray-600">
                       {statusHintOf(domain.status) ??
