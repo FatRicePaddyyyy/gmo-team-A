@@ -100,7 +100,7 @@ export default function CartCompletePage() {
             <p>
               {isLoggedIn
                 ? "お支払い方法の選択に進みます。"
-                : "ログインすると、お支払い方法の選択に進みます。"}
+                : "ログインすると、お支払い方法の選択に進みます（ドメインの管理・更新のため、取得にはアカウントとの紐付けが必須です）。"}
               選択後に「確定する」を押すと、その場でこのドメインが登録されます。
             </p>
           </LearningNote>
@@ -117,16 +117,10 @@ export default function CartCompletePage() {
           </div>
         </div>
 
-        {!isLoggedIn && (
-          <div className="mt-6 rounded-lg border border-border bg-gray-50 px-4 py-4 text-center">
-            <p className="text-sm font-bold text-gray-900">
-              お申し込みにはログインが必要です
-            </p>
-            <p className="mt-1 text-sm leading-relaxed text-gray-600">
-              ドメインの管理・更新のため、購入にはアカウントとの紐付けが必須です。
-            </p>
-          </div>
-        )}
+        {/* 「ログインが必要」はこの画面で何度も言わない。
+            見出し下の一文と「この先で起きること」で言い終わっており、
+            すぐ下にログインボタンもある。実際に押しても失敗する関門は
+            /cart/payment 側に置いた（Issue #70）。 */}
 
         <div className="mt-4 flex flex-col items-stretch gap-3 sm:flex-row sm:justify-center">
           <Button
