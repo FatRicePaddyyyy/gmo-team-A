@@ -1,14 +1,16 @@
-export type PaymentMethod = "credit-card" | "konbini" | "bank-transfer";
-
-export interface PaymentMethodOption {
-  id: PaymentMethod;
-  label: string;
-  description: string;
-}
-
-/** 初回取得・更新のどちらの支払い確認にも使う。デモのため実際の決済は行わない */
-export const PAYMENT_METHODS: PaymentMethodOption[] = [
-  { id: "credit-card", label: "クレジットカード", description: "主要ブランドに対応（デモのため実際の入力欄はありません）" },
-  { id: "konbini", label: "コンビニ払い", description: "発行された番号でコンビニのレジからお支払い" },
-  { id: "bank-transfer", label: "銀行振込", description: "指定口座への振込確認後に手続きが進みます" },
-];
+/**
+ * このデモで扱う支払い方法。
+ *
+ * 以前はクレジットカード・コンビニ払い・銀行振込の 3 つから選ばせていたが、
+ * どれを選んでも保存も送信もされず、注文の中身は 1 ミリも変わらなかった。
+ * 決済機能そのものが無いので当然で、選択肢は「選ばせているように見えるだけ」の
+ * 飾りになっていた。何も変わらない選択を挟むと、利用者は
+ * 「振込にしたら手数料が違うのでは」と実在しない差を考え込むことになる。
+ *
+ * 学びたいのはドメインの取得手順であって決済方法の比較ではないので、
+ * クレジットカード 1 つに固定して、選ぶ手間ごと無くした。
+ */
+export const PAYMENT_METHOD = {
+  label: "クレジットカード",
+  description: "このデモに決済機能はありません。カード番号の入力欄もなく、料金は発生しません。",
+} as const;

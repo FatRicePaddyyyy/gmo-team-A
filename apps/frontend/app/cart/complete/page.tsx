@@ -62,7 +62,7 @@ export default function CartCompletePage() {
           </h1>
           <p className="text-sm leading-relaxed text-gray-600">
             まだ課金は発生していません。実際に取得するには、このあと
-            {isLoggedIn ? "お支払い方法の選択" : "ログイン"}が必要です。
+            {isLoggedIn ? "お支払い内容の確認" : "ログイン"}が必要です。
           </p>
         </div>
 
@@ -99,9 +99,9 @@ export default function CartCompletePage() {
           <LearningNote title="この先で起きること" tone="info">
             <p>
               {isLoggedIn
-                ? "お支払い方法の選択に進みます。"
-                : "ログインすると、お支払い方法の選択に進みます（ドメインの管理・更新のため、取得にはアカウントとの紐付けが必須です）。"}
-              選択後に「確定する」を押すと、その場でこのドメインが登録されます。
+                ? "お支払い内容の確認に進みます。"
+                : "ログインすると、お支払い内容の確認に進みます（ドメインの管理・更新のため、取得にはアカウントとの紐付けが必須です）。"}
+              内容を確認して「確定する」を押すと、その場でこのドメインが登録されます。
             </p>
           </LearningNote>
 
@@ -112,7 +112,7 @@ export default function CartCompletePage() {
           <div className="flex items-start gap-2 rounded-lg border border-border bg-gray-50 px-4 py-3 text-sm text-gray-700">
             <Info className="mt-0.5 size-4 shrink-0 text-gray-500" aria-hidden="true" />
             <p>
-              このサイトは学習用のデモです。お支払い方法はどれを選んでも、実際の決済機能が無いため料金が請求されることはありません。
+              このサイトは学習用のデモです。実際の決済機能が無いため、料金が請求されることはありません。
             </p>
           </div>
         </div>
@@ -129,7 +129,7 @@ export default function CartCompletePage() {
             nativeButton={false}
             render={<Link href={isLoggedIn ? "/cart/payment" : "/login"} />}
           >
-            {isLoggedIn ? "お支払い方法の選択に進む" : "ログイン"}
+            {isLoggedIn ? "お支払い内容の確認に進む" : "ログイン"}
           </Button>
           <Button
             variant="outline"
