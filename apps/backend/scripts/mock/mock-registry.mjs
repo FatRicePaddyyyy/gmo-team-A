@@ -152,12 +152,45 @@ function sendForce(res, force, clTRID, log) {
   send(res, force.http, envelope(force.code, msg, null, clTRID));
 }
 
+// --- メンテナンスモード -------------------------------------------------
+// 本物のレジストリは定期メンテナンスに入ると、どのエンドポイントでも
+// HTTP 503 + EPP 2500 を返す（実測 2026-08-27・kitaqsign / kitaqnic とも同じ）。
+// メンテ中の画面を確かめるのに本物のメンテ時間を待つのは再現性が無いので、
+// ここで再現できるようにする。
+//
+//   MAINTENANCE=1 node scripts/mock/mock-registry.mjs
+//
+// 起動後に切り替えたいときは:
+//   curl -X POST localhost:9999/__mock/maintenance -d '{"on":true}'
+let maintenance = process.env.MAINTENANCE === "1";
+const MAINTENANCE_MSG = "ただいまメンテナンスのため一時的にご利用いただけません。時間をおいて再度お試しください。 / The registry is temporarily unavailable due to maintenance.";
+
 const server = createServer(async (req, res) => {
   const url = new URL(req.url ?? "/", `http://localhost:${PORT}`);
   const path = url.pathname;
   const method = req.method ?? "GET";
   const clTRID = req.headers["x-cl-trid"] ?? null;
   const log = (msg) => console.log(`  ${method} ${path} → ${msg}`);
+
+  // --- メンテナンスの切り替え（モック専用。本物には無いエンドポイント）
+  if (path === "/__mock/maintenance") {
+    if (method === "POST") {
+      const body = await readBody(req);
+      maintenance = Boolean(body?.on);
+    }
+    log(`maintenance=${maintenance}`);
+    return send(res, 200, { maintenance });
+  }
+
+  // --- メンテ中は hello も含めて全部 503 + 2500。
+  // 本物は msg フィールドで返してくる（message ではない）ので、そこも合わせる。
+  if (maintenance) {
+    log("503 2500 maintenance");
+    return send(res, 503, {
+      result: { code: 2500, msg: MAINTENANCE_MSG },
+      trID: { clTRID, svTRID: null },
+    });
+  }
 
   // --- L 用 force: hello 以外の全ハンドラで最優先。
   // 認証チェックより前に判定し、"認証OKでも指定 code" を再現可能にする。

@@ -12,18 +12,38 @@ import type { DomainDetail } from "../_hooks/use-domain-detail.hook";
  * ラベルと値を並べる行。値が空なら「—」を出して、欠落と空文字を区別しない。
  *
  * 「値」は素の string / null / React 要素のいずれもありうる。素の string / null は
- * `value || "—"` の truthy 判定で拾えるが、`<span>` に包んだ場合は truthy 扱いに
- * なるので、呼び出し側で「中身が空なら null を渡す」ことを徹底する。
+ * truthy 判定で拾えるが、`<span>` に包んだ場合は truthy 扱いになるので、
+ * 呼び出し側で「中身が空なら null を渡す」ことを徹底する。
  * ここでは最終フォールバックだけ担当する。
  */
-function Row({ label, value }: { label: string; value: React.ReactNode }) {
+function Row({
+  label,
+  value,
+  unavailable = false,
+}: {
+  label: string;
+  value: React.ReactNode;
+  /**
+   * レジストリに問い合わせられていない項目。
+   * 「—」だと「設定されていない」と読めてしまうので、取得できていないことを明示する。
+   */
+  unavailable?: boolean;
+}) {
   // 空文字列も「値なし」扱いにする。backend のレスポンスが一時的に "" を返しても
   // 空表示にならず、必ず「—」が出るようにする（issue #66）
   const empty = value === null || value === undefined || value === "";
   return (
     <div className="flex flex-wrap gap-x-3 gap-y-0.5 border-b border-gray-100 py-2 last:border-b-0">
       <dt className="w-40 shrink-0 text-xs text-gray-500">{label}</dt>
-      <dd className="min-w-0 flex-1 text-sm text-gray-900">{empty ? "—" : value}</dd>
+      <dd className="min-w-0 flex-1 text-sm text-gray-900">
+        {unavailable ? (
+          <span className="text-gray-500">いま取得できません</span>
+        ) : empty ? (
+          "—"
+        ) : (
+          value
+        )}
+      </dd>
     </div>
   );
 }
@@ -34,6 +54,9 @@ interface DomainOverviewProps {
 
 /** ドメインの現在の状態。ここは表示だけで、変更は下のカードが受け持つ */
 export function DomainOverview({ domain }: DomainOverviewProps) {
+  // レジストリに問い合わせられなかったとき、レジストリ由来の項目は
+  // 「無い」ではなく「取れていない」。空欄で見せると誤解を生む。
+  const registryDown = !domain.registryAvailable;
   const daysLeft = redemptionDaysLeft({
     status: domain.status,
     rgpStatus: domain.rgpStatus,
@@ -95,6 +118,7 @@ export function DomainOverview({ domain }: DomainOverviewProps) {
             <Row label="レジストリ" value={domain.registry || null} />
             <Row
               label="登録者"
+              unavailable={registryDown}
               value={
                 domain.registrant ? (
                   <span className="inline-flex items-center gap-1.5">
@@ -109,6 +133,7 @@ export function DomainOverview({ domain }: DomainOverviewProps) {
             />
             <Row
               label="ネームサーバー"
+              unavailable={registryDown}
               value={
                 domain.nameservers?.length ? (
                   <ul className="space-y-0.5">
@@ -123,6 +148,7 @@ export function DomainOverview({ domain }: DomainOverviewProps) {
             />
             <Row
               label="レジストリ上の状態"
+              unavailable={registryDown}
               value={
                 domain.statuses?.length ? (
                   <span className="flex flex-wrap gap-1">
@@ -140,6 +166,7 @@ export function DomainOverview({ domain }: DomainOverviewProps) {
             />
             <Row
               label="いまの段階"
+              unavailable={registryDown}
               value={
                 domain.rgpStatus?.length ? (
                   <span className="flex flex-wrap gap-1">
@@ -159,6 +186,7 @@ export function DomainOverview({ domain }: DomainOverviewProps) {
             {contacts.length > 0 && (
               <Row
                 label="連絡先"
+              unavailable={registryDown}
                 value={
                   <ul className="space-y-0.5">
                     {contacts.map(([role, id]) => (
@@ -173,10 +201,12 @@ export function DomainOverview({ domain }: DomainOverviewProps) {
             )}
             <Row
               label="最終更新"
+              unavailable={registryDown}
               value={domain.upDate ? formatDate(domain.upDate) : null}
             />
             <Row
               label="移管日"
+              unavailable={registryDown}
               value={domain.trDate ? formatDate(domain.trDate) : null}
             />
           </dl>

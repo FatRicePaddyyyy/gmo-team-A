@@ -46,6 +46,9 @@ const DomainSchema = z.object({
   createdAt: z.string(),
   ownerUserId: z.string(),
   autoRenew: z.boolean(),
+  // GET と同じ形。update 直後は必ずレジストリに届いているので常に true。
+  registryAvailable: z.boolean(),
+  registryUnavailableReason: z.string().nullable(),
   statuses: z.array(z.string()),
   registrant: z.string(),
   contacts: z.record(z.string(), z.string()),

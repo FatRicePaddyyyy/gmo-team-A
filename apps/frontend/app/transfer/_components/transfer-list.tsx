@@ -46,6 +46,7 @@ export function TransferList({ state }: TransferListProps) {
 
       {loadError && (
         <FeedbackBanner
+              context="transfer"
           tone="error"
           message={loadError}
           unauthorized={loadUnauthorized}
