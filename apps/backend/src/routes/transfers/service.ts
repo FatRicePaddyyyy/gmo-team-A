@@ -7,6 +7,7 @@ import type { Result } from "../../types/result";
 import { TransferDomainRepository } from "./domain-repository";
 import { OutboundTransferRequestRepository } from "./outbound-repository";
 import { TransferRepository } from "./repository";
+import type { TransferWithDomainName } from "./repository";
 
 type Transfer = typeof transfers.$inferSelect;
 type OutboundRequest = typeof outboundTransferRequests.$inferSelect;
@@ -206,7 +207,7 @@ export class TransferService {
   }: {
     userId: string;
     env: CloudflareBindings;
-  }): Promise<Result<Transfer[]>> {
+  }): Promise<Result<TransferWithDomainName[]>> {
     return TransferRepository.findByGainingUserId({ userId, env });
   }
 }

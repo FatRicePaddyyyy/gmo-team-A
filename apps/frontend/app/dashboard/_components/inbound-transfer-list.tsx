@@ -21,7 +21,7 @@ interface InboundTransferListProps {
  * 申請が 1 件も無いときは何も出さない（普段は空のセクションが居座らないようにする）。
  */
 export function InboundTransferList({ state }: InboundTransferListProps) {
-  const { transfers, loadError, running, feedback } = state;
+  const { transfers, loadError, loadUnauthorized, running, feedback } = state;
   const [rejecting, setRejecting] = useState<string | null>(null);
 
   // 読み込み中も出さない。移管申請は普段 0 件なので、読み込み表示を挟むと
@@ -44,9 +44,19 @@ export function InboundTransferList({ state }: InboundTransferListProps) {
       </div>
 
       {feedback && (
-        <FeedbackBanner tone={feedback.tone} message={feedback.message} />
+        <FeedbackBanner
+          tone={feedback.tone}
+          message={feedback.message}
+          unauthorized={feedback.unauthorized}
+        />
       )}
-      {loadError && <FeedbackBanner tone="error" message={loadError} />}
+      {loadError && (
+        <FeedbackBanner
+          tone="error"
+          message={loadError}
+          unauthorized={loadUnauthorized}
+        />
+      )}
 
       {transfers.map((transfer: InboundTransfer) => (
         <Card key={transfer.transferId} className="ring-1 ring-amber-200">

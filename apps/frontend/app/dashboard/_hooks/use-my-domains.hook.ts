@@ -18,6 +18,8 @@ export type RenewPeriodUnit = "Y" | "M";
 export interface DomainFeedback {
   tone: "success" | "error";
   message: string;
+  /** セッション切れ。帯にログイン導線を出すため */
+  unauthorized?: boolean;
 }
 
 /**
@@ -42,16 +44,19 @@ export function useMyDomains(enabled: boolean) {
   // 一度でも取得を終えたか。取得前に空状態が描画されるのを防ぐために見る
   const [loaded, setLoaded] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [loadUnauthorized, setLoadUnauthorized] = useState(false);
   const [running, setRunning] = useState<RunningDomainAction | null>(null);
   const [feedback, setFeedback] = useState<DomainFeedback | null>(null);
 
   const refresh = useCallback(async () => {
     setLoading(true);
     setLoadError(null);
+    setLoadUnauthorized(false);
     const result = await callApi<MyDomain[]>($listDomains());
     if (!result.success) {
       // 直前の一覧は消さない。消すと「廃止しました」と「まだ取得していません」が同時に出る
       setLoadError(result.error);
+      setLoadUnauthorized(Boolean(result.unauthorized));
     } else {
       setDomains(result.data);
     }
@@ -73,7 +78,11 @@ export function useMyDomains(enabled: boolean) {
         $renewDomain({ param: { "domain-id": domain.id }, json: { period } }),
       );
       if (!result.success) {
-        setFeedback({ tone: "error", message: result.error });
+        setFeedback({
+          tone: "error",
+          message: result.error,
+          unauthorized: result.unauthorized,
+        });
       } else {
         setFeedback({
           tone: "success",
@@ -95,7 +104,11 @@ export function useMyDomains(enabled: boolean) {
         $deleteDomain({ param: { "domain-id": domain.id } }),
       );
       if (!result.success) {
-        setFeedback({ tone: "error", message: result.error });
+        setFeedback({
+          tone: "error",
+          message: result.error,
+          unauthorized: result.unauthorized,
+        });
       } else {
         setFeedback({
           tone: "success",
@@ -117,7 +130,11 @@ export function useMyDomains(enabled: boolean) {
         $restoreDomain({ param: { "domain-id": domain.id } }),
       );
       if (!result.success) {
-        setFeedback({ tone: "error", message: result.error });
+        setFeedback({
+          tone: "error",
+          message: result.error,
+          unauthorized: result.unauthorized,
+        });
       } else {
         setFeedback({
           tone: "success",
@@ -137,6 +154,7 @@ export function useMyDomains(enabled: boolean) {
     // useState の初期値では R2 の描画に間に合わず、空状態が1フレーム出てしまう。
     loading: loading || (enabled && !loaded),
     loadError,
+    loadUnauthorized,
     running,
     feedback,
     refresh,

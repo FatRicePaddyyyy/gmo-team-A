@@ -13,7 +13,7 @@ interface DomainListProps {
 
 /** 取得済みドメインの一覧セクション。取得も操作も `useMyDomains` が持つ */
 export function DomainList({ state }: DomainListProps) {
-  const { domains, loading, loadError, running, feedback, refresh } = state;
+  const { domains, loading, loadError, loadUnauthorized, running, feedback, refresh } = state;
 
   return (
     <section className="space-y-4">
@@ -38,10 +38,20 @@ export function DomainList({ state }: DomainListProps) {
       </div>
 
       {feedback && (
-        <FeedbackBanner tone={feedback.tone} message={feedback.message} />
+        <FeedbackBanner
+          tone={feedback.tone}
+          message={feedback.message}
+          unauthorized={feedback.unauthorized}
+        />
       )}
 
-      {loadError && <FeedbackBanner tone="error" message={loadError} />}
+      {loadError && (
+        <FeedbackBanner
+          tone="error"
+          message={loadError}
+          unauthorized={loadUnauthorized}
+        />
+      )}
 
       {loading && domains.length === 0 && (
         <p className="py-8 text-center text-sm text-gray-600">
