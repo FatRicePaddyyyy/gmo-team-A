@@ -77,8 +77,7 @@ export class DomainService {
   }): Promise<Result<DomainCheckItem[]>> {
     // Issue #76: 形式は Zod でも検証しているが、service 層でも先に見る（transfers と同じ二段構え）。
     // handler を経由しない呼び出しが将来入っても、レジストリへ送らずここで止められる。
-    const invalid = names.find(name => !isValidFqdn(name.trim().toLowerCase()));
-    if (invalid !== undefined) {
+    if (names.some(name => !isValidFqdn(name.trim().toLowerCase()))) {
       return { success: false, data: null, error: "invalid_domain_name" };
     }
 
