@@ -95,8 +95,9 @@ export type ListPendingInboundTransfersResponse = InferResponseType<
   typeof $listPendingInboundTransfers
 >;
 
-// 自分のドメインに来た移管申請のうち、処理が済んだもの。
-// 承認・却下すると上の一覧から消えるので、記録はこちらで見る。
+// 自分のドメインに来た移管申請のうち、渡さずに終わったもの（却下・取消・期限切れ）。
+// 決着すると上の一覧から消えるので、記録はこちらで見る。
+// 承認済みは含まない（渡したあとは記録が残らないか、別人の履歴になるため）。
 export const $listInboundTransferHistory = client(
   process.env.NEXT_PUBLIC_BACKEND_URL!,
 ).secure.domains["inbound-transfer-history"].$get;

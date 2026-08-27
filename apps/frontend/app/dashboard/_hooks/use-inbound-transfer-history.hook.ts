@@ -14,14 +14,17 @@ type HistorySuccess = Extract<
 export type InboundTransferHistory = HistorySuccess["data"][number];
 
 /**
- * 自分のドメインに来た移管申請のうち、処理が済んだもの。
+ * 自分のドメインに来た移管申請のうち、渡さずに終わったもの。
  *
- * 承認・却下すると受信待ちの一覧からは消える。それだけだと
+ * 決着すると受信待ちの一覧からは消える。それだけだと
  * 「誰かが自分のドメインを取ろうとした」記録がどこにも残らず、
  * 身に覚えのない申請が繰り返されていても気づけない。
  *
+ * 承認済みは API が返さない（渡したあとは記録が残らないか、
+ * 所有者が変わって別人の履歴になるため）。
+ *
  * 受信待ちと違って急いで見るものではないので、自動更新はしない。
- * 承認・却下した直後だけ、呼び出し側から取り直す。
+ * 決着させた直後だけ、呼び出し側から取り直す。
  */
 export function useInboundTransferHistory(enabled: boolean) {
   const [history, setHistory] = useState<InboundTransferHistory[]>([]);

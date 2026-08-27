@@ -25,8 +25,6 @@ function historyStatusLabel(status: string): string {
   return HISTORY_STATUS_LABELS[status] ?? status;
 }
 
-
-
 interface InboundTransferHistoryListProps {
   state: ReturnType<typeof useInboundTransferHistory>;
 }
@@ -71,21 +69,21 @@ export function InboundTransferHistoryList({
       )}
 
       {history.map((item) => (
-          <Card key={item.transferId} className="ring-1 ring-gray-200">
-            <CardContent className="flex flex-wrap items-center justify-between gap-3">
-              <div className="min-w-0">
-                <p className="truncate font-heading text-base font-semibold text-gray-900">
-                  {item.domainName}
-                </p>
-                <p className="mt-0.5 text-xs text-gray-500">
-                  申請日 {formatDate(item.requestedAt)}
-                </p>
-              </div>
-              <span className="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-700">
-                {historyStatusLabel(item.status)}
-              </span>
-            </CardContent>
-          </Card>
+        <Card key={item.transferId} className="ring-1 ring-gray-200">
+          <CardContent className="flex flex-wrap items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className="truncate font-heading text-base font-semibold text-gray-900">
+                {item.domainName}
+              </p>
+              <p className="mt-0.5 text-xs text-gray-500">
+                申請日 {formatDate(item.requestedAt)}
+              </p>
+            </div>
+            <span className="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-700">
+              {historyStatusLabel(item.status)}
+            </span>
+          </CardContent>
+        </Card>
       ))}
     </section>
   );
