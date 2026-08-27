@@ -24,7 +24,7 @@ const COMPLETE_STEPS = buildFlowSteps("login");
  * 確認していない人が URL 直打ちで来たときは「完了」を名乗らない。
  */
 export default function CartCompletePage() {
-  const { data: session } = useSession();
+  const { data: session, isPending } = useSession();
   const isLoggedIn = Boolean(session?.user);
   const [order, setOrder] = useState<ConfirmedOrder | null>(null);
   const [checked, setChecked] = useState(false);
@@ -34,7 +34,19 @@ export default function CartCompletePage() {
     setChecked(true);
   }, []);
 
-  if (checked && !order) {
+  // セッションと申し込みの読み込みが終わるまでは、どの画面を出すか決められない。
+  // 先に描いてしまうと「ログイン」と「マイドメイン」が一瞬入れ替わったり、
+  // 申し込みが無い人に支払いフォームが一瞬見えたりする。
+  // dashboard / transfer と同じ出し方に揃えている。
+  if (!checked || isPending) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="text-lg">読み込み中...</div>
+      </div>
+    );
+  }
+
+  if (!order) {
     return <NoOrderNotice isLoggedIn={isLoggedIn} />;
   }
 
