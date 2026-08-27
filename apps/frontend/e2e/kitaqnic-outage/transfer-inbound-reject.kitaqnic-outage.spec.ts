@@ -20,7 +20,7 @@ test.describe(
         .toString()
         .padStart(6, "0")}`;
       await page.goto(`/?q=${name}.xyz`);
-      await expect(page.getByRole("region", { name: "検索結果" })).toBeVisible();
+      await expect(page.getByRole("region", { name: "検索結果", exact: true })).toBeVisible();
 
       await expect(page.getByText("空き状況を確認できませんでした")).toBeVisible();
       await expect(page.getByText(`${name}.xyz`).first()).toBeVisible();

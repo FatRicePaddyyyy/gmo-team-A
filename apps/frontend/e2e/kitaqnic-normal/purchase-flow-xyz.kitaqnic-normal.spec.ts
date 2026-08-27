@@ -39,7 +39,7 @@ test.describe(
       // 2. 検索。ランダム名で1件 .xyz を必ず空きにする
       const domainName = `e2e-${uniqueSuffix()}`;
       await page.goto(`/?q=${domainName}.xyz`);
-      await expect(page.getByRole("region", { name: "検索結果" })).toBeVisible();
+      await expect(page.getByRole("region", { name: "検索結果", exact: true })).toBeVisible();
 
       // 3. .xyz を選ぶ (kitaqnic 管轄)
       const proceedButton = page.getByRole("button", {

@@ -18,7 +18,7 @@ test.describe(
         .toString()
         .padStart(6, "0")}`;
       await page.goto(`/?q=${name}`);
-      await expect(page.getByRole("region", { name: "検索結果" })).toBeVisible();
+      await expect(page.getByRole("region", { name: "検索結果", exact: true })).toBeVisible();
 
       // 確認できなかったことが伝わる見出しが出ている。
       // 落ちている理由によって文言が変わる（メンテナンス中はそう明示する）ので、

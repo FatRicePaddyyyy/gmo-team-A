@@ -40,7 +40,7 @@ test.describe(
 
       // 検索 → 「このドメインで進む」→ 内容確認 → 支払い → 完了
       await page.goto(`/?q=${fullDomain}`);
-      await expect(page.getByRole("region", { name: "検索結果" })).toBeVisible();
+      await expect(page.getByRole("region", { name: "検索結果", exact: true })).toBeVisible();
       await page
         .getByRole("button", {
           name: new RegExp(`このドメインで進む.*${domainBase}\\.com`),

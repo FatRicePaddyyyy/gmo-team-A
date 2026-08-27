@@ -278,7 +278,7 @@ export async function setupInboundPending(
 
   // 検索は「name + .tld」を丸ごと入れる (`/?q=name.tld` の形)
   await page.goto(`/?q=${fullDomain}`);
-  await expect(page.getByRole("region", { name: "検索結果" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "検索結果", exact: true })).toBeVisible();
   await page
     .getByRole("button", {
       name: new RegExp(`このドメインで進む.*${domainName}\\.${tld}`),
