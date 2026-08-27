@@ -323,14 +323,28 @@ export class DomainService {
     // これをしないと外したはずのネームサーバーが残り続ける。
     let addNameServers: string[] | undefined;
     let remNameServers: string[] | undefined;
+    let nameServersUnchanged = false;
     if (nameServers) {
       const currentResult = await RegistryBridge.info({ name: domain.name, registry: domain.registry, env });
       if (!currentResult.success) {return currentResult;}
-      const current = currentResult.data.nameservers ?? [];
-      const added = nameServers.filter((host) => !current.includes(host));
-      const removed = current.filter((host) => !nameServers.includes(host));
+      // ホスト名は大小を区別しない。レジストリが小文字で返すのに対して
+      // 利用者が大文字で入力すると、比較だけで差分ありと判定されてしまう。
+      const normalize = (host: string) => host.trim().toLowerCase();
+      const desired = nameServers.map(normalize);
+      const current = (currentResult.data.nameservers ?? []).map(normalize);
+      const added = desired.filter((host) => !current.includes(host));
+      const removed = current.filter((host) => !desired.includes(host));
       addNameServers = added.length > 0 ? added : undefined;
       remNameServers = removed.length > 0 ? removed : undefined;
+      nameServersUnchanged = added.length === 0 && removed.length === 0;
+    }
+
+    // ネームサーバーだけを送ってきて中身が今と同じなら、レジストリに投げるものが
+    // 何も無い。空の domain:update は 2001 で弾かれうるので、info を返して終える。
+    if (nameServersUnchanged && !addStatuses && !remStatuses && !chg && autoRenew === undefined) {
+      const infoResult = await RegistryBridge.info({ name: domain.name, registry: domain.registry, env });
+      if (!infoResult.success) {return infoResult;}
+      return { success: true, data: DomainMapper.toDetailResponse(domain, infoResult.data), error: null };
     }
 
     // 追加するホストは、参照する前にホストオブジェクトとして登録しておく

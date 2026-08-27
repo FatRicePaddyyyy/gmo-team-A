@@ -450,8 +450,20 @@ export class RegistryBridge {
         // reason にドメイン名が含まれるかで区別する（含まれなければ参照先オブジェクトの不在）。
         // reason は Swagger の Result スキーマに定義が無い未ドキュメント化フィールドのため、
         // 盲目キャストせず readResultReason で存在確認したうえで読む。
+        //
+        // reason が無い場合は、リクエストに他オブジェクトへの参照
+        // （ネームサーバー・コンタクト）が載っていたかで決める。
+        // 参照が無ければ 2303 の対象はドメイン自身しかありえない。逆に参照が
+        // あるなら、そちらの不在のほうが起こりやすい。以前は無条件で
+        // domain_not_found にしていたため、一覧に出ているドメインに対して
+        // 「ドメインが見つかりません」と表示されていた。
         const reason = readResultReason(data.result);
-        const isDomainItself = !reason || reason.includes(name);
+        const referencesOtherObjects =
+          (add?.nameservers?.length ?? 0) > 0 ||
+          add?.contacts !== undefined ||
+          (rem?.nameservers?.length ?? 0) > 0 ||
+          rem?.contacts !== undefined;
+        const isDomainItself = reason ? reason.includes(name) : !referencesOtherObjects;
         return {
           success: false,
           data: null,

@@ -17,8 +17,11 @@
 #   (b) NS を 1 件に減らす       → 200 / 減らした 1 件だけになる（rem が効く）
 #   (c) 別の NS に入れ替える     → 200 / 旧 NS が消えて新 NS だけになる
 #   (d) NS を空にする            → 200 / 0 件になる
-#   (e) 認証なし                 → 401
-#   (f) 存在しない ID            → 404
+#   (e) 同じ NS を送り直す       → 200 / 変化なし（差分ゼロで空 update を投げない）
+#   (f) 大文字で送る             → 200 / 小文字と同一視され増えない
+#   (g) 作成時に NS を指定       → 201 / 指定した NS が入る（domain:create 側）
+#   (h) 認証なし                 → 401
+#   (i) 存在しない ID            → 404
 
 set -uo pipefail
 
@@ -59,6 +62,12 @@ current_ns() {
     | tr -d '" ' | tr ',' '\n' | grep -v '^$' | sort | paste -sd, -
 }
 
+# レジストリは意図的に一時障害を注入してくる（500 + 「予期しない応答」）。
+# 実装の不具合と区別するため、一時障害らしい応答のときだけ 1 度だけ再試行する。
+retry_note() {
+  note "一時障害らしい応答のため 1 度だけ再試行する: $*"
+}
+
 # $1 = 送る JSON, $2 = 期待する NS (ソート済みカンマ区切り), $3 = ラベル
 put_ns() {
   local body="$1" expected="$2" label="$3"
@@ -67,6 +76,14 @@ put_ns() {
     -H "Content-Type: application/json" -b "${COOKIE_JAR}" \
     -w "\n__HTTP__%{http_code}" -d "${body}")"
   status="$(http_status "${res}")"
+  if [ "${status}" = "500" ] && [[ "$(http_body "${res}")" == *"予期しない応答"* ]]; then
+    retry_note "${label}"
+    sleep 1
+    res="$(curl -sS -X PUT "${BACKEND_URL}/api/v1/secure/domains/${DOMAIN_ID}" \
+      -H "Content-Type: application/json" -b "${COOKIE_JAR}" \
+      -w "\n__HTTP__%{http_code}" -d "${body}")"
+    status="$(http_status "${res}")"
+  fi
   expect 200 "${status}" "${label}" "$(http_body "${res}")"
   [ "${status}" = "200" ] || return
 
@@ -99,15 +116,59 @@ put_ns "{\"nameServers\":[\"ns3.${NAME}\",\"ns4.${NAME}\"]}" \
 step "(d) NS を空にする → 200 + 0 件になる"
 put_ns '{"nameServers":[]}' "" "NS を空に"
 
-# --- (e) 認証なし ------------------------------------------------------------
-step "(e) 認証なしで update → 401"
+# --- (e) 同じ NS を送り直す --------------------------------------------------
+# 差分ゼロのとき空の domain:update を投げると 2001 で弾かれうる
+step "(e) 同じ NS を送り直す → 200 + 変化なし"
+put_ns "{\"nameServers\":[\"ns5.${NAME}\"]}" "ns5.${NAME}" "NS を 1 件設定"
+put_ns "{\"nameServers\":[\"ns5.${NAME}\"]}" "ns5.${NAME}" "同じ NS を再送"
+
+# --- (f) 大文字で送る --------------------------------------------------------
+# ホスト名は大小を区別しない。差分判定で増殖しないこと
+step "(f) 大文字で送る → 200 + 増えない"
+UPPER_NS="$(echo "ns5.${NAME}" | tr '[:lower:]' '[:upper:]')"
+put_ns "{\"nameServers\":[\"${UPPER_NS}\"]}" "ns5.${NAME}" "大文字で再送"
+
+# --- (g) 作成時に NS を指定 --------------------------------------------------
+# domain:create でも nameservers を参照するので、こちらも host:create が要る
+step "(g) 作成時に NS を指定 → 201 + 指定した NS が入る"
+CREATE_NAME="update-ns-create-${TS}.${TLD}"
+CREATE_RES="$(curl -sS -X POST "${BACKEND_URL}/api/v1/secure/domains" \
+  -H "Content-Type: application/json" -b "${COOKIE_JAR}" \
+  -w "\n__HTTP__%{http_code}" \
+  -d "{\"name\":\"${CREATE_NAME}\",\"period\":{\"unit\":\"Y\",\"value\":1},\"nameServers\":[\"ns1.${CREATE_NAME}\",\"ns2.${CREATE_NAME}\"]}")"
+CREATE_STATUS="$(http_status "${CREATE_RES}")"
+if [ "${CREATE_STATUS}" = "500" ] && [[ "$(http_body "${CREATE_RES}")" == *"予期しない応答"* ]]; then
+  retry_note "NS 付きで作成"
+  sleep 1
+  CREATE_NAME="update-ns-create-${TS}b.${TLD}"
+  CREATE_RES="$(curl -sS -X POST "${BACKEND_URL}/api/v1/secure/domains" \
+    -H "Content-Type: application/json" -b "${COOKIE_JAR}" \
+    -w "\n__HTTP__%{http_code}" \
+    -d "{\"name\":\"${CREATE_NAME}\",\"period\":{\"unit\":\"Y\",\"value\":1},\"nameServers\":[\"ns1.${CREATE_NAME}\",\"ns2.${CREATE_NAME}\"]}")"
+  CREATE_STATUS="$(http_status "${CREATE_RES}")"
+fi
+expect 201 "${CREATE_STATUS}" "NS 付きで作成" "$(http_body "${CREATE_RES}")"
+if [ "${CREATE_STATUS}" = "201" ]; then
+  CREATED_ID="$(json_str "$(http_body "${CREATE_RES}")" id)"
+  CREATED_NS="$(curl -sS "${BACKEND_URL}/api/v1/secure/domains/${CREATED_ID}" -b "${COOKIE_JAR}" \
+    | sed -n 's/.*"nameservers":\[\([^]]*\)\].*/\1/p' \
+    | tr -d '" ' | tr ',' '\n' | grep -v '^$' | sort | paste -sd, -)"
+  if [ "${CREATED_NS}" = "ns1.${CREATE_NAME},ns2.${CREATE_NAME}" ]; then
+    ok "作成時の NS が入った (${CREATED_NS})"
+  else
+    ng "作成時の NS が入っていない (実際: ${CREATED_NS:-空})"
+  fi
+fi
+
+# --- (h) 認証なし ------------------------------------------------------------
+step "(h) 認証なしで update → 401"
 NA="$(curl -sS -o /dev/null -w "%{http_code}" \
   -X PUT "${BACKEND_URL}/api/v1/secure/domains/${DOMAIN_ID}" \
   -H "Content-Type: application/json" -d '{"nameServers":["ns1.example.com"]}')"
 expect 401 "${NA}" "認証なしは 401"
 
-# --- (f) 存在しない ID -------------------------------------------------------
-step "(f) 存在しない ID → 404"
+# --- (i) 存在しない ID -------------------------------------------------------
+step "(i) 存在しない ID → 404"
 NF="$(curl -sS -o /dev/null -w "%{http_code}" \
   -X PUT "${BACKEND_URL}/api/v1/secure/domains/00000000-0000-0000-0000-000000000000" \
   -H "Content-Type: application/json" -b "${COOKIE_JAR}" \
