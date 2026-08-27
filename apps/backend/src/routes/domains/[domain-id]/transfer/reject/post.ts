@@ -1,6 +1,6 @@
 import { createRoute, z } from "@hono/zod-openapi";
 import { createDBClient } from "../../../../../lib/db";
-import { toUserMessage } from "../../../../../lib/error-messages";
+import { isMaintenanceError, toUserMessage } from "../../../../../lib/error-messages";
 import { createOpenAPIHono } from "../../../../../lib/openapi-hono";
 import { DomainService } from "../../../service";
 
@@ -30,6 +30,7 @@ const route = createRoute({
     404: { content: { "application/json": { schema: ErrorSchema } }, description: "不在" },
     409: { content: { "application/json": { schema: ErrorSchema } }, description: "申請不在" },
     500: { content: { "application/json": { schema: ErrorSchema } }, description: "サーバーエラー" },
+    503: { content: { "application/json": { schema: ErrorSchema } }, description: "レジストリがメンテナンス中のため一時的に利用できない" },
   },
 });
 
@@ -50,6 +51,11 @@ export const rejectTransferRouteHandler = app.openapi(route, async (ctx) => {
     }
     if (result.error === "transfer_not_found") {
       return ctx.json({ success: false as const, data: null, error: toUserMessage(result.error) }, 409);
+    }
+    // メンテナンスは「内部で異常が起きた」のではなく「待てば戻る」状態なので、
+    // 500 ではなく 503 を返す。監視側で定期メンテと障害を切り分けられるようにする。
+    if (isMaintenanceError(result.error)) {
+      return ctx.json({ success: false as const, data: null, error: toUserMessage(result.error) }, 503);
     }
     return ctx.json({ success: false as const, data: null, error: toUserMessage(result.error) }, 500);
   }

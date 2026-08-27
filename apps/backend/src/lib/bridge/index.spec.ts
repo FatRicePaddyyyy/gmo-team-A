@@ -395,6 +395,42 @@ describe("RegistryBridge.resolveRegistry: 片側 hello 失敗時の判定", () =
     expect(res.error).toBe("unsupported_tld");
   });
 
+  // Issue #87: 上のケースと違い、落ちている理由がメンテナンスだと分かっている場合。
+  // 静的テーブルに無い TLD（.jp など）でも「対応していない」と断定してはいけない。
+  // メンテ明けには通る操作を「入力が間違っている」として突き返してしまい、
+  // 利用者はドメイン名の方を疑って直しようのない修正を試みることになる。
+  test("[異常系] メンテナンスで hello 失敗 + 静的テーブルにも無い TLD → registry_maintenance", async () => {
+    vi.spyOn(RegistryBridge, "hello").mockResolvedValue({ success: false, data: null, error: "registry_maintenance" });
+
+    const res = await RegistryBridge.resolveRegistry({ name: "example.jp", env: mockEnv });
+
+    expect(res.error).toBe("registry_maintenance");
+  });
+
+  test("[異常系] 片側だけメンテナンス + 静的テーブルにも無い TLD → registry_maintenance", async () => {
+    vi.spyOn(RegistryBridge, "hello").mockImplementation(async ({ registry }) => {
+      if (registry === "kitaqsign") {
+        return { success: true, data: { registryCode: "KQSGN", tlds: ["com"] }, error: null };
+      }
+      return { success: false, data: null, error: "registry_maintenance" };
+    });
+
+    const res = await RegistryBridge.resolveRegistry({ name: "example.jp", env: mockEnv });
+
+    expect(res.error).toBe("registry_maintenance");
+  });
+
+  // メンテ中でも、静的テーブルに載っている TLD は今までどおり判定できる。
+  // ここまでメンテナンス扱いにすると、.com の登録がメンテのたびに止まる。
+  test("[フォールバック] メンテナンス中でも静的テーブルにある TLD は解決できる", async () => {
+    vi.spyOn(RegistryBridge, "hello").mockResolvedValue({ success: false, data: null, error: "registry_maintenance" });
+
+    const res = await RegistryBridge.resolveRegistry({ name: "example.com", env: mockEnv });
+
+    expect(res.success).toBe(true);
+    expect(res.data).toBe("kitaqsign");
+  });
+
   test("[正常系] 両方 hello 成功・kitaqsign 管轄 TLD → kitaqsign", async () => {
     vi.spyOn(RegistryBridge, "hello").mockImplementation(async ({ registry }) => {
       if (registry === "kitaqsign") {
