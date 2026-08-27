@@ -72,7 +72,7 @@ export function DomainList({ state }: DomainListProps) {
               nativeButton={false}
               render={<Link href="/transfer" />}
             >
-              他社のドメインをここへ移す
+              他のレジストラのドメインをここへ移す
             </Button>
           </div>
         </div>

@@ -11,7 +11,7 @@ const footerLinks = [
     links: [
       { label: "ドメインを検索する", href: "/" },
       { label: "マイドメイン", href: "/dashboard" },
-      { label: "他社のドメインをここへ移す", href: "/transfer" },
+      { label: "他のレジストラのドメインをここへ移す", href: "/transfer" },
     ],
   },
   {

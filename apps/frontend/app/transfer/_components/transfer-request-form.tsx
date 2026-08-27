@@ -74,7 +74,7 @@ export function TransferRequestForm({
     if (ownedNames.includes(data.name)) {
       setError("name", {
         message:
-          "このドメインはすでにここにあるので、引き取る必要はありません。他社へ渡したい場合は、下の「自分のドメインを他社へ渡す」から進んでください。",
+          "このドメインはすでにここにあるので、引き取る必要はありません。他のレジストラへ渡したい場合は、下の「自分のドメインを他のレジストラへ渡したい」から進んでください。",
       });
       return;
     }
