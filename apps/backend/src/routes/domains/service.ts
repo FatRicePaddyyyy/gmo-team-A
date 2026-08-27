@@ -657,6 +657,39 @@ export class DomainService {
     };
   }
 
+  // 自分のドメインに来た移管申請のうち、渡さずに終わったもの。
+  // 決着すると pending 一覧から消えるため、これが無いと
+  // 「誰かが取りに来た」記録がどこにも残らない。
+  static async listInboundTransferHistory({
+    userId,
+    db,
+  }: {
+    userId: string;
+    db: DBClient;
+  }): Promise<Result<{
+    transferId: string;
+    domainId: string;
+    domainName: string;
+    registry: "kitaqsign" | "kitaqnic";
+    requestedAt: string;
+    status: string;
+  }[]>> {
+    const result = await DomainTransferRepository.findInboundHistoryByOwner({ ownerUserId: userId, db });
+    if (!result.success) {return result;}
+    return {
+      success: true,
+      data: result.data.map(row => ({
+        transferId: row.transferId,
+        domainId: row.domainId,
+        domainName: row.domainName,
+        registry: row.registry,
+        requestedAt: new Date(row.requestedAt).toISOString(),
+        status: row.status,
+      })),
+      error: null,
+    };
+  }
+
   static async approveTransfer({
     domainId,
     userId,

@@ -70,7 +70,7 @@ export default function DomainDetailPage() {
     : false;
   const busy = running !== null;
 
-  // 他社へ渡すステップの現在位置。
+  // 他のレジストラへ渡すステップの現在位置。
   //   - authInfo 未設定 → ① 発行
   //   - authInfo 設定成功後・移管先申請前 → ② 移管先に伝える
   //   - status が pendingTransfer → ③ 移管先が申請済み・承認待ち
@@ -129,10 +129,12 @@ export default function DomainDetailPage() {
                   {domain?.name ?? "ドメインの詳細"}
                 </h1>
                 <p className="mt-1 text-sm text-gray-600">
-                  ネームサーバーの変更と、他の
+                  <GlossaryTerm description={GLOSSARY.nameServer.description}>
+                    {GLOSSARY.nameServer.term}
+                  </GlossaryTerm>
+                  の変更と、他の
                   <GlossaryTerm
                     description={GLOSSARY.registrar.description}
-                    className="underline decoration-dotted underline-offset-4"
                   >
                     {GLOSSARY.registrar.term}
                   </GlossaryTerm>
@@ -189,7 +191,7 @@ export default function DomainDetailPage() {
                     - overview: 現在の状態 (dl 一覧)
                     - renew:    有効期限を延ばす
                     - ns:       ネームサーバー
-                    - transfer: 他社へ渡す (ステップインジケーター付き)
+                    - transfer: 他のレジストラへ渡す (ステップインジケーター付き)
                     - locks:    保護 (client*Prohibited の 5 種トグル、Issue #107)
                     - lifecycle: 廃止・復旧
                 */}
@@ -197,7 +199,7 @@ export default function DomainDetailPage() {
                   <TabsTrigger value="overview">現在の状態</TabsTrigger>
                   <TabsTrigger value="renew">有効期限を延ばす</TabsTrigger>
                   <TabsTrigger value="ns">ネームサーバー</TabsTrigger>
-                  <TabsTrigger value="transfer">他社へ渡す</TabsTrigger>
+                  <TabsTrigger value="transfer">他のレジストラへ渡す</TabsTrigger>
                   <TabsTrigger value="locks">保護</TabsTrigger>
                   <TabsTrigger value="lifecycle">廃止・復旧</TabsTrigger>
                 </TabsList>

@@ -260,7 +260,7 @@ import type { Page } from "@playwright/test";
 import { expect } from "@playwright/test";
 
 /**
- * teama frontend で「ドメインを購入 → 詳細ページの他社へ渡すタブで authInfo を設定
+ * teama frontend で「ドメインを購入 → 詳細ページの「他のレジストラへ渡す」タブで authInfo を設定
  * → teama-2 registry で transfer/request を投げる → backend cron 発火」まで運ぶ。
  *
  * inbound 系 3 ケース (approve / reject / cancel) の前半で共通なのでまとめる。
@@ -294,7 +294,7 @@ export async function setupInboundPending(
   await page
     .getByRole("link", { name: new RegExp(fullDomain.replace(".", "\\.")) })
     .click();
-  await page.getByRole("tab", { name: "他社へ渡す" }).click();
+  await page.getByRole("tab", { name: "他のレジストラへ渡す" }).click();
   const authInfo = `e2e-${randomHex(8)}`;
   await page.getByPlaceholder("新しい認証コードを入力").fill(authInfo);
   await page.getByRole("button", { name: "認証コードを設定する" }).click();
@@ -305,12 +305,12 @@ export async function setupInboundPending(
   await t2TransferRequest(registry, fullDomain, authInfo);
   await fireCron();
 
-  // 再度詳細ページを開いて、他社へ渡すタブに incoming transfer カードが出るのを待つ
+  // 再度詳細ページを開いて、「他のレジストラへ渡す」タブに incoming transfer カードが出るのを待つ
   await page.goto("/dashboard");
   await page
     .getByRole("link", { name: new RegExp(fullDomain.replace(".", "\\.")) })
     .click();
-  await page.getByRole("tab", { name: "他社へ渡す" }).click();
+  await page.getByRole("tab", { name: "他のレジストラへ渡す" }).click();
 
   return { fullDomain, authInfo };
 }
