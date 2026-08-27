@@ -96,14 +96,15 @@ export function TldGuide({ heading = "末尾（TLD）の選び方", id }: TldGui
         </Accordion>
 
         <div className="mt-6 space-y-3">
-          <LearningNote title="迷ったらどうする？">
+          {/* 上の TLD 一覧を見終えた人向けの補足。畳んでおいて、必要な人だけ開く */}
+          <LearningNote title="迷ったらどうする？" collapsible>
             <p>
               個人でこれから始めるなら <span className="font-semibold">.com</span> が無難です。
               日本向けだと伝えたいなら <span className="font-semibold">.jp</span>、
               日本で登記した会社なら <span className="font-semibold">.co.jp</span> を検討してください。
             </p>
           </LearningNote>
-          <LearningNote title={RENEWAL_LESSON.title}>
+          <LearningNote title={RENEWAL_LESSON.title} collapsible>
             <p>{RENEWAL_LESSON.body}</p>
           </LearningNote>
         </div>

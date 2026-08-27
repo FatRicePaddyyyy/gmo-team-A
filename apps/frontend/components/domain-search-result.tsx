@@ -164,7 +164,8 @@ export function DomainSearchResult({
             {NO_CHARGE_YET_NOTE}
           </p>
 
-          <LearningNote title="末尾（TLD）で何が変わるの？">
+          {/* 検索結果を早く見たい人の邪魔をしないよう、既定では畳んでおく */}
+          <LearningNote title="末尾（TLD）で何が変わるの？" collapsible>
             <p>
               <span className="font-semibold">.com</span> や{" "}
               <span className="font-semibold">.jp</span> のような末尾を「TLD」と呼びます。
@@ -174,7 +175,7 @@ export function DomainSearchResult({
           </LearningNote>
 
           {/* 価格を見比べる、まさにその場で出す勘違い1つだけ */}
-          <LearningNote title={MISCONCEPTION.price.title} tone="warn">
+          <LearningNote title={MISCONCEPTION.price.title} tone="warn" collapsible>
             <p>{MISCONCEPTION.price.body}</p>
           </LearningNote>
         </div>
