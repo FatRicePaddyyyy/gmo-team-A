@@ -112,7 +112,7 @@ export function HeroSearch({
                 if (error) setError(null);
               }}
               aria-invalid={error ? true : undefined}
-              aria-describedby={error ? errorId : hintId}
+              aria-describedby={error ? `${errorId} ${hintId}` : hintId}
               placeholder="manabi-blog"
               className="h-11 text-gray-900 placeholder:text-gray-400"
             />

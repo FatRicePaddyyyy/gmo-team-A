@@ -74,7 +74,10 @@ async function checkAvailabilityBulk(fullNames: string[]): Promise<Map<string, A
 export async function searchDomains(query: string): Promise<DomainResult[]> {
   const trimmed = query.trim();
   const matchedTld = matchKnownTld(trimmed);
-  const name = stripKnownTld(trimmed);
+  // 小文字に揃えてから送る。ドメイン名は大文字小文字を区別しないうえ、
+  // バックエンドが受け取った名前を小文字化して返すため、ここで揃えておかないと
+  // 下の checks.get() が空振りして「通信に失敗しました」と表示されてしまう。
+  const name = stripKnownTld(trimmed).toLowerCase();
   if (!name) return [];
 
   const candidates = matchedTld ? [matchedTld] : TLD_CATALOG;

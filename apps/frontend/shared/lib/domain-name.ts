@@ -16,7 +16,7 @@ import {
   isValidDomainLabels,
   isValidFqdn,
 } from "backend/registry-policy";
-import { stripKnownTld } from "@/shared/lib/tld-catalog";
+import { TLD_CATALOG, stripKnownTld } from "@/shared/lib/tld-catalog";
 
 export {
   DOMAIN_NAME_RULE_MESSAGE,
@@ -25,6 +25,8 @@ export {
   isValidDomainLabels,
   isValidFqdn,
 };
+
+const LONGEST_TLD_LENGTH = Math.max(...TLD_CATALOG.map((info) => info.tld.length));
 
 /** 移管申請フォームのように FQDN をそのまま打たせる入力欄のメッセージ */
 export const FQDN_INPUT_MESSAGE = `${DOMAIN_NAME_RULE_MESSAGE}末尾（.com など）まで含めて入力してください。`;
@@ -48,6 +50,11 @@ export function validateSearchInput(query: string): string | null {
   }
   if (!isValidDomainLabels(name)) {
     return DOMAIN_NAME_RULE_MESSAGE;
+  }
+  // 末尾（TLD）を足したあとに 253 文字を超えるとバックエンドで弾かれる。
+  // 一番長い候補 TLD の分を引いた長さで、ここでも先に止める。
+  if (name.length > FQDN_MAX_LENGTH - LONGEST_TLD_LENGTH) {
+    return "ドメイン名が長すぎます。";
   }
   return null;
 }

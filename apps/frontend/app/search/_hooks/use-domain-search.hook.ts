@@ -3,6 +3,7 @@
 import { useCallback, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { DomainResult } from "@/components/domain-search-result";
+import { validateSearchInput } from "@/shared/lib/domain-name";
 import { searchDomains } from "../client";
 
 const SEARCH_ERROR_MESSAGE = "検索に失敗しました。時間をおいてもう一度お試しください。";
@@ -36,6 +37,17 @@ export function useDomainSearch() {
       if (options?.syncUrl !== false) {
         router.replace(`/?q=${encodeURIComponent(value)}`, { scroll: false });
       }
+      // 検索フォームは送信前に弾いているが、URL の ?q= から直接来る経路は
+      // フォームを通らない。ここでも止めないと日本語入力がレジストリまで届き、
+      // 422 が failed に化けて「通信に失敗しました」と出てしまう（Issue #76）。
+      const invalidReason = validateSearchInput(value);
+      if (invalidReason) {
+        setResults([]);
+        setError(invalidReason);
+        setLoading(false);
+        return;
+      }
+
       setLoading(true);
       setError(null);
 
