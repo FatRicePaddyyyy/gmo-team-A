@@ -3,7 +3,7 @@
 import { Check } from "lucide-react";
 
 /**
- * 他社へ渡す (outbound) 移管のステップインジケーター。
+ * 他のレジストラへ渡す (outbound) 移管のステップインジケーター。
  *
  * 一連の流れは 4 段階:
  *   ① 認証コード (AuthCode) を発行する
@@ -54,7 +54,7 @@ export function TransferOutSteps({ current }: TransferOutStepsProps) {
   const currentIndex = STEPS.findIndex((s) => s.key === current);
 
   return (
-    <nav aria-label="他社へ渡す手順" className="rounded-lg border border-gray-200 bg-white p-3">
+    <nav aria-label="他のレジストラへ渡す手順" className="rounded-lg border border-gray-200 bg-white p-3">
       <ol className="flex flex-col gap-3 sm:flex-row sm:gap-2">
         {STEPS.map((step, index) => {
           const status: "done" | "current" | "upcoming" =

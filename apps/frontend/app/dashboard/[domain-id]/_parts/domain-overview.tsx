@@ -167,7 +167,11 @@ export function DomainOverview({ domain }: DomainOverviewProps) {
               }
             />
             <Row
-              label="ネームサーバー"
+              label={
+                <GlossaryTerm description={GLOSSARY.nameServer.description}>
+                  {GLOSSARY.nameServer.term}
+                </GlossaryTerm>
+              }
               unavailable={registryDown}
               value={
                 domain.nameservers?.length ? (
