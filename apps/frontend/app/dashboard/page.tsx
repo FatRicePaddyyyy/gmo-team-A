@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback } from "react";
+import { useCallback, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import { ArrowLeftRight, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ConnectionErrorNotice } from "@/components/connection-error-notice";
@@ -18,10 +20,26 @@ import { useMyDomains } from "./_hooks/use-my-domains.hook";
 import { InboundTransferHistoryList } from "./_components/inbound-transfer-history-list";
 
 export default function DashboardPage() {
+  const router = useRouter();
   const { session, isPending, isSignedIn, isConnectionError } = useAuthStatus();
 
   const domainsState = useMyDomains(isSignedIn);
   const { refresh: refreshDomains } = domainsState;
+
+  // 引き渡し承認直後は詳細ページから `/dashboard?transferred=xxx.com` に飛んでくる。
+  // クエリを読んでトーストで「引き渡しました」を告げてから、URL からクエリを消す。
+  // useSearchParams はサスペンス境界が要るため、マウント後に window.location から読む。
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const transferred = params.get("transferred");
+    if (!transferred) return;
+    toast.success(`${transferred} を他のレジストラへ引き渡しました`, {
+      description:
+        "しばらくはレジストリで反映処理中です。相手側で見えるまで少し時間がかかることがあります。",
+    });
+    // URL からクエリを消して、リロードや戻る操作で 2 回目のトーストが出ないようにする
+    router.replace("/dashboard", { scroll: false });
+  }, [router]);
 
   const historyState = useInboundTransferHistory(isSignedIn);
   const { refresh: refreshHistory } = historyState;

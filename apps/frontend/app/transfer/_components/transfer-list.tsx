@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { ConfirmAction } from "@/components/confirm-action";
 import { FeedbackBanner } from "@/components/feedback-banner";
+import { InfoHint } from "@/components/info-hint";
 import { formatDate } from "@/shared/lib/format-date";
 import type { useTransferRequests } from "../_hooks/use-transfer-requests.hook";
 import {
@@ -33,15 +34,21 @@ export function TransferList({ state }: TransferListProps) {
         <h2 className="font-heading text-xl font-bold text-gray-900">
           申請中の移管
         </h2>
-        <Button
-          variant="outline"
-          size="sm"
-          disabled={loading}
-          onClick={() => void refresh()}
-        >
-          <RefreshCw aria-hidden="true" />
-          {loading ? "読み込み中..." : "最新にする"}
-        </Button>
+        <div className="flex items-center gap-1">
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={loading}
+            onClick={() => void refresh()}
+          >
+            <RefreshCw aria-hidden="true" />
+            {loading ? "読み込み中..." : "最新にする"}
+          </Button>
+          <InfoHint
+            label="「最新にする」で何が更新されるか"
+            description="申請中の移管について、相手のレジストラで承認・却下・取り消しがあったかを確認して、この一覧に反映します。放置していると 20 分ほどで自動承認されるため、待つ間に押すと今の状態が分かります。"
+          />
+        </div>
       </div>
 
       {loadError && (
