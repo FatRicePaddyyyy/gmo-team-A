@@ -45,6 +45,7 @@ export function InboundTransferList({ state }: InboundTransferListProps) {
 
       {feedback && (
         <FeedbackBanner
+              context="transferDecision"
           tone={feedback.tone}
           message={feedback.message}
           unauthorized={feedback.unauthorized}
@@ -52,6 +53,7 @@ export function InboundTransferList({ state }: InboundTransferListProps) {
       )}
       {loadError && (
         <FeedbackBanner
+              context="transferDecision"
           tone="error"
           message={loadError}
           unauthorized={loadUnauthorized}

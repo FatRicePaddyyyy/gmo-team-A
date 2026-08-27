@@ -141,6 +141,7 @@ export function NameServerForm({
 
         {feedback && (
           <FeedbackBanner
+              context="nameServers"
             tone={feedback.tone}
             message={feedback.message}
             unauthorized={feedback.unauthorized}

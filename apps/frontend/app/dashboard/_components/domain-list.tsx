@@ -39,6 +39,7 @@ export function DomainList({ state }: DomainListProps) {
 
       {loadError && (
         <FeedbackBanner
+              context="detail"
           tone="error"
           message={loadError}
           unauthorized={loadUnauthorized}

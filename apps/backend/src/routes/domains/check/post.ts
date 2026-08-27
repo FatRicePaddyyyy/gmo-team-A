@@ -29,6 +29,8 @@ const DomainCheckItemSchema = z.object({
   avail: z.boolean(),
   /** 通信障害・レジストリ障害などで確認自体ができなかった */
   failed: z.boolean(),
+  // 確認できなかった理由。メンテナンス中かどうかで利用者の行動が変わるため返す。
+  reason: z.string().optional(),
 }).openapi("DomainCheckItem");
 
 const SuccessSchema = z.object({
@@ -56,5 +58,10 @@ export const checkDomainRouteHandler = app.openapi(route, async (ctx) => {
     // 名前の形式が不正なケース。Zod と同じ 400 + 同じ文言に揃える。
     return ctx.json({ success: false as const, data: null, error: toUserMessage(result.error) }, 400);
   }
-  return ctx.json({ success: true as const, data: { results: result.data }, error: null }, 200);
+  // 確認できなかった理由は内部エラーコードのままなので、外に出す前に日本語へ変換する
+  // （メンテナンス中かどうかで利用者の取るべき行動が変わるため、理由自体は返す）。
+  const withMessages = result.data.map((item) =>
+    item.reason ? { ...item, reason: toUserMessage(item.reason) } : item,
+  );
+  return ctx.json({ success: true as const, data: { results: withMessages }, error: null }, 200);
 });

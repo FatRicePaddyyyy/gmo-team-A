@@ -51,6 +51,15 @@ function pickPrimaryStatus(statuses: string[], fallback: string): string {
 }
 
 export interface DomainCheckItem {
+  /**
+   * 確認できなかった理由（`failed: true` のときだけ入る）。
+   *
+   * これまで理由を捨てていたため、レジストリのメンテナンス中でも画面には
+   * 「一時的な問題」としか出せず、利用者は何度も検索し直すことになっていた。
+   * 内部エラーコード（registry_maintenance など）をそのまま載せず、
+   * ハンドラで日本語に変換してから返す。
+   */
+  reason?: string;
   name: string;
   avail: boolean;
   /** 通信障害・レジストリ障害などで確認自体ができなかった */
@@ -110,7 +119,12 @@ export class DomainService {
         groups.kitaqnic.push(name);
       } else if (!ks.success || !kn.success) {
         // 片方でも hello に失敗している場合は「非対応」と断定できない（疎通エラーの可能性）
-        results.push({ name, avail: false, failed: true });
+        results.push({
+          name,
+          avail: false,
+          failed: true,
+          reason: (ks.success ? kn.error : ks.error) ?? undefined,
+        });
       } else {
         // 両方 hello 成功 + どちらの対応TLDにも無い → 非対応TLDとして確定（障害ではない）
         results.push({ name, avail: false, failed: false });
@@ -122,7 +136,9 @@ export class DomainService {
       if (groupNames.length === 0) {continue;}
       const checkResult = await RegistryBridge.check({ names: groupNames, registry, env });
       if (!checkResult.success) {
-        for (const name of groupNames) {results.push({ name, avail: false, failed: true });}
+        for (const name of groupNames) {
+          results.push({ name, avail: false, failed: true, reason: checkResult.error });
+        }
         continue;
       }
       for (const name of groupNames) {

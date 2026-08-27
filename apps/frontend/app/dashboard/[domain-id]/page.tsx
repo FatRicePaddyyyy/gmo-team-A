@@ -106,6 +106,7 @@ export default function DomainDetailPage() {
 
             {loadError && (
               <FeedbackBanner
+              context="detail"
                 tone="error"
                 message={loadError}
                 unauthorized={loadUnauthorized}

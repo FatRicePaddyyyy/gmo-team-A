@@ -21,7 +21,8 @@ const SCROLL_INTENT_KEY = "manabi-domain:search-scroll-intent";
  * 「ドメインを探す」をそのままトップにした（3画面構成: 探す／学ぶ／マイドメイン）。
  */
 export default function Home() {
-  const { query, results, loading, error, search } = useDomainSearch();
+  const { query, results, loading, error, unavailableReason, search } =
+    useDomainSearch();
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [inputValue, setInputValue] = useState<string | undefined>(undefined);
   // 診断（/plan-finder）から渡ってくるおすすめの末尾。検索するたびに URL が
@@ -99,6 +100,7 @@ export default function Home() {
         results={results}
         loading={loading}
         error={error}
+        unavailableReason={unavailableReason}
         recommendedTld={recommendedTld}
       />
 

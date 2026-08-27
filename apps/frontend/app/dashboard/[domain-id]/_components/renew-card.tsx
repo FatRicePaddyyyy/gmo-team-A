@@ -167,6 +167,7 @@ export function RenewCard({
 
         {feedback && (
           <FeedbackBanner
+              context="renew"
             tone={feedback.tone}
             message={feedback.message}
             unauthorized={feedback.unauthorized}
