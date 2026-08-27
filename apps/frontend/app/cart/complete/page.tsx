@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { CheckCircle2, Info } from "lucide-react";
 import { useSession } from "@/auth-client";
 import { Button } from "@/components/ui/button";
@@ -15,6 +14,7 @@ import { loadConfirmedOrder, type ConfirmedOrder } from "@/shared/lib/order-stor
 import { buildFlowSteps } from "@/shared/lib/progress-store";
 import { purposeLabel } from "@/shared/lib/purpose";
 import { findTld, MISCONCEPTION } from "@/shared/lib/tld-catalog";
+import { NoOrderNotice } from "../_components/no-order-notice";
 
 const COMPLETE_STEPS = buildFlowSteps("login");
 
@@ -24,8 +24,7 @@ const COMPLETE_STEPS = buildFlowSteps("login");
  * 確認していない人が URL 直打ちで来たときは「完了」を名乗らない。
  */
 export default function CartCompletePage() {
-  const router = useRouter();
-  const { data: session } = useSession();
+  const { data: session, isPending } = useSession();
   const isLoggedIn = Boolean(session?.user);
   const [order, setOrder] = useState<ConfirmedOrder | null>(null);
   const [checked, setChecked] = useState(false);
@@ -35,30 +34,19 @@ export default function CartCompletePage() {
     setChecked(true);
   }, []);
 
-  if (checked && !order) {
+  // セッションと申し込みの読み込みが終わるまでは、どの画面を出すか決められない。
+  // 先に描くと、案内の2つ目のボタンが「ログイン」から「マイドメイン」へ一瞬で入れ替わる。
+  // dashboard / transfer と同じ出し方に揃えている。
+  if (!checked || isPending) {
     return (
-      <div className="min-h-screen bg-gray-50">
-        <SiteHeader />
-        <main className="mx-auto max-w-3xl px-4 py-10">
-          <div className="rounded-lg border border-dashed border-border bg-white px-4 py-12 text-center">
-            <Info className="mx-auto mb-3 size-8 text-gray-400" aria-hidden="true" />
-            <h1 className="mb-1 text-xl font-bold text-gray-900">まだお申し込みはありません</h1>
-            <p className="mb-6 text-sm leading-relaxed text-gray-600">
-              このページは、お申し込み内容の確認を終えた方に表示されます。
-              まずはドメインを選んで、確認画面で設定を決めてください。
-            </p>
-            <Button
-              className="h-11 px-5 text-white"
-              style={{ background: "var(--brand)" }}
-              onClick={() => router.push("/")}
-            >
-              ドメインを検索する
-            </Button>
-          </div>
-        </main>
-        <SiteFooter />
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="text-lg">読み込み中...</div>
       </div>
     );
+  }
+
+  if (!order) {
+    return <NoOrderNotice isLoggedIn={isLoggedIn} />;
   }
 
   return (
@@ -112,7 +100,7 @@ export default function CartCompletePage() {
             <p>
               {isLoggedIn
                 ? "お支払い方法の選択に進みます。"
-                : "ログインすると、お支払い方法の選択に進みます。"}
+                : "ログインすると、お支払い方法の選択に進みます（ドメインの管理・更新のため、取得にはアカウントとの紐付けが必須です）。"}
               選択後に「確定する」を押すと、その場でこのドメインが登録されます。
             </p>
           </LearningNote>
@@ -129,16 +117,10 @@ export default function CartCompletePage() {
           </div>
         </div>
 
-        {!isLoggedIn && (
-          <div className="mt-6 rounded-lg border border-border bg-gray-50 px-4 py-4 text-center">
-            <p className="text-sm font-bold text-gray-900">
-              お申し込みにはログインが必要です
-            </p>
-            <p className="mt-1 text-sm leading-relaxed text-gray-600">
-              ドメインの管理・更新のため、購入にはアカウントとの紐付けが必須です。
-            </p>
-          </div>
-        )}
+        {/* 「ログインが必要」はこの画面で何度も言わない。
+            見出し下の一文と「この先で起きること」で言い終わっており、
+            すぐ下にログインボタンもある。実際に押しても失敗する関門は
+            /cart/payment 側に置いた（Issue #70）。 */}
 
         <div className="mt-4 flex flex-col items-stretch gap-3 sm:flex-row sm:justify-center">
           <Button
