@@ -1,4 +1,5 @@
 import { createRoute, z } from "@hono/zod-openapi";
+import { createDBClient } from "../../lib/db";
 import { toUserMessage } from "../../lib/error-messages";
 import { createOpenAPIHono } from "../../lib/openapi-hono";
 import { TransferService } from "./service";
@@ -39,7 +40,8 @@ const app = createOpenAPIHono();
 
 export const listTransfersRouteHandler = app.openapi(route, async (ctx) => {
   const userId = ctx.get("userId");
-  const result = await TransferService.listMine({ userId, env: ctx.env });
+  const db = createDBClient(ctx.env);
+  const result = await TransferService.listMine({ userId, db });
   if (!result.success) {
     return ctx.json({ success: false as const, data: null, error: toUserMessage(result.error) }, 500);
   }

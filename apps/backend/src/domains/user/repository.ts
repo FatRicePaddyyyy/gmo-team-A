@@ -1,5 +1,5 @@
 import { eq } from "drizzle-orm";
-import { createDBClient } from "../../lib/db";
+import type { DBClient } from "../../lib/db";
 import { classifyDbError } from "../../lib/db-error";
 import { user } from "../../lib/schema/auth-schema";
 import type { Result } from "../../types/result";
@@ -9,13 +9,12 @@ import type { Result } from "../../types/result";
 export class UserRepository {
   static async exists({
     id,
-    env,
+    db,
   }: {
     id: string;
-    env: CloudflareBindings;
+    db: DBClient;
   }): Promise<Result<boolean>> {
     try {
-      const db = createDBClient(env);
       const rows = await db.select({ id: user.id }).from(user).where(eq(user.id, id));
       return { success: true, data: rows.length > 0, error: null };
     } catch (error) {

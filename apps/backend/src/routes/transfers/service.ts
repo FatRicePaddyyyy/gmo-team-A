@@ -1,6 +1,7 @@
 import { TransferStatusRepository } from "../../domains/transfer/repository";
 import { RegistryBridge } from "../../lib/bridge";
 import type { Registry } from "../../lib/bridge/types";
+import type { DBClient } from "../../lib/db";
 import { detectRegistry, isValidFqdn } from "../../lib/registry-policy";
 import type { outboundTransferRequests, transfers } from "../../lib/schema/general-schema";
 import type { Result } from "../../types/result";
@@ -25,12 +26,14 @@ export class TransferService {
     authInfo,
     registry,
     gainingUserId,
+    db,
     env,
   }: {
     name: string;
     authInfo: string;
     registry: Registry;
     gainingUserId: string;
+    db: DBClient;
     env: CloudflareBindings;
   }): Promise<Result<TransferRequestResult>> {
     // B15/NB-4: FQDN 形式は Zod でも検証しているが、service 層でも念のためチェック。
@@ -47,12 +50,12 @@ export class TransferService {
       return { success: false, data: null, error: "invalid_domain_registry" };
     }
 
-    const domainResult = await TransferDomainRepository.findByName({ name: normalizedName, env });
+    const domainResult = await TransferDomainRepository.findByName({ name: normalizedName, db });
     if (!domainResult.success) {return domainResult;}
     if (!domainResult.data) {
       // backend DB に該当ドメイン無し = 外部レジストラのドメインを取りに行くケース (outbound)。
       // outbound_transfer_requests に pending を INSERT + registry に transferRequest を投げる。
-      return await requestOutbound({ name: normalizedName, authInfo, registry, gainingUserId, env });
+      return await requestOutbound({ name: normalizedName, authInfo, registry, gainingUserId, db, env });
     }
     const domain = domainResult.data;
 
@@ -85,7 +88,7 @@ export class TransferService {
         status: "pendingTransfer",
         gainingUserId,
       },
-      env,
+      db,
     });
     if (!transferResult.success) {
       // Smell 対策: UNIQUE violation (別 request との race) と generic D1 error を区別する。
@@ -103,7 +106,7 @@ export class TransferService {
       const r = await TransferRepository.updateStatus({
         id: transferResult.data.id,
         status: "clientCancelled",
-        env,
+        db,
       });
       if (!r.success) {
         console.error("TransferService.request: rollback transfer status failed", r.error);
@@ -122,7 +125,7 @@ export class TransferService {
     const statusUpdateResult = await TransferDomainRepository.updateStatus({
       id: domain.id,
       status: "pendingTransfer",
-      env,
+      db,
     });
     if (!statusUpdateResult.success) {
       // NB-2: 補償 cancel を試み、失敗した場合はレジストリ info で reconciliation する。
@@ -131,6 +134,7 @@ export class TransferService {
         domain: { id: domain.id, name: normalizedName, currentOwnerUserId: domain.ownerUserId },
         gainingUserId,
         registry,
+        db,
         env,
       });
       return statusUpdateResult;
@@ -150,18 +154,20 @@ export class TransferService {
   static async cancel({
     transferId,
     userId,
+    db,
     env,
   }: {
     transferId: string;
     userId: string;
+    db: DBClient;
     env: CloudflareBindings;
   }): Promise<Result<void>> {
-    const transferResult = await TransferRepository.findById({ id: transferId, env });
+    const transferResult = await TransferRepository.findById({ id: transferId, db });
     if (!transferResult.success) {return transferResult;}
     if (!transferResult.data) {
       // inbound 側 (自 backend の transfers) に無ければ outbound_transfer_requests を検索。
       // teama が別レジストラのドメインを取りに行った申請を取消するケース。
-      return await cancelOutbound({ outboundId: transferId, userId, env });
+      return await cancelOutbound({ outboundId: transferId, userId, db, env });
     }
     const transfer = transferResult.data;
 
@@ -172,7 +178,7 @@ export class TransferService {
       return { success: false, data: null, error: "transfer_not_cancellable" };
     }
 
-    const domainResult = await TransferDomainRepository.findById({ id: transfer.domainId, env });
+    const domainResult = await TransferDomainRepository.findById({ id: transfer.domainId, db });
     if (!domainResult.success) {return domainResult;}
     if (!domainResult.data) {
       return { success: false, data: null, error: "domain_not_found" };
@@ -192,7 +198,7 @@ export class TransferService {
       transferId,
       domainId: transfer.domainId,
       transferStatus: "clientCancelled",
-      env,
+      db,
     });
     if (!settle.success) {return settle;}
 
@@ -203,12 +209,12 @@ export class TransferService {
   // cancel 対象を見つけるための最小 API。
   static async listMine({
     userId,
-    env,
+    db,
   }: {
     userId: string;
-    env: CloudflareBindings;
+    db: DBClient;
   }): Promise<Result<TransferWithDomainName[]>> {
-    return TransferRepository.findByGainingUserId({ userId, env });
+    return TransferRepository.findByGainingUserId({ userId, db });
   }
 }
 
@@ -226,12 +232,14 @@ async function compensateAndReconcile({
   domain,
   gainingUserId,
   registry,
+  db,
   env,
 }: {
   transferId: string;
   domain: { id: string; name: string; currentOwnerUserId: string };
   gainingUserId: string;
   registry: Registry;
+  db: DBClient;
   env: CloudflareBindings;
 }): Promise<void> {
   const compensate = await RegistryBridge.transferCancel({ name: domain.name, registry, env });
@@ -245,7 +253,7 @@ async function compensateAndReconcile({
       transferId,
       domainId: domain.id,
       transferStatus: "clientCancelled",
-      env,
+      db,
     });
     if (!rollback.success) {
       console.error("compensateAndReconcile: batched rollback failed", rollback.error);
@@ -264,7 +272,7 @@ async function compensateAndReconcile({
       if (isStillPending) {
         // (b) レジストリでもまだ pending。DB を pendingTransfer に合わせて cron に任せる。
         console.warn(`TransferService: registry still pending; deferring to cron.`);
-        const rDom = await TransferDomainRepository.updateStatus({ id: domain.id, status: "pendingTransfer", env });
+        const rDom = await TransferDomainRepository.updateStatus({ id: domain.id, status: "pendingTransfer", db });
         if (!rDom.success) {console.error("compensateAndReconcile: sync domain pendingTransfer failed", rDom.error);}
       } else {
         // (c) レジストリでは確定済み。gaining ユーザーがオーナーになった前提で DB を反映する。
@@ -278,7 +286,7 @@ async function compensateAndReconcile({
           domainId: domain.id,
           transferStatus: "serverApproved",
           newOwnerUserId: gainingUserId,
-          env,
+          db,
         });
         if (!commit.success) {
           console.error(
@@ -318,12 +326,14 @@ async function requestOutbound({
   authInfo,
   registry,
   gainingUserId,
+  db,
   env,
 }: {
   name: string;
   authInfo: string;
   registry: Registry;
   gainingUserId: string;
+  db: DBClient;
   env: CloudflareBindings;
 }): Promise<Result<TransferRequestResult>> {
   const outboundResult = await OutboundTransferRequestRepository.create({
@@ -334,7 +344,7 @@ async function requestOutbound({
       gainingUserId,
       authInfo,
     },
-    env,
+    db,
   });
   if (!outboundResult.success) {
     if (outboundResult.error === "unique_violation") {
@@ -349,7 +359,7 @@ async function requestOutbound({
     const rollback = await OutboundTransferRequestRepository.updateStatus({
       id: outboundResult.data.id,
       status: "clientCancelled",
-      env,
+      db,
     });
     if (!rollback.success) {
       console.error(
@@ -372,13 +382,15 @@ async function requestOutbound({
 async function cancelOutbound({
   outboundId,
   userId,
+  db,
   env,
 }: {
   outboundId: string;
   userId: string;
+  db: DBClient;
   env: CloudflareBindings;
 }): Promise<Result<void>> {
-  const found = await OutboundTransferRequestRepository.findById({ id: outboundId, env });
+  const found = await OutboundTransferRequestRepository.findById({ id: outboundId, db });
   if (!found.success) {return found;}
   if (!found.data) {
     return { success: false, data: null, error: "transfer_not_found" };
@@ -402,7 +414,7 @@ async function cancelOutbound({
   const update = await OutboundTransferRequestRepository.updateStatus({
     id: outbound.id,
     status: "clientCancelled",
-    env,
+    db,
   });
   if (!update.success) {return update;}
 

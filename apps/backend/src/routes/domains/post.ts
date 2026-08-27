@@ -1,4 +1,5 @@
 import { createRoute, z } from "@hono/zod-openapi";
+import { createDBClient } from "../../lib/db";
 import { toUserMessage } from "../../lib/error-messages";
 import { createOpenAPIHono } from "../../lib/openapi-hono";
 import { detectRegistry } from "../../lib/registry-policy";
@@ -63,7 +64,8 @@ export const createDomainRouteHandler = app.openapi(route, async (ctx) => {
   if (!registry) {
     return ctx.json({ success: false as const, data: null, error: "ドメイン名の形式が正しくありません。TLD（.com など）を含めて入力してください。" }, 400);
   }
-  const result = await DomainService.create({ ...payload, registry, userId, env: ctx.env });
+  const db = createDBClient(ctx.env);
+  const result = await DomainService.create({ ...payload, registry, userId, db, env: ctx.env });
   if (!result.success) {
     if (result.error === "domain_exists") {
       return ctx.json({ success: false as const, data: null, error: toUserMessage(result.error) }, 409);

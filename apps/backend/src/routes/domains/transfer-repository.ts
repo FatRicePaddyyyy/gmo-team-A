@@ -1,5 +1,5 @@
 import { and, eq } from "drizzle-orm";
-import { createDBClient } from "../../lib/db";
+import type { DBClient } from "../../lib/db";
 import { classifyDbError } from "../../lib/db-error";
 import { domains, transfers } from "../../lib/schema/general-schema";
 import type { Result } from "../../types/result";
@@ -23,13 +23,12 @@ export class DomainTransferRepository {
   // partial UNIQUE index (transfers_pending_domain_unique_idx) により 0 or 1 行が保証される。
   static async findPendingByDomainId({
     domainId,
-    env,
+    db,
   }: {
     domainId: string;
-    env: CloudflareBindings;
+    db: DBClient;
   }): Promise<Result<Transfer | null>> {
     try {
-      const db = createDBClient(env);
       const rows = await db
         .select()
         .from(transfers)
@@ -46,13 +45,12 @@ export class DomainTransferRepository {
   // gaining 側の情報 (gainingUserId) は返り値に含めない (情報漏洩防止)。
   static async findInboundPendingByOwner({
     ownerUserId,
-    env,
+    db,
   }: {
     ownerUserId: string;
-    env: CloudflareBindings;
+    db: DBClient;
   }): Promise<Result<InboundPendingTransferRow[]>> {
     try {
-      const db = createDBClient(env);
       const rows = await db
         .select({
           transferId: transfers.id,
