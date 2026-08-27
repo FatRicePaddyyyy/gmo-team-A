@@ -81,6 +81,14 @@ export const $cancelTransfer = client(
 export type CancelTransferRequest = InferRequestType<typeof $cancelTransfer>;
 export type CancelTransferResponse = InferResponseType<typeof $cancelTransfer>;
 
+// 「今すぐ移管 poll を回す」ユーザートリガー。
+// backend 側で 10 秒に 1 回にスロットルされているので、多重呼び出しは skip される (200 + ran:false)。
+// 詳細ページの「最新にする」やタブ切替時に、cron を待たず反映するために使う。
+export const $pollNowTransfer = client(
+  process.env.NEXT_PUBLIC_BACKEND_URL!,
+).secure.transfers["poll-now"].$post;
+export type PollNowTransferResponse = InferResponseType<typeof $pollNowTransfer>;
+
 // 自分が申請した移管の一覧（取消対象を見つけるために使う）
 export const $listTransfers = client(
   process.env.NEXT_PUBLIC_BACKEND_URL!,
