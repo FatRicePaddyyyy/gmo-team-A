@@ -4,6 +4,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import { Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { validateSearchInput } from "@/shared/lib/domain-name";
 import { stripKnownTld } from "@/shared/lib/tld-catalog";
 
 const popularTlds = [".com", ".net", ".jp", ".co.jp", ".org", ".xyz"];
@@ -42,8 +43,13 @@ export function HeroSearch({
   footer,
 }: HeroSearchProps) {
   const [query, setQuery] = useState(initialQuery ?? "");
+  // 送信前に弾いた理由。日本語ドメインなどをそのままバックエンドへ送ると
+  // レジストリが 422 を返し、画面には「通信に失敗しました」と出てしまうため
+  // ここで理由を出して止める（Issue #76）。
+  const [error, setError] = useState<string | null>(null);
   const inputId = useId();
   const hintId = useId();
+  const errorId = useId();
   const internalInputRef = useRef<HTMLInputElement>(null);
   const inputRef = externalInputRef ?? internalInputRef;
 
@@ -54,7 +60,14 @@ export function HeroSearch({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (query.trim()) onSearch?.(query.trim());
+    const message = validateSearchInput(query);
+    if (message) {
+      setError(message);
+      inputRef.current?.focus();
+      return;
+    }
+    setError(null);
+    onSearch?.(query.trim());
   };
 
   /**
@@ -64,6 +77,7 @@ export function HeroSearch({
   const handleSelectTld = (tld: string) => {
     const base = stripKnownTld(query.trim());
     setQuery(tld ? `${base}${tld}` : base);
+    setError(null);
     inputRef.current?.focus();
   };
 
@@ -93,8 +107,12 @@ export function HeroSearch({
               type="search"
               name="domain"
               value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              aria-describedby={hintId}
+              onChange={(e) => {
+                setQuery(e.target.value);
+                if (error) setError(null);
+              }}
+              aria-invalid={error ? true : undefined}
+              aria-describedby={error ? errorId : hintId}
               placeholder="manabi-blog"
               className="h-11 text-gray-900 placeholder:text-gray-400"
             />
@@ -120,6 +138,11 @@ export function HeroSearch({
               空き状況を調べる
             </Button>
           </div>
+          {error && (
+            <p id={errorId} role="alert" className="mt-2 text-xs leading-relaxed text-red-700">
+              {error}
+            </p>
+          )}
           <p id={hintId} className="mt-2 text-xs leading-relaxed text-gray-600">
             半角英数字とハイフンで入力します。末尾（TLD）は横のプルダウンから選べます（例: manabi-blog）。
           </p>

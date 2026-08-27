@@ -3,6 +3,11 @@
   "type": "module",
   "main": "./src/index.ts",
   "types": "./src/index.ts",
+  "//exports": "frontend が Hono RPC の型 (.) に加えて、ドメイン名の入力ルール (./registry-policy) を実体ごと共有するための公開口。regex を frontend 側に書き写すと画面ごとに強度がずれるため (Issue #76)。registry-policy.ts は zod にも DB にも依存しない純粋モジュールなので、フロントのバンドルに backend 本体は入らない。",
+  "exports": {
+    ".": { "types": "./src/index.ts", "default": "./src/index.ts" },
+    "./registry-policy": { "types": "./src/lib/registry-policy.ts", "default": "./src/lib/registry-policy.ts" }
+  },
   "scripts": {
     "dev": "wrangler dev --test-scheduled",
     "deploy": "wrangler deploy --minify --env production",

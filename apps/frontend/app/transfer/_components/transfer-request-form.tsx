@@ -6,19 +6,24 @@ import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import {
+  FQDN_INPUT_MESSAGE,
+  FQDN_MAX_LENGTH,
+  FQDN_REGEX,
+} from "@/shared/lib/domain-name";
 
 // バックエンド (POST /api/v1/secure/transfers) の Zod スキーマに合わせる。
 // name は小文字化した FQDN、authInfo は 1〜64 文字。
-const FQDN_REGEX = /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/;
-
+// regex とメッセージは backend の registry-policy を単一の出どころにしている
+// （ここに写しを置くと画面ごとに強度がずれる。Issue #76）。
 const transferRequestSchema = z.object({
   name: z
     .string()
     .trim()
     .toLowerCase()
     .min(1, "ドメイン名を入力してください")
-    .max(253, "ドメイン名が長すぎます")
-    .regex(FQDN_REGEX, "末尾（.com など）まで含めて入力してください"),
+    .max(FQDN_MAX_LENGTH, "ドメイン名が長すぎます")
+    .regex(FQDN_REGEX, FQDN_INPUT_MESSAGE),
   authInfo: z
     .string()
     .trim()

@@ -90,6 +90,34 @@ pnpm --filter backend run test          # バックエンド ユニットテス�
 
 ---
 
+## ドメイン名の入力ルール
+
+**IDN（日本語ドメイン）は現状サポート外。** punycode 変換ロジックがリポジトリに無く、
+kitaqsign が IDN を拒否する（Swagger の `422` = TLD ポリシー違反 / IDN 不可）ため、
+入力の時点で弾いて理由を伝える方針にしている。
+
+受け付ける形式は RFC 1035 準拠の FQDN（半角英数字とハイフン、ラベル 1〜63 文字、全体 253 文字以内）。
+
+判定の出どころは **`apps/backend/src/lib/registry-policy.ts` の 1 箇所だけ**。
+
+| 使う側 | 参照の仕方 |
+|---|---|
+| バックエンドのルート | `lib/domain-name-schema.ts` の `domainNameSchema()` を Zod に挿す |
+| バックエンドの service | `isValidFqdn()` を呼ぶ（Zod を通らない経路への二段構え） |
+| フロントエンド | `shared/lib/domain-name.ts`（`backend/registry-policy` の再エクスポート） |
+
+**フロント側に regex を書き写さないこと。** 画面ごとにバリデーションの強度がずれ、
+同じ入力でも「TLD が違う」「通信に失敗しました」と表示が変わる原因になる（Issue #76）。
+
+Zod のエラーメッセージには日本語ではなく `error-messages.ts` のエラーコード
+（例: `invalid_domain_name`）を書く。`createOpenAPIHono` の `defaultHook` がコードを拾って
+定型文言に変換する。コードを書かないと汎用の「入力内容に誤りがあります」しか返らない。
+
+将来 IDN に対応する場合は、`toASCII()` で `xn--` に変換したうえで、hello の `allowIdn` を見て
+kitaqnic 経路へ振り分ける必要がある。別 issue として扱う。
+
+---
+
 ## E2E テスト（Playwright）
 
 バックエンドとフロントエンドを起動した状態で実行する。

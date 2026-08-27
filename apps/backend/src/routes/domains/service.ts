@@ -2,6 +2,7 @@ import { TransferStatusRepository } from "../../domains/transfer/repository";
 import { RegistryBridge } from "../../lib/bridge";
 import type { Registry } from "../../lib/bridge/types";
 import type { DBClient } from "../../lib/db";
+import { isValidFqdn } from "../../lib/registry-policy";
 import type { Result } from "../../types/result";
 import { DomainMapper   } from "./mapper";
 import type {DomainDetailResponse, DomainResponse} from "./mapper";
@@ -91,6 +92,13 @@ export class DomainService {
     const results: DomainCheckItem[] = [];
 
     for (const name of names) {
+      // Issue #76: 形式が不正な名前 (日本語ドメインなど) は failed ではなく
+      // 「確定的に取得できない」として返す。failed: true にすると画面上
+      // 「レジストリと通信に失敗しました」と出て、障害と誤解されるため。
+      if (!isValidFqdn(name.trim().toLowerCase())) {
+        results.push({ name, avail: false, failed: false });
+        continue;
+      }
       const tld = tldOf(name);
       if (!tld) {
         results.push({ name, avail: false, failed: true });
@@ -143,6 +151,12 @@ export class DomainService {
     db: DBClient;
     env: CloudflareBindings;
   }): Promise<Result<DomainResponse>> {
+    // Issue #76: FQDN 形式は Zod でも検証しているが、service 層でも念のためチェックする
+    // (transfers と同じ二段構え)。handler を経由しない呼び出しが将来入っても弾けるようにする。
+    if (!isValidFqdn(name.trim().toLowerCase())) {
+      return { success: false, data: null, error: "invalid_domain_name" };
+    }
+
     // 1. 疎通確認: レジストリの hello を叩き、認証ヘッダ・応答・TLD 対応を確認する。
     const helloResult = await RegistryBridge.hello({ registry, env });
     if (!helloResult.success) {return helloResult;}

@@ -115,11 +115,91 @@ describe("POST /api/v1/public/domains/check", () => {
 
     expect(res.status).toBe(400);
   });
+
+  // Issue #76: 以前は日本語ドメインが素通りしてレジストリまで届き、422 が
+  // failed: true に化けて「レジストリと通信に失敗しました」と表示されていた。
+  test("[異常系] 日本語ドメインはレジストリへ送らず、理由付きの400で返す", async () => {
+    const checkBulk = vi.spyOn(DomainService, "checkBulk");
+
+    const res = await checkDomainRouteHandler.request(
+      "/api/v1/public/domains/check",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ names: ["日本語.com"] }),
+      },
+      mockEnv,
+    );
+
+    expect(res.status).toBe(400);
+    const json = await res.json() as any;
+    expect(json.error).toContain("日本語や記号は使えません");
+    expect(checkBulk).not.toHaveBeenCalled();
+  });
+
+  test("[異常系] 1件でも形式が不正なら全体を弾く", async () => {
+    const res = await checkDomainRouteHandler.request(
+      "/api/v1/public/domains/check",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ names: ["example.com", "-bad.com"] }),
+      },
+      mockEnv,
+    );
+
+    expect(res.status).toBe(400);
+  });
+});
+
+// ─── checkBulk (service) ─────────────────────────────────────────────────────
+
+describe("DomainService.checkBulk", () => {
+  // Zod を通らない経路から呼ばれても「障害」に見せないための二段構え。
+  // failed: true にすると画面が「通信に失敗しました」と出してしまう。
+  test("[異常系] 形式が不正な名前は failed ではなく avail:false で返す", async () => {
+    // 上の check ハンドラーのテストが checkBulk 自体を差し替えているので、
+    // ここでは実装を戻してから呼ぶ (clearAllMocks は呼び出し履歴しか消さない)。
+    vi.spyOn(DomainService, "checkBulk").mockRestore();
+    const check = vi.spyOn(RegistryBridge, "check");
+
+    const results = await DomainService.checkBulk({
+      names: ["日本語.com"],
+      env: mockEnv,
+    });
+
+    expect(results).toEqual([{ name: "日本語.com", avail: false, failed: false }]);
+    expect(check).not.toHaveBeenCalled();
+  });
 });
 
 // ─── create ───────────────────────────────────────────────────────────────────
 
 describe("POST /api/v1/secure/domains", () => {
+  // Issue #76: 以前は trim().min(1) しか無く、実レジストリの 422 を invalid_tld に
+  // 写像していたため「対応していないドメインです」と TLD の問題に見えていた。
+  test("[異常系] 日本語ドメインは登録処理に入る前に理由付きの400で返す", async () => {
+    const create = vi.spyOn(DomainService, "create");
+
+    const res = await createDomainRouteHandler.request(
+      "/api/v1/secure/domains",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: "日本語.com",
+          period: { unit: "Y", value: 1 },
+        }),
+      },
+      mockEnv,
+    );
+
+    expect(res.status).toBe(400);
+    const json = await res.json() as any;
+    expect(json.error).toContain("日本語や記号は使えません");
+    expect(create).not.toHaveBeenCalled();
+  });
+
   test("[正常系] ドメイン登録成功", async () => {
     vi.spyOn(DomainService, "create").mockResolvedValue({
       success: true,
