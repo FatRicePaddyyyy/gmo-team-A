@@ -109,7 +109,7 @@ export default function CartPaymentPage() {
                   <GlossaryTerm
                     description={
                       findTld(item.tld)?.summary ??
-                      "インターネット上の住所（ドメイン名）の末尾につく「拡張子」です。"
+                      "インターネット上の住所（ドメイン名）の末尾につく「TLD」です。"
                     }
                   >
                     <span style={{ color: "var(--brand)" }}>{item.tld}</span>

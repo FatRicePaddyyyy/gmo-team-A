@@ -32,7 +32,7 @@ export const INITIAL_PROGRESS: ProgressState = {
 export const FLOW_STEPS = [
   { key: "select", label: "ドメインを選ぶ" },
   { key: "review", label: "内容を確認" },
-  { key: "signup", label: "会員登録" },
+  { key: "login", label: "ログイン" },
   { key: "payment", label: "お支払い" },
 ] as const;
 

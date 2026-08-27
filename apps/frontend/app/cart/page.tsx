@@ -52,8 +52,8 @@ export default function CartPage() {
   const blocked = lines.filter((line) => !line.verdict.allowed);
   // 直前の候補が消えないよう、検索に戻るときはクエリを持って戻す
   const backToSearchHref = progress.searchedName
-    ? `/search?q=${encodeURIComponent(progress.searchedName)}`
-    : "/search";
+    ? `/?q=${encodeURIComponent(progress.searchedName)}`
+    : "/";
 
   const handleSubmit = () => {
     // 取得条件を満たさない末尾が残っていたら、理由を出して止める
@@ -93,7 +93,7 @@ export default function CartPage() {
               className="h-11 px-5 text-white"
               style={{ background: "var(--brand)" }}
               nativeButton={false}
-              render={<Link href="/search" />}
+              render={<Link href="/" />}
             >
               ドメインを検索する
             </Button>
