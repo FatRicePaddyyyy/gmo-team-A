@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   $approveTransfer,
   $listPendingInboundTransfers,
@@ -48,6 +48,12 @@ export function useInboundTransfers(
   const [loadUnauthorized, setLoadUnauthorized] = useState(false);
   // セッション切れを掴んだか。自動更新を止める判断に使う
   const [sessionExpired, setSessionExpired] = useState(false);
+
+  // refresh の依存に入れるとポーリングのたびに関数が作り直されるので、ref 経由で読む
+  const onDomainsChangedRef = useRef(onDomainsChanged);
+  useEffect(() => {
+    onDomainsChangedRef.current = onDomainsChanged;
+  }, [onDomainsChanged]);
   const [running, setRunning] = useState<RunningTransferAction | null>(null);
   const [feedback, setFeedback] = useState<DomainFeedback | null>(null);
 
@@ -86,7 +92,19 @@ export function useInboundTransfers(
       }
     } else {
       setSessionExpired(false);
-      setTransfers(result.data);
+      setTransfers((previous) => {
+        // 申請が増減したら、ドメイン側の status も動いている。
+        // ここで知らせないと「承認カードは消えたのに、一覧はまだ
+        // 『承認するか却下するか決めてください』と出す」という食い違いが起きる。
+        const changed =
+          previous.length !== result.data.length ||
+          previous.some(
+            (transfer, index) =>
+              transfer.transferId !== result.data[index]?.transferId,
+          );
+        if (changed) void onDomainsChangedRef.current();
+        return result.data;
+      });
     }
     setLoaded(true);
     if (!silent) setLoading(false);
