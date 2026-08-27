@@ -172,6 +172,18 @@ const server = createServer(async (req, res) => {
   const clTRID = req.headers["x-cl-trid"] ?? null;
   const log = (msg) => console.log(`  ${method} ${path} → ${msg}`);
 
+  // --- コンタクトの差し替え（モック専用。移管で入ってきたドメインの再現用）
+  // 自分で取得したドメインは 3 ロールとも同じ連絡先になるため、
+  // 「3 者が別人」の分岐をこれ無しでは確認できない。
+  if (path === "/__mock/contacts" && method === "POST") {
+    const body = await readBody(req);
+    const record = domains.get(body?.name);
+    if (!record) { return send(res, 404, { error: "domain not found" }); }
+    record.contacts = body.contacts;
+    log(`contacts replaced for ${body.name}`);
+    return send(res, 200, { contacts: record.contacts });
+  }
+
   // --- メンテナンスの切り替え（モック専用。本物には無いエンドポイント）
   if (path === "/__mock/maintenance") {
     if (method === "POST") {

@@ -80,6 +80,11 @@ export function DomainOverview({ domain }: DomainOverviewProps) {
   const contacts = Object.entries(domain.contacts ?? {});
   // 3 ロールとも同じ連絡先か。自分で取得したドメインは必ずこうなる
   // （登録時に ADMIN / TECH / BILLING すべて同じ contactId を割り当てているため）。
+  //
+  // 移管で入ってきたドメインは他社が作った連絡先を指したままになる
+  // （承認しても書き換えていない）。他社も 3 ロールに同じ ID を使っていれば
+  // ここは true になるが、そのドメインの持ち主はこの利用者なので
+  // 氏名を出して困ることはない。レジストリ内部の ID を見せるより読める。
   const sameContact =
     contacts.length > 0 &&
     contacts.every(([, id]) => id === contacts[0]?.[1]);
