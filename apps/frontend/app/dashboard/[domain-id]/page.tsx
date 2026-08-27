@@ -8,6 +8,8 @@ import { BackLink } from "@/components/back-link";
 import { RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { FeedbackBanner } from "@/components/feedback-banner";
+import { GlossaryTerm } from "@/components/glossary-term";
+import { GLOSSARY } from "@/shared/lib/glossary";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import {
@@ -97,7 +99,14 @@ export default function DomainDetailPage() {
                   {domain?.name ?? "ドメインの詳細"}
                 </h1>
                 <p className="mt-1 text-sm text-gray-600">
-                  ネームサーバーの変更と、他のレジストラへ移管するための設定ができます。
+                  ネームサーバーの変更と、他の
+                  <GlossaryTerm
+                    description={GLOSSARY.registrar.description}
+                    className="underline decoration-dotted underline-offset-4"
+                  >
+                    {GLOSSARY.registrar.term}
+                  </GlossaryTerm>
+                  へ移管するための設定ができます。
                 </p>
               </div>
               {/* レジストリへの反映が遅れることがあるので、取り直す手段を置く。

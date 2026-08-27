@@ -10,6 +10,8 @@ import type {
 } from "../_hooks/use-inbound-transfers.hook";
 import { ConfirmAction } from "@/components/confirm-action";
 import { FeedbackBanner } from "@/components/feedback-banner";
+import { GlossaryTerm } from "@/components/glossary-term";
+import { GLOSSARY } from "@/shared/lib/glossary";
 import { formatDate } from "@/shared/lib/format-date";
 
 interface InboundTransferListProps {
@@ -39,7 +41,14 @@ export function InboundTransferList({ state }: InboundTransferListProps) {
           あなたのドメインへの移管申請
         </h2>
         <p className="mt-1 text-sm text-gray-600">
-          他のレジストラへドメインを渡す手続きです。心当たりがなければ却下してください。
+          他の
+          <GlossaryTerm
+            description={GLOSSARY.registrar.description}
+            className="underline decoration-dotted underline-offset-4"
+          >
+            {GLOSSARY.registrar.term}
+          </GlossaryTerm>
+          へドメインを渡す手続きです。心当たりがなければ却下してください。
         </p>
       </div>
 

@@ -60,7 +60,14 @@ export default function TransferPage() {
           <p className="mt-3 border-l-2 border-gray-300 pl-4 text-sm text-gray-600">
             逆に
             <span className="font-semibold text-gray-900">
-              自分のドメインを他のレジストラへ渡したい
+              自分のドメインを他の
+              <GlossaryTerm
+                description={GLOSSARY.registrar.description}
+                className="underline decoration-dotted underline-offset-4"
+              >
+                {GLOSSARY.registrar.term}
+              </GlossaryTerm>
+              へ渡したい
             </span>
             ときは、この画面ではなく
             <Link
