@@ -91,8 +91,11 @@ export function DomainOverview({ domain }: DomainOverviewProps) {
               label="登録者"
               value={
                 <span className="inline-flex items-center gap-1.5">
-                  <User className="size-4 text-gray-400" aria-hidden="true" />
-                  {domain.registrant}
+                  <User
+                    className="size-4 shrink-0 text-gray-400"
+                    aria-hidden="true"
+                  />
+                  <span className="break-all">{domain.registrant}</span>
                 </span>
               }
             />
@@ -102,7 +105,7 @@ export function DomainOverview({ domain }: DomainOverviewProps) {
                 domain.nameservers?.length ? (
                   <ul className="space-y-0.5">
                     {domain.nameservers.map((ns) => (
-                      <li key={ns} className="font-mono text-sm">
+                      <li key={ns} className="font-mono text-sm break-all">
                         {ns}
                       </li>
                     ))}
@@ -118,7 +121,7 @@ export function DomainOverview({ domain }: DomainOverviewProps) {
                     {domain.statuses.map((s) => (
                       <span
                         key={s}
-                        className="rounded bg-gray-100 px-1.5 py-0.5 font-mono text-xs text-gray-700"
+                        className="rounded bg-gray-100 px-1.5 py-0.5 font-mono text-xs break-all text-gray-700"
                       >
                         {s}
                       </span>
@@ -135,7 +138,7 @@ export function DomainOverview({ domain }: DomainOverviewProps) {
                     {domain.rgpStatus.map((s) => (
                       <span
                         key={s}
-                        className="rounded bg-gray-100 px-1.5 py-0.5 font-mono text-xs text-gray-700"
+                        className="rounded bg-gray-100 px-1.5 py-0.5 font-mono text-xs break-all text-gray-700"
                       >
                         {s}
                       </span>
@@ -152,7 +155,7 @@ export function DomainOverview({ domain }: DomainOverviewProps) {
                     {contacts.map(([role, id]) => (
                       <li key={role} className="text-sm">
                         <span className="text-gray-500">{role}: </span>
-                        <span className="font-mono">{id}</span>
+                        <span className="font-mono break-all">{id}</span>
                       </li>
                     ))}
                   </ul>
