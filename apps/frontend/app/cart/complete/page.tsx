@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { CheckCircle2, Info } from "lucide-react";
 import { useSession } from "@/auth-client";
 import { Button } from "@/components/ui/button";
@@ -15,6 +14,7 @@ import { loadConfirmedOrder, type ConfirmedOrder } from "@/shared/lib/order-stor
 import { buildFlowSteps } from "@/shared/lib/progress-store";
 import { purposeLabel } from "@/shared/lib/purpose";
 import { findTld, MISCONCEPTION } from "@/shared/lib/tld-catalog";
+import { NoOrderNotice } from "../_components/no-order-notice";
 
 const COMPLETE_STEPS = buildFlowSteps("login");
 
@@ -24,7 +24,6 @@ const COMPLETE_STEPS = buildFlowSteps("login");
  * 確認していない人が URL 直打ちで来たときは「完了」を名乗らない。
  */
 export default function CartCompletePage() {
-  const router = useRouter();
   const { data: session } = useSession();
   const isLoggedIn = Boolean(session?.user);
   const [order, setOrder] = useState<ConfirmedOrder | null>(null);
@@ -36,29 +35,7 @@ export default function CartCompletePage() {
   }, []);
 
   if (checked && !order) {
-    return (
-      <div className="min-h-screen bg-gray-50">
-        <SiteHeader />
-        <main className="mx-auto max-w-3xl px-4 py-10">
-          <div className="rounded-lg border border-dashed border-border bg-white px-4 py-12 text-center">
-            <Info className="mx-auto mb-3 size-8 text-gray-400" aria-hidden="true" />
-            <h1 className="mb-1 text-xl font-bold text-gray-900">まだお申し込みはありません</h1>
-            <p className="mb-6 text-sm leading-relaxed text-gray-600">
-              このページは、お申し込み内容の確認を終えた方に表示されます。
-              まずはドメインを選んで、確認画面で設定を決めてください。
-            </p>
-            <Button
-              className="h-11 px-5 text-white"
-              style={{ background: "var(--brand)" }}
-              onClick={() => router.push("/")}
-            >
-              ドメインを検索する
-            </Button>
-          </div>
-        </main>
-        <SiteFooter />
-      </div>
-    );
+    return <NoOrderNotice isLoggedIn={isLoggedIn} />;
   }
 
   return (

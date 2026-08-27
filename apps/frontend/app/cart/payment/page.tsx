@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { CreditCard, Info } from "lucide-react";
+import { useSession } from "@/auth-client";
 import { Button } from "@/components/ui/button";
 import { CheckoutStepper } from "@/components/checkout-stepper";
 import { FeedbackBanner } from "@/components/feedback-banner";
@@ -16,6 +17,7 @@ import { loadConfirmedOrder, type ConfirmedOrder } from "@/shared/lib/order-stor
 import { buildFlowSteps } from "@/shared/lib/progress-store";
 import { findTld } from "@/shared/lib/tld-catalog";
 import { PAYMENT_METHODS, type PaymentMethod } from "@/shared/lib/payment-methods";
+import { NoOrderNotice } from "../_components/no-order-notice";
 
 const PAYMENT_STEPS = buildFlowSteps("payment");
 
@@ -28,11 +30,15 @@ const PAYMENT_STEPS = buildFlowSteps("payment");
  */
 export default function CartPaymentPage() {
   const router = useRouter();
+  const { data: session, isPending: sessionPending } = useSession();
+  const isLoggedIn = Boolean(session?.user);
   const [order, setOrder] = useState<ConfirmedOrder | null>(null);
   const [checked, setChecked] = useState(false);
   const [method, setMethod] = useState<PaymentMethod>("credit-card");
   const [submitting, setSubmitting] = useState(false);
   const [failures, setFailures] = useState<string[]>([]);
+  // 401 のときだけログインし直す導線を出すため、理由まで持っておく。
+  const [failureUnauthorized, setFailureUnauthorized] = useState(false);
 
   useEffect(() => {
     setOrder(loadConfirmedOrder());
@@ -40,24 +46,45 @@ export default function CartPaymentPage() {
   }, []);
 
   if (checked && !order) {
+    return <NoOrderNotice isLoggedIn={isLoggedIn} />;
+  }
+
+  // 申し込みはあるがログインしていない場合。ドメイン登録は認証必須なので、
+  // このまま「確定する」を押しても必ず 401 になる。押させる前に理由と導線を出す。
+  // セッション判定が終わるまでは出さない（ログイン済みの人に一瞬だけ出てしまうため）。
+  if (checked && order && !sessionPending && !isLoggedIn) {
     return (
       <div className="min-h-screen bg-gray-50">
         <SiteHeader />
+        <CheckoutStepper steps={PAYMENT_STEPS} />
         <main className="mx-auto max-w-3xl px-4 py-10">
-          <div className="rounded-lg border border-dashed border-border bg-white px-4 py-12 text-center">
+          <div className="rounded-lg border border-border bg-white px-4 py-12 text-center shadow-sm">
             <Info className="mx-auto mb-3 size-8 text-gray-400" aria-hidden="true" />
-            <h1 className="mb-1 text-xl font-bold text-gray-900">まだお申し込みはありません</h1>
+            <h1 className="mb-1 text-xl font-bold text-gray-900">
+              お支払いに進むにはログインが必要です
+            </h1>
             <p className="mb-6 text-sm leading-relaxed text-gray-600">
-              このページは、お申し込み内容の確認を終えた方に表示されます。
-              まずはドメインを選んで、確認画面で設定を決めてください。
+              ドメインの管理・更新のため、取得にはアカウントとの紐付けが必須です。
+              お申し込みの内容は残っているので、ログインするとこの画面に戻ります。
             </p>
-            <Button
-              className="h-11 px-5 text-white"
-              style={{ background: "var(--brand)" }}
-              onClick={() => router.push("/")}
-            >
-              ドメインを検索する
-            </Button>
+            <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:justify-center">
+              <Button
+                className="h-11 px-6 text-white"
+                style={{ background: "var(--brand)" }}
+                nativeButton={false}
+                render={<Link href="/login" />}
+              >
+                ログイン
+              </Button>
+              <Button
+                variant="outline"
+                className="h-11 px-5"
+                nativeButton={false}
+                render={<Link href="/cart/complete" />}
+              >
+                確認画面に戻る
+              </Button>
+            </div>
           </div>
         </main>
         <SiteFooter />
@@ -69,6 +96,7 @@ export default function CartPaymentPage() {
     if (!order) return;
     setSubmitting(true);
     setFailures([]);
+    setFailureUnauthorized(false);
     // 確定した各ドメインを登録する。現状は常に1件だが、将来複数対応する余地は残す。
     const results = await Promise.all(
       order.items.map(async (item) => {
@@ -76,12 +104,16 @@ export default function CartPaymentPage() {
         const result = await callApi(
           $createDomain({ json: { name: fullName, period: { unit: "Y", value: 1 } } }),
         );
-        return result.success ? null : `${fullName}: ${result.error}`;
+        return result.success
+          ? null
+          : { message: `${fullName}: ${result.error}`, unauthorized: result.unauthorized };
       }),
     );
     setSubmitting(false);
-    const failed = results.filter((failure): failure is string => failure !== null);
+    const failedResults = results.filter((failure) => failure !== null);
+    const failed = failedResults.map((failure) => failure.message);
     if (failed.length > 0) {
+      setFailureUnauthorized(failedResults.some((failure) => failure.unauthorized));
       // 部分失敗のケースは payment ページに残ってエラー表示。ConfirmedOrder は消さない
       // （ユーザーが「別のドメインを試す」を選ぶかもしれず、確定情報を失うと戻せない）
       setFailures(failed);
@@ -157,9 +189,12 @@ export default function CartPaymentPage() {
 
         {failures.length > 0 && (
           <div className="mb-6">
+            {/* このデモに決済は無いので「お支払いは完了しました」は事実に反する。
+                起きたのはドメイン登録の失敗だけなので、そう書く。 */}
             <FeedbackBanner
               tone="error"
-              message="お支払いは完了しましたが、一部のドメインの登録に失敗しました。"
+              message="ドメインの登録に失敗しました。"
+              unauthorized={failureUnauthorized}
             />
             <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-red-900">
               {failures.map((failure) => (
