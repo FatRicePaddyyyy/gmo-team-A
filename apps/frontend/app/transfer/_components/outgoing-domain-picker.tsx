@@ -7,6 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { FeedbackBanner } from "@/components/feedback-banner";
 import type { useMyDomains } from "../../dashboard/_hooks/use-my-domains.hook";
 import { canUpdateSettings } from "../../dashboard/_lib/domain-status";
+import { TRANSFER_OUT_ANCHOR } from "../../dashboard/[domain-id]/_components/transfer-out-card";
 
 interface OutgoingDomainPickerProps {
   state: ReturnType<typeof useMyDomains>;
@@ -76,7 +77,11 @@ export function OutgoingDomainPicker({ state }: OutgoingDomainPickerProps) {
                 variant={ready ? "outline" : "ghost"}
                 disabled={!ready}
                 nativeButton={false}
-                render={<Link href={`/dashboard/${domain.id}`} />}
+                render={
+                  <Link
+                    href={`/dashboard/${domain.id}#${TRANSFER_OUT_ANCHOR}`}
+                  />
+                }
               >
                 渡す手続きへ
                 <ChevronRight aria-hidden="true" />

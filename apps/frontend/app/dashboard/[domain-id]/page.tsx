@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect } from "react";
 import { useParams } from "next/navigation";
 import { useSession } from "@/auth-client";
 import { useInboundTransfers } from "../_hooks/use-inbound-transfers.hook";
@@ -23,7 +24,10 @@ import { NameServerForm } from "./_components/name-server-form";
 import { IncomingTransferCard } from "./_components/incoming-transfer-card";
 import { LifecycleCard } from "./_components/lifecycle-card";
 import { RenewCard } from "./_components/renew-card";
-import { TransferOutCard } from "./_components/transfer-out-card";
+import {
+  TRANSFER_OUT_ANCHOR,
+  TransferOutCard,
+} from "./_components/transfer-out-card";
 import { useDomainDetail } from "./_hooks/use-domain-detail.hook";
 
 export default function DomainDetailPage() {
@@ -47,6 +51,17 @@ export default function DomainDetailPage() {
   // 設定変更（canUpdateSettings）とは別に判定する。
   const renewable = domain ? canRenew(domain.status) : false;
   const busy = running !== null;
+
+  // カードはドメインを取得したあとに描画されるので、ブラウザ標準のアンカー移動
+  // （#transfer-out）は対象がまだ無い時点で走ってしまい、何も起きない。
+  // 描画された時点で自分でスクロールする。
+  useEffect(() => {
+    if (!domain) return;
+    if (window.location.hash !== `#${TRANSFER_OUT_ANCHOR}`) return;
+    document
+      .getElementById(TRANSFER_OUT_ANCHOR)
+      ?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [domain]);
 
   if (isPending) {
     return (
