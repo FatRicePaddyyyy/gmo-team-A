@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import {
   $cancelTransfer,
   $listTransfers,
+  $pollNowTransfer,
   $requestTransfer,
   type ListTransfersResponse,
   type RequestTransferResponse,
@@ -57,6 +58,16 @@ export function useTransferRequests(enabled: boolean) {
       setLoading(true);
       setLoadError(null);
       setLoadUnauthorized(false);
+    }
+    // 一覧を GET する前に、backend の cron 相当の poll を「今すぐ」1 回走らせる。
+    // レジストリ側で承認/却下が起きても、cron が動くまで backend DB に反映されない。
+    // 「最新にする」を押した/自動ポーリングで叩いたときに poll → GET の順にすることで、
+    // リロード無しで新しい状態が現れるようにする。
+    // best effort: poll-now が失敗しても取り直しは進める。
+    try {
+      await callApi($pollNowTransfer());
+    } catch {
+      // no-op: poll-now は best effort
     }
     const result = await callApi<MyTransfer[]>($listTransfers());
     if (!result.success) {

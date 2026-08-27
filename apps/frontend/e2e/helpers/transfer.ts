@@ -334,15 +334,21 @@ export async function setupInboundPending(
 
   await t2TransferRequest(registry, fullDomain, authInfo);
 
-  // 詳細ページの「最新にする」ボタンを押して backend の poll-now を叩く。
-  // 詳細ページには authInfo 設定直後の時点ですでにいる。
+  // /dashboard に戻って「最新にする」を押す。
+  // dashboard の refresh は inbound 一覧を GET する前に poll-now を叩くため、
+  // これで backend cron 相当を発火 + 一覧再取得ができる。
   // レジストリの transfer message が poll → DB 反映 → inbound 一覧
   // 更新までの 1 cycle に収まらないことがあるので、間を空けて 2 回押す。
+  await page.goto("/dashboard");
   await clickRefresh(page);
   await page.waitForTimeout(1_000);
   await clickRefresh(page);
 
-  // 「他のレジストラへ渡す」タブに incoming transfer カードが出るのを待つ
+  // 詳細ページに戻って、「他のレジストラへ渡す」タブに incoming transfer カードが
+  // 出るのを待つ
+  await page
+    .getByRole("link", { name: new RegExp(fullDomain.replace(".", "\\.")) })
+    .click();
   await page.getByRole("tab", { name: "他のレジストラへ渡す" }).click();
 
   return { fullDomain, authInfo };
