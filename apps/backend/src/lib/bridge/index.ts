@@ -1,4 +1,5 @@
 import type { Result, SimpleResult } from "../../types/result";
+import { isMaintenanceError } from "../error-messages";
 import { getClient, getKitaqnicClient } from "./client";
 import type {
   DomainCheckResponse,
@@ -367,6 +368,18 @@ export class RegistryBridge {
         );
         return { success: true, data: fallback, error: null };
       }
+      // どちらかの hello がメンテナンスで落ちていて、静的テーブルにも無い TLD の場合、
+      // その TLD を扱えるかどうかは判断できない。ここで unsupported_tld と断定すると、
+      // メンテ明けには通るはずの操作を「入力が間違っている」として突き返すことになり、
+      // 利用者はドメイン名の方を疑って直しようのない修正を試みる。
+      // 分からないときは分からないと伝える（メンテナンス扱い = 503）。
+      if ((!ks.success && isMaintenanceError(ks.error)) || (!kn.success && isMaintenanceError(kn.error))) {
+        console.warn(
+          `resolveRegistry: registry under maintenance and tld=${tld} not in static fallback; cannot decide support — returning registry_maintenance`,
+        );
+        return { success: false, data: null, error: "registry_maintenance" };
+      }
+
       // ここに来た = 生きている hello の supportedTlds に無く、かつ静的テーブルにも無い TLD。
       // 生存側 hello + 静的テーブルの両方に無いなら、落ちている側にだけ存在する可能性より
       // 「そもそも登録できない TLD」の可能性がはるかに高い (静的テーブルは全 gTLD をカバーする前提)。
