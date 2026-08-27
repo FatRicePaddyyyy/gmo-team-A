@@ -149,9 +149,6 @@ jobs:
     name: E2E tests (Playwright)
     needs: [tsc-frontend, tsc-backend, lint]
     runs-on: ubuntu-latest
-    env:
-      E2E_TEST_EMAIL: ${{ secrets.E2E_TEST_EMAIL }}
-      E2E_TEST_PASSWORD: ${{ secrets.E2E_TEST_PASSWORD }}
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -171,15 +168,6 @@ jobs:
           key: node-modules-${{ runner.os }}-${{ hashFiles('**/pnpm-lock.yaml') }}
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
-      - name: Install Japanese / CJK fonts
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            fonts-noto-cjk \
-            fonts-ipafont-gothic \
-            fonts-ipafont-mincho \
-            fontconfig
-          fc-cache -f -v
       - name: Install Playwright browsers
         working-directory: apps/frontend
         run: pnpm exec playwright install --with-deps chromium
@@ -198,7 +186,6 @@ jobs:
           pnpm dev &
           echo "Backend PID: $!"
           # /api は OpenAPI spec を返す認証不要エンドポイント
-          # || true で接続拒否(exit 7)を無視し set -e に止められないようにする
           for i in $(seq 1 30); do
             STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8787/api || echo "000")
             if [ "$STATUS" = "200" ]; then
@@ -208,22 +195,10 @@ jobs:
             echo "Waiting for backend... ($i/30) (HTTP $STATUS)"
             sleep 2
           done
-      - name: Seed test user
-        env:
-          SECRET_KEY: ${{ secrets.SECRET_KEY }}
-          E2E_TEST_EMAIL: ${{ secrets.E2E_TEST_EMAIL }}
-          E2E_TEST_PASSWORD: ${{ secrets.E2E_TEST_PASSWORD }}
-        run: |
-          curl -s -X POST "http://localhost:8787/api/v1/secret/create-seed-user" \
-            -H "Authorization: Bearer $SECRET_KEY" \
-            -H "Content-Type: application/json" \
-            -d "{\"email\":\"$E2E_TEST_EMAIL\",\"name\":\"テストユーザー\",\"password\":\"$E2E_TEST_PASSWORD\"}"
       - name: Run Playwright tests
         working-directory: apps/frontend
         env:
           NEXT_PUBLIC_BACKEND_URL: http://localhost:8787
-          E2E_TEST_EMAIL: ${{ secrets.E2E_TEST_EMAIL }}
-          E2E_TEST_PASSWORD: ${{ secrets.E2E_TEST_PASSWORD }}
         run: pnpm exec playwright test
       - name: Upload Playwright report
         if: always()
@@ -232,10 +207,4 @@ jobs:
           name: playwright-html-report
           path: apps/frontend/playwright-report
           retention-days: 7
-      - name: Upload test screenshots
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: playwright-screenshots
-          path: apps/frontend/test-results
-          retention-days: 7
+

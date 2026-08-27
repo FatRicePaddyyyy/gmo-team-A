@@ -18,6 +18,9 @@ const mockEnv = {
   KITAQNIC_BASIC_PASS: "p",
   KITAQNIC_REGISTRAR_ID: "REG-1",
   KITAQNIC_API_KEY: "k",
+  // 静的フォールバック用の TLD リスト (wrangler.jsonc の vars と同期)。
+  KITAQSIGN_FALLBACK_TLDS: "com,net,org,info",
+  KITAQNIC_FALLBACK_TLDS: "xyz,shop,store,app,dev,io,site,online,tech,space,click,link,top,world,life,cloud,email,fun",
 } as unknown as CloudflareBindings;
 
 /** レジストリの生レスポンスを1回分だけ返す fetch を仕込む */
@@ -81,6 +84,21 @@ describe("RegistryBridge.hello: 対応TLDの入れ物がレジストリごとに
 
     expect(res.success).toBe(false);
     expect(res.error).toBe("invalid_registry_response");
+  });
+
+  // Kitaqnic の shape で info.registryCode が欠落しているとき、
+  // トップレベルの svID にフォールバックする (normalizeGreeting 側の防御)。
+  test("kitaqnic 形で info.registryCode が無ければ svID を使う", async () => {
+    stubRegistry(200, okEnvelope({
+      svID: "KQNIC",
+      info: { supportedTlds: ["xyz"] },
+    }));
+
+    const res = await RegistryBridge.hello({ registry: "kitaqnic", env: mockEnv });
+
+    expect(res.success).toBe(true);
+    expect(res.data?.registryCode).toBe("KQNIC");
+    expect(res.data?.tlds).toEqual(["xyz"]);
   });
 });
 
@@ -226,8 +244,13 @@ describe("RegistryBridge.update: 403/404 の権限系吸収", () => {
     expect(res.error).toBe("forbidden");
   });
 
-  test("[異常系] 404 は domain_not_found にマップされる", async () => {
-    stubRegistry(404, errEnvelope(2303, "Object does not exist"));
+  test("[異常系] 404 + reason にドメイン名を含む → domain_not_found にマップされる", async () => {
+    // レジストリは HTTP 404 + result.reason にどのオブジェクトが不在かを載せてくる (未ドキュメント化)。
+    // reason がドメイン名を明示的に含むならドメイン本体の不在 = domain_not_found。
+    stubRegistry(404, {
+      result: { code: 2303, message: "Object does not exist", reason: "nope.com not found" },
+      trID: { clTRID: null, svTRID: "TEST-0001" },
+    });
 
     const res = await RegistryBridge.update({
       name: "nope.com",
@@ -238,13 +261,107 @@ describe("RegistryBridge.update: 403/404 の権限系吸収", () => {
 
     expect(res.error).toBe("domain_not_found");
   });
+
+  test("[異常系] 404 + reason に host 名 (ドメイン外) → referenced_object_not_found にマップされる", async () => {
+    // 実測 (kitaqsign 2026-08-27): add/rem で指定した host が未登録のとき
+    // HTTP 404 + result.reason="ns3.example.com not found" で返る。
+    // 「404 なら常にドメイン不在」と決めつけると host 不在を誤写像するので、reason を見る。
+    stubRegistry(404, {
+      result: { code: 2303, message: "Object does not exist", reason: "ns3.example.com not found" },
+      trID: { clTRID: null, svTRID: "TEST-0001" },
+    });
+
+    const res = await RegistryBridge.update({
+      name: "example.com",
+      add: { nameservers: ["ns3.example.com"] },
+      registry: "kitaqsign",
+      env: mockEnv,
+    });
+
+    expect(res.error).toBe("referenced_object_not_found");
+  });
+
+  test("[異常系] 404 + reason 無し → 参照先不在の可能性が高いので referenced_object_not_found", async () => {
+    // reason フィールドを載せずに 404+2303 が返るケース。ドメイン本体か参照先かは判別できないが、
+    // HTTP 404+result.code 2303 は host 不在の典型パターン (実測) なので referenced_object_not_found に倒す。
+    // 本当にドメイン不在ならその前の findById (backend DB) で弾けているので、この時点で 404 は
+    // 参照先の可能性が高い。
+    stubRegistry(404, errEnvelope(2303, "Object does not exist"));
+
+    const res = await RegistryBridge.update({
+      name: "example.com",
+      chg: { registrant: "C-0001" },
+      registry: "kitaqsign",
+      env: mockEnv,
+    });
+
+    expect(res.error).toBe("referenced_object_not_found");
+  });
+
+  // Kitaqnic の update 成功レスポンスは EppResponseUnit (resData が空 = Record<string, never>) を返す。
+  // 呼び出し側はレスポンスの中身を参照せず info() で取り直す設計だが、bridge 段では
+  // "resData 欠落" を invalid_registry_response に丸めず、空オブジェクトのまま成功で返すこと。
+  test("[正常系] Kitaqnic の Unit (resData なし) 応答でも成功で返す", async () => {
+    // openapi-fetch は 200 + result.code 1000 なら resData 不在でも success 扱い
+    stubRegistry(200, {
+      result: { code: 1000, message: "Command completed successfully" },
+      trID: { clTRID: null, svTRID: "TEST-0001" },
+    });
+
+    const res = await RegistryBridge.update({
+      name: "example.xyz",
+      chg: { registrant: "C-0001" },
+      registry: "kitaqnic",
+      env: mockEnv,
+    });
+
+    expect(res.success).toBe(true);
+    expect(res.data).toEqual({});
+  });
+
+  // update の 2303 は「ドメイン本体不在」と「add/rem で指定した NS/コンタクトが未登録」の
+  // 2 通りが同じコードで返る。reason に対象ドメイン名が含まれるかで区別する。
+  test("[異常系] 2303 + reason に対象ドメイン名を含む → domain_not_found", async () => {
+    stubRegistry(200, {
+      result: { code: 2303, message: "Object does not exist", reason: "Domain example.com not found" },
+      trID: { clTRID: null, svTRID: "TEST-0001" },
+    });
+
+    const res = await RegistryBridge.update({
+      name: "example.com",
+      add: { nameservers: ["ns1.other.com"] },
+      registry: "kitaqsign",
+      env: mockEnv,
+    });
+
+    expect(res.error).toBe("domain_not_found");
+  });
+
+  test("[異常系] 2303 + reason に対象ドメイン名を含まない → referenced_object_not_found", async () => {
+    stubRegistry(200, {
+      result: { code: 2303, message: "Object does not exist", reason: "Host ns1.other.com not found" },
+      trID: { clTRID: null, svTRID: "TEST-0001" },
+    });
+
+    const res = await RegistryBridge.update({
+      name: "example.com",
+      add: { nameservers: ["ns1.other.com"] },
+      registry: "kitaqsign",
+      env: mockEnv,
+    });
+
+    expect(res.error).toBe("referenced_object_not_found");
+  });
 });
 
 // ─── resolveRegistry ─────────────────────────────────────────────────────────
 
 describe("RegistryBridge.resolveRegistry: 片側 hello 失敗時の判定", () => {
-  test("[異常系] kitaqsign 疎通 OK・kitaqnic 疎通 NG で kitaqnic 管轄 TLD → network_error", async () => {
+  test("[フォールバック] kitaqsign 疎通 OK・kitaqnic 疎通 NG で kitaqnic 管轄 TLD → 静的テーブルで kitaqnic", async () => {
     // hello を直接 spy で差し替える (fetch stub 二重管理を避けるため)。
+    // kitaqnic 側がメンテナンス中で hello が長時間落ちるケース。
+    // withRetry で 5xx リトライしても復旧しないので、静的テーブル (FALLBACK_KITAQNIC_TLDS) で
+    // 「.xyz は kitaqnic」と判定する。
     vi.spyOn(RegistryBridge, "hello").mockImplementation(async ({ registry }) => {
       if (registry === "kitaqsign") {
         return { success: true, data: { registryCode: "KQSGN", tlds: ["com", "net"] }, error: null };
@@ -254,17 +371,28 @@ describe("RegistryBridge.resolveRegistry: 片側 hello 失敗時の判定", () =
 
     const res = await RegistryBridge.resolveRegistry({ name: "example.xyz", env: mockEnv });
 
-    // 修正前は unsupported_tld を返していた (kitaqnic が実は対応してるかもしれないのに誤情報)
-    expect(res.success).toBe(false);
-    expect(res.error).toBe("network_error");
+    expect(res.success).toBe(true);
+    if (res.success) {expect(res.data).toBe("kitaqnic");}
   });
 
-  test("[異常系] 両方 hello が失敗 → network_error", async () => {
+  test("[フォールバック] 両方 hello が失敗 + 静的テーブルに存在する TLD → 静的テーブルで kitaqsign", async () => {
     vi.spyOn(RegistryBridge, "hello").mockResolvedValue({ success: false, data: null, error: "network_error" });
 
     const res = await RegistryBridge.resolveRegistry({ name: "example.com", env: mockEnv });
 
-    expect(res.error).toBe("network_error");
+    expect(res.success).toBe(true);
+    if (res.success) {expect(res.data).toBe("kitaqsign");}
+  });
+
+  test("[異常系] 片側/両方 hello 失敗 + 静的テーブルにも無い TLD → unsupported_tld", async () => {
+    // hello が両方落ちていても、静的テーブルにも無いなら「実在しない TLD」の可能性が
+    // 圧倒的に高い (静的テーブルは全 gTLD をカバーする前提)。500 = network_error でユーザーに
+    // 再試行を促すより、4xx = unsupported_tld で「その TLD は扱えません」と伝えるほうが正しい。
+    vi.spyOn(RegistryBridge, "hello").mockResolvedValue({ success: false, data: null, error: "network_error" });
+
+    const res = await RegistryBridge.resolveRegistry({ name: "example.foobarbaz", env: mockEnv });
+
+    expect(res.error).toBe("unsupported_tld");
   });
 
   test("[正常系] 両方 hello 成功・kitaqsign 管轄 TLD → kitaqsign", async () => {
@@ -486,5 +614,95 @@ describe("RegistryBridge.renew", () => {
 
     expect(res.success).toBe(true);
     expect(res.data?.exDate).toBe("2028-08-26T00:00:00.000Z");
+  });
+});
+
+// ─── poll ────────────────────────────────────────────────────────────────────
+
+describe("RegistryBridge.poll: レジストリごとに endpoint が違うが shape は共通", () => {
+  test("[正常系] Kitaqsign から message を取得できる (payload の各種フィールドを保持)", async () => {
+    stubRegistry(200, okEnvelope({
+      count: 1,
+      message: {
+        id: 42,
+        msgType: "transfer",
+        qdate: "2026-08-26T10:00:00Z",
+        payload: {
+          domain: "example.com",
+          status: "serverApproved",
+          op: "approve",
+          counterpartyRegistrar: "teama-2",
+        },
+      },
+    }));
+
+    const res = await RegistryBridge.poll({ registry: "kitaqsign", env: mockEnv });
+
+    expect(res.success).toBe(true);
+    expect(res.data?.id).toBe(42);
+    expect(res.data?.payload.domain).toBe("example.com");
+    expect(res.data?.payload.status).toBe("serverApproved");
+    expect(res.data?.payload.counterpartyRegistrar).toBe("teama-2");
+  });
+
+  test("[正常系] Kitaqnic (GET /messages) も同じ shape で返るので同様に読める", async () => {
+    stubRegistry(200, okEnvelope({
+      count: 1,
+      message: {
+        id: 100,
+        msgType: "transfer",
+        qdate: "2026-08-26T10:00:00Z",
+        payload: { domain: "example.xyz", op: "request", counterpartyRegistrar: "teama-2" },
+      },
+    }));
+
+    const res = await RegistryBridge.poll({ registry: "kitaqnic", env: mockEnv });
+
+    expect(res.success).toBe(true);
+    expect(res.data?.id).toBe(100);
+    expect(res.data?.payload.op).toBe("request");
+  });
+
+  test("[正常系] 204 は queue empty (data=null) で返す", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(null, { status: 204 })));
+
+    const res = await RegistryBridge.poll({ registry: "kitaqsign", env: mockEnv });
+
+    expect(res.success).toBe(true);
+    expect(res.data).toBeNull();
+  });
+
+  // 以前は 5xx を !data ブランチで queue empty として扱っており、cron が空キューと誤認して
+  // drain break していた。5xx は poll_failed で返し、cron 側でリトライ判断させる。
+  test("[異常系] HTTP 500 は poll_failed で返す (空キューと誤認しない)", async () => {
+    stubRegistry(500, { result: { code: 2400, message: "Command failed" } });
+
+    const res = await RegistryBridge.poll({ registry: "kitaqsign", env: mockEnv });
+
+    expect(res.success).toBe(false);
+    expect(res.error).toBe("poll_failed");
+  });
+
+  test("[異常系] 200 + result.code≠1000 は poll_failed で返す", async () => {
+    stubRegistry(200, errEnvelope(2400, "Command failed"));
+
+    const res = await RegistryBridge.poll({ registry: "kitaqsign", env: mockEnv });
+
+    expect(res.success).toBe(false);
+    expect(res.error).toBe("poll_failed");
+  });
+
+  // EPP RFC 5730: 1300 は "no messages in queue"。1000 と同じく空扱いで受け入れる。
+  // Kitaqsign/Kitaqnic の Swagger にはないが、EPP 準拠実装が送っても壊れないようにする。
+  test("[正常系] result.code=1300 (EPP no-messages) は queue empty で返す", async () => {
+    stubRegistry(200, {
+      result: { code: 1300, message: "Command completed successfully; no messages" },
+      trID: { clTRID: null, svTRID: "TEST-0001" },
+    });
+
+    const res = await RegistryBridge.poll({ registry: "kitaqsign", env: mockEnv });
+
+    expect(res.success).toBe(true);
+    expect(res.data).toBeNull();
   });
 });

@@ -3,8 +3,9 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
-import { Menu, X, ShoppingCart, UserRound } from "lucide-react";
+import { Menu, X, ShoppingCart } from "lucide-react";
 import { useSession } from "@/auth-client";
+import { AccountMenu } from "@/components/account-menu";
 import { Button } from "@/components/ui/button";
 import { useCart } from "@/shared/hooks/use-cart.hook";
 
@@ -93,15 +94,7 @@ export function SiteHeader() {
           */}
           <div className="flex w-32 justify-end">
             {isPending ? null : signedInName ? (
-              <Button
-                variant="ghost"
-                className="h-11 min-w-0"
-                nativeButton={false}
-                render={<Link href="/dashboard" />}
-              >
-                <UserRound aria-hidden="true" />
-                <span className="truncate">{signedInName}</span>
-              </Button>
+              <AccountMenu name={signedInName} />
             ) : (
               <Button
                 variant="brand"

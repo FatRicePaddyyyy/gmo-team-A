@@ -1,6 +1,7 @@
 import { TransferStatusRepository } from "../../domains/transfer/repository";
 import { RegistryBridge } from "../../lib/bridge";
 import type { Registry } from "../../lib/bridge/types";
+import type { DBClient } from "../../lib/db";
 import type { Result } from "../../types/result";
 import { DomainMapper   } from "./mapper";
 import type {DomainDetailResponse, DomainResponse} from "./mapper";
@@ -131,6 +132,7 @@ export class DomainService {
     period,
     nameServers,
     userId,
+    db,
     env,
   }: {
     name: string;
@@ -138,6 +140,7 @@ export class DomainService {
     period: { unit: string; value: number };
     nameServers?: string[];
     userId: string;
+    db: DBClient;
     env: CloudflareBindings;
   }): Promise<Result<DomainResponse>> {
     // 1. 疎通確認: レジストリの hello を叩き、認証ヘッダ・応答・TLD 対応を確認する。
@@ -154,7 +157,7 @@ export class DomainService {
     // 2. コンタクト作成: 実ユーザーの name / email を postalInfo.name / email に流し込む。
     //    レジストリの Swagger 制約に沿って、ユーザーは事前に許可ダミー氏名 (例: "Taro Test") と
     //    @example.(com|net|org) のメールで登録されている前提。
-    const userResult = await DomainUserRepository.findById({ id: userId, env });
+    const userResult = await DomainUserRepository.findById({ id: userId, db });
     if (!userResult.success) {return userResult;}
     if (!userResult.data) {
       return { success: false, data: null, error: "user_not_found" };
@@ -195,7 +198,7 @@ export class DomainService {
         authInfo,
         ownerUserId: userId,
       },
-      env,
+      db,
     });
     if (!dbResult.success) {return dbResult;}
 
@@ -204,12 +207,12 @@ export class DomainService {
 
   static async list({
     userId,
-    env,
+    db,
   }: {
     userId: string;
-    env: CloudflareBindings;
+    db: DBClient;
   }): Promise<Result<DomainResponse[]>> {
-    const result = await DomainRepository.listByUserId({ userId, env });
+    const result = await DomainRepository.listByUserId({ userId, db });
     if (!result.success) {return result;}
     return { success: true, data: result.data.map(row => DomainMapper.toResponse(row)), error: null };
   }
@@ -217,13 +220,15 @@ export class DomainService {
   static async info({
     domainId,
     userId,
+    db,
     env,
   }: {
     domainId: string;
     userId: string;
+    db: DBClient;
     env: CloudflareBindings;
   }): Promise<Result<DomainDetailResponse>> {
-    const domainResult = await DomainRepository.findById({ id: domainId, env });
+    const domainResult = await DomainRepository.findById({ id: domainId, db });
     if (!domainResult.success) {return domainResult;}
     if (domainResult.data?.ownerUserId !== userId) {
       return { success: false, data: null, error: "not_found" };
@@ -244,7 +249,7 @@ export class DomainService {
     // 読み取りついでにレジストリの最新値で DB を同期する (best-effort)。
     // ここで DB 書き込みが失敗しても、呼び出し元にはレジストリの新鮮なデータを返したいので、
     // 失敗はログに残して処理は続行する (CQS 的にも read リクエストが write 失敗で 500 にならない)。
-    const updateResult = await DomainRepository.updateExpiresAtAndStatus({ id: domainId, expiresAt, status, env });
+    const updateResult = await DomainRepository.updateExpiresAtAndStatus({ id: domainId, expiresAt, status, db });
     if (!updateResult.success) {
       console.error("DomainService.info: DB sync failed but continuing with registry data:", updateResult.error);
     }
@@ -257,14 +262,16 @@ export class DomainService {
     domainId,
     period,
     userId,
+    db,
     env,
   }: {
     domainId: string;
     period: { unit: string; value: number };
     userId: string;
+    db: DBClient;
     env: CloudflareBindings;
   }): Promise<Result<DomainResponse>> {
-    const domainResult = await DomainRepository.findById({ id: domainId, env });
+    const domainResult = await DomainRepository.findById({ id: domainId, db });
     if (!domainResult.success) {return domainResult;}
     if (domainResult.data?.ownerUserId !== userId) {
       return { success: false, data: null, error: "not_found" };
@@ -288,7 +295,7 @@ export class DomainService {
     if (!renewResult.success) {return renewResult;}
 
     const expiresAt = new Date(renewResult.data.exDate);
-    const updateResult = await DomainRepository.updateExpiresAt({ id: domainId, expiresAt, env });
+    const updateResult = await DomainRepository.updateExpiresAt({ id: domainId, expiresAt, db });
     if (!updateResult.success) {return updateResult;}
 
     const updated = { ...domain, expiresAt };
@@ -303,6 +310,7 @@ export class DomainService {
     chg,
     autoRenew,
     userId,
+    db,
     env,
   }: {
     domainId: string;
@@ -312,9 +320,10 @@ export class DomainService {
     chg?: { registrant?: string; authInfo?: string };
     autoRenew?: boolean; // Issue #24: 自動更新設定
     userId: string;
+    db: DBClient;
     env: CloudflareBindings;
   }): Promise<Result<DomainDetailResponse>> {
-    const domainResult = await DomainRepository.findById({ id: domainId, env });
+    const domainResult = await DomainRepository.findById({ id: domainId, db });
     if (!domainResult.success) {return domainResult;}
     if (domainResult.data?.ownerUserId !== userId) {
       return { success: false, data: null, error: "not_found" };
@@ -328,7 +337,7 @@ export class DomainService {
     // autoRenew のみ変更する場合は、Bridge を呼ばず DB だけ更新して early return
     const hasRegistryChanges = Boolean(nameServers ?? addStatuses ?? remStatuses ?? chg);
     if (!hasRegistryChanges && autoRenew !== undefined) {
-      const arResult = await DomainRepository.updateAutoRenew({ id: domainId, autoRenew, env });
+      const arResult = await DomainRepository.updateAutoRenew({ id: domainId, autoRenew, db });
       if (!arResult.success) {return arResult;}
       const updatedRow = { ...domain, autoRenew };
       // レジストリからの最新情報はないので info を呼ぶ
@@ -337,14 +346,74 @@ export class DomainService {
       return { success: true, data: DomainMapper.toDetailResponse(updatedRow, infoResult.data), error: null };
     }
 
-    const add = (nameServers || addStatuses)
+    // nameServers の差分展開:
+    //   会員 API は「宣言的」に nameServers 全リストを受け取るが、レジストリ (EPP) の update は
+    //   add=追加 / rem=削除 の差分プロトコル (Swagger DomainChangeSet)。
+    //   宣言 → 差分の変換をここで行わないと、既存 NS を含めて再送した瞬間に "Object exists" で
+    //   失敗する (再現: nameservers-e2e-kitaqsign m2〜m5)。
+    //   仕様上の根拠: issue #10 / #9「PUT /domains/{id} で NS 変更のみなら nameServers だけでよい。
+    //   BRIDGE で add/rem/chg に変換」。
+    let nsToAdd: string[] | undefined;
+    let nsToRem: string[] | undefined;
+    if (nameServers !== undefined) {
+      const currentInfo = await RegistryBridge.info({ name: domain.name, registry: domain.registry, env });
+      if (!currentInfo.success) {return currentInfo;}
+      // 大文字小文字の揺れをレジストリの表記に合わせて (case-insensitive で) 比較する。
+      // DNS ホスト名は RFC 1035 上 case-insensitive、実 API は返却時の大文字小文字を保つため、
+      // 「大文字だけ違う NS を差分と誤検知して add/rem を打つ」のを防ぐ。
+      const current = new Set((currentInfo.data.nameservers ?? []).map((s) => s.toLowerCase()));
+      const target = nameServers.map((s) => s.toLowerCase());
+      const targetSet = new Set(target);
+      const addList = nameServers.filter((s) => !current.has(s.toLowerCase()));
+      const remList = (currentInfo.data.nameservers ?? []).filter((s) => !targetSet.has(s.toLowerCase()));
+      nsToAdd = addList.length > 0 ? addList : undefined;
+      nsToRem = remList.length > 0 ? remList : undefined;
+    }
+
+    const add = (nsToAdd || addStatuses)
       ? {
-          ...(nameServers ? { nameservers: nameServers } : {}),
+          ...(nsToAdd ? { nameservers: nsToAdd } : {}),
           ...(addStatuses ? { statuses: addStatuses } : {}),
         }
       : undefined;
 
-    const rem = remStatuses ? { statuses: remStatuses } : undefined;
+    const rem = (nsToRem || remStatuses)
+      ? {
+          ...(nsToRem ? { nameservers: nsToRem } : {}),
+          ...(remStatuses ? { statuses: remStatuses } : {}),
+        }
+      : undefined;
+
+    // すべての差分がゼロで chg/autoRenew も無い場合は、レジストリを叩かず no-op で成功を返す。
+    // nameServers 再送 (no-op) を「何もしない」で吸収するのが目的。
+    const hasRegistryPayload = Boolean(add ?? rem ?? chg);
+    if (!hasRegistryPayload) {
+      const infoOnly = await RegistryBridge.info({ name: domain.name, registry: domain.registry, env });
+      if (!infoOnly.success) {return infoOnly;}
+      // autoRenew だけ来ていれば DB 更新して返す
+      if (autoRenew !== undefined) {
+        const arResult = await DomainRepository.updateAutoRenew({ id: domainId, autoRenew, db });
+        if (!arResult.success) {return arResult;}
+      }
+      const updatedRow = {
+        ...domain,
+        ...(autoRenew !== undefined ? { autoRenew } : {}),
+      };
+      return { success: true, data: DomainMapper.toDetailResponse(updatedRow, infoOnly.data), error: null };
+    }
+
+    // add.nameservers に指定するホストは事前にレジストリに登録されている必要がある
+    // (未登録だと 404+2303 で弾かれる)。会員 API は宣言的に nameServers を受け取るので、
+    // add に含まれる新規ホストをここで先回り登録する。既存 (409) は idempotent 化して吸収。
+    if (nsToAdd && nsToAdd.length > 0) {
+      const hostCreateResults = await Promise.all(
+        nsToAdd.map((host) =>
+          RegistryBridge.createHost({ name: host, registry: domain.registry, env }),
+        ),
+      );
+      const firstFailure = hostCreateResults.find((r) => !r.success);
+      if (firstFailure) {return { success: false, data: null, error: firstFailure.error };}
+    }
 
     const updateResult = await RegistryBridge.update({
       name: domain.name,
@@ -366,16 +435,16 @@ export class DomainService {
       return { success: false, data: null, error: "invalid_expires_at" };
     }
     const status = pickPrimaryStatus(registryData.status ?? [], domain.status);
-    const syncResult = await DomainRepository.updateExpiresAtAndStatus({ id: domainId, expiresAt, status, env });
+    const syncResult = await DomainRepository.updateExpiresAtAndStatus({ id: domainId, expiresAt, status, db });
     if (!syncResult.success) {return syncResult;}
 
     if (chg?.authInfo) {
-      const authInfoResult = await DomainRepository.updateAuthInfo({ id: domainId, authInfo: chg.authInfo, env });
+      const authInfoResult = await DomainRepository.updateAuthInfo({ id: domainId, authInfo: chg.authInfo, db });
       if (!authInfoResult.success) {return authInfoResult;}
     }
 
     if (autoRenew !== undefined) {
-      const arResult = await DomainRepository.updateAutoRenew({ id: domainId, autoRenew, env });
+      const arResult = await DomainRepository.updateAutoRenew({ id: domainId, autoRenew, db });
       if (!arResult.success) {return arResult;}
     }
 
@@ -392,13 +461,15 @@ export class DomainService {
   static async delete({
     domainId,
     userId,
+    db,
     env,
   }: {
     domainId: string;
     userId: string;
+    db: DBClient;
     env: CloudflareBindings;
   }): Promise<Result<DomainResponse>> {
-    const domainResult = await DomainRepository.findById({ id: domainId, env });
+    const domainResult = await DomainRepository.findById({ id: domainId, db });
     if (!domainResult.success) {return domainResult;}
     if (domainResult.data?.ownerUserId !== userId) {
       return { success: false, data: null, error: "not_found" };
@@ -435,7 +506,7 @@ export class DomainService {
       ? pickPrimaryStatus(infoResult.data.status ?? [], "pendingDelete")
       : "pendingDelete";
 
-    const updateResult = await DomainRepository.updateStatus({ id: domainId, status, env });
+    const updateResult = await DomainRepository.updateStatus({ id: domainId, status, db });
     if (!updateResult.success) {return updateResult;}
 
     const updated = { ...domain, status };
@@ -447,10 +518,10 @@ export class DomainService {
   // approve / reject を叩けるようにする。
   static async listInboundPendingTransfers({
     userId,
-    env,
+    db,
   }: {
     userId: string;
-    env: CloudflareBindings;
+    db: DBClient;
   }): Promise<Result<{
     transferId: string;
     domainId: string;
@@ -458,7 +529,7 @@ export class DomainService {
     registry: "kitaqsign" | "kitaqnic";
     requestedAt: string;
   }[]>> {
-    const result = await DomainTransferRepository.findInboundPendingByOwner({ ownerUserId: userId, env });
+    const result = await DomainTransferRepository.findInboundPendingByOwner({ ownerUserId: userId, db });
     if (!result.success) {return result;}
     return {
       success: true,
@@ -476,13 +547,15 @@ export class DomainService {
   static async approveTransfer({
     domainId,
     userId,
+    db,
     env,
   }: {
     domainId: string;
     userId: string;
+    db: DBClient;
     env: CloudflareBindings;
   }): Promise<Result<void>> {
-    const domainResult = await DomainRepository.findById({ id: domainId, env });
+    const domainResult = await DomainRepository.findById({ id: domainId, db });
     if (!domainResult.success) {return domainResult;}
     if (!domainResult.data) {
       return { success: false, data: null, error: "domain_not_found" };
@@ -497,7 +570,7 @@ export class DomainService {
     // 既に処理済み (clientApproved/serverApproved/clientRejected/clientCancelled) なら弾く。
     // poll consumer が先に owner 変更を反映していると、ここで元 owner がヒットしても
     // 「pending が無い = 既に処理済み」と判断できる。
-    const transferResult = await DomainTransferRepository.findPendingByDomainId({ domainId, env });
+    const transferResult = await DomainTransferRepository.findPendingByDomainId({ domainId, db });
     if (!transferResult.success) {return transferResult;}
     if (!transferResult.data) {
       return { success: false, data: null, error: "transfer_not_found" };
@@ -519,7 +592,7 @@ export class DomainService {
         transferId: transferResult.data.id,
         domainId,
         transferStatus: "clientApproved",
-        env,
+        db,
       });
       if (!commit.success) {return commit;}
     } else {
@@ -528,7 +601,7 @@ export class DomainService {
         domainId,
         transferStatus: "clientApproved",
         newOwnerUserId: transferResult.data.gainingUserId,
-        env,
+        db,
       });
       if (!commit.success) {return commit;}
     }
@@ -539,13 +612,15 @@ export class DomainService {
   static async rejectTransfer({
     domainId,
     userId,
+    db,
     env,
   }: {
     domainId: string;
     userId: string;
+    db: DBClient;
     env: CloudflareBindings;
   }): Promise<Result<void>> {
-    const domainResult = await DomainRepository.findById({ id: domainId, env });
+    const domainResult = await DomainRepository.findById({ id: domainId, db });
     if (!domainResult.success) {return domainResult;}
     if (!domainResult.data) {
       return { success: false, data: null, error: "domain_not_found" };
@@ -558,7 +633,7 @@ export class DomainService {
 
     // B2: pendingTransfer な transfer が無ければ既に処理済みとして弾く。
     // これを bridge の前に置くことで、確定済みの transfer に対して余分な reject リクエストを送らない。
-    const transferResult = await DomainTransferRepository.findPendingByDomainId({ domainId, env });
+    const transferResult = await DomainTransferRepository.findPendingByDomainId({ domainId, db });
     if (!transferResult.success) {return transferResult;}
     if (!transferResult.data) {
       return { success: false, data: null, error: "transfer_not_found" };
@@ -576,7 +651,7 @@ export class DomainService {
       transferId: transferResult.data.id,
       domainId,
       transferStatus: "clientRejected",
-      env,
+      db,
     });
     if (!settle.success) {return settle;}
 
@@ -586,13 +661,15 @@ export class DomainService {
   static async restore({
     domainId,
     userId,
+    db,
     env,
   }: {
     domainId: string;
     userId: string;
+    db: DBClient;
     env: CloudflareBindings;
   }): Promise<Result<DomainResponse>> {
-    const domainResult = await DomainRepository.findById({ id: domainId, env });
+    const domainResult = await DomainRepository.findById({ id: domainId, db });
     if (!domainResult.success) {return domainResult;}
     if (domainResult.data?.ownerUserId !== userId) {
       return { success: false, data: null, error: "not_found" };
@@ -631,7 +708,7 @@ export class DomainService {
     // 「復旧できるか」の判定（isRestorable）とは別物なので、ここでは両方を見る。
     const status = isDeletedStatus(raw) ? "ok" : raw;
 
-    const updateResult = await DomainRepository.updateStatus({ id: domainId, status, env });
+    const updateResult = await DomainRepository.updateStatus({ id: domainId, status, db });
     if (!updateResult.success) {return updateResult;}
 
     const updated = { ...domain, status };

@@ -1,5 +1,5 @@
 import { eq } from "drizzle-orm";
-import { createDBClient } from "../../lib/db";
+import type { DBClient } from "../../lib/db";
 import { classifyDbError } from "../../lib/db-error";
 import { domains } from "../../lib/schema/general-schema";
 import type { Result } from "../../types/result";
@@ -11,13 +11,12 @@ type Domain = typeof domains.$inferSelect;
 export class TransferDomainRepository {
   static async findById({
     id,
-    env,
+    db,
   }: {
     id: string;
-    env: CloudflareBindings;
+    db: DBClient;
   }): Promise<Result<Domain | null>> {
     try {
-      const db = createDBClient(env);
       const rows = await db.select().from(domains).where(eq(domains.id, id));
       return { success: true, data: rows[0] ?? null, error: null };
     } catch (error) {
@@ -28,13 +27,12 @@ export class TransferDomainRepository {
 
   static async findByName({
     name,
-    env,
+    db,
   }: {
     name: string;
-    env: CloudflareBindings;
+    db: DBClient;
   }): Promise<Result<Domain | null>> {
     try {
-      const db = createDBClient(env);
       const rows = await db.select().from(domains).where(eq(domains.name, name));
       return { success: true, data: rows[0] ?? null, error: null };
     } catch (error) {
@@ -46,14 +44,13 @@ export class TransferDomainRepository {
   static async updateStatus({
     id,
     status,
-    env,
+    db,
   }: {
     id: string;
     status: string;
-    env: CloudflareBindings;
+    db: DBClient;
   }): Promise<Result<void>> {
     try {
-      const db = createDBClient(env);
       await db.update(domains).set({ status }).where(eq(domains.id, id));
       return { success: true, data: undefined, error: null };
     } catch (error) {

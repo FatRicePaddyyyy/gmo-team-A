@@ -1,13 +1,13 @@
 import { swaggerUI } from "@hono/swagger-ui";
+import { sentry } from "@sentry/hono/cloudflare";
+import { logger } from "hono/logger";
 import { auth } from "./lib/better-auth";
 import { createOpenAPIHono } from "./lib/openapi-hono";
 import { authMiddleware } from "./middlewares/auth";
 import { corsMiddleware } from "./middlewares/cors";
 import { apiKeyAuthMiddleware } from "./middlewares/secret-key";
+import { sentryReportMiddleware } from "./middlewares/sentry-report";
 import { createSeedUserRouteHandler } from "./routes/add-seed-user/post";
-import { deleteCategoryRouteHandler } from "./routes/category/delete";
-import { getAllCategoriesAndProductsRouteHandler } from "./routes/category/get";
-import { createCategoryRouteHandler } from "./routes/category/post";
 import { deleteDomainRouteHandler } from "./routes/domains/[domain-id]/delete";
 import { getDomainRouteHandler } from "./routes/domains/[domain-id]/get";
 import { updateDomainRouteHandler } from "./routes/domains/[domain-id]/put";
@@ -19,13 +19,27 @@ import { checkDomainRouteHandler } from "./routes/domains/check/post";
 import { listDomainsRouteHandler } from "./routes/domains/get";
 import { listInboundPendingTransfersRouteHandler } from "./routes/domains/pending-inbound-transfers/get";
 import { createDomainRouteHandler } from "./routes/domains/post";
-import { helloRouteHandler } from "./routes/hello/post";
 import { cancelTransferRouteHandler } from "./routes/transfers/[transfer-id]/cancel/post";
 import { listTransfersRouteHandler } from "./routes/transfers/get";
 import { requestTransferRouteHandler } from "./routes/transfers/post";
 import { handleTransferCronPoll } from "./scheduled/transfer-cron-poll";
 
 const app = createOpenAPIHono();
+
+app.use(
+  sentry(app, {
+    dsn: "https://da097d9c689227060c2c0dc393e759d0@o4511977049292800.ingest.us.sentry.io/4511977056305152",
+  }),
+);
+
+// 5xx レスポンスと未捕捉例外を横断で Sentry に送る。
+// sentry() の直後に噛ませて Sentry スコープが有効な状態で captureException を呼ぶ。
+app.use("/*", sentryReportMiddleware);
+
+// リクエスト/レスポンスを 1 行で残す (Hono 公式 logger)。
+// wrangler tail で確認する運用のため、CF Workers の console.log 経由でそのまま出す。
+// 認証・API キーミドルウェアより前に噛ませ、401/403 も含めて全リクエストを記録する。
+app.use("/*", logger());
 
 app.use("/*", corsMiddleware);
 
@@ -38,10 +52,6 @@ app.use("/api/v1/secure/*", authMiddleware);
 
 export const routes = app
   .route("/", createSeedUserRouteHandler)
-  .route("/", helloRouteHandler)
-  .route("/", createCategoryRouteHandler)
-  .route("/", deleteCategoryRouteHandler)
-  .route("/", getAllCategoriesAndProductsRouteHandler)
   .route("/", checkDomainRouteHandler)
   .route("/", createDomainRouteHandler)
   .route("/", listDomainsRouteHandler)
@@ -59,6 +69,10 @@ export const routes = app
   .route("/", requestTransferRouteHandler)
   .route("/", listTransfersRouteHandler)
   .route("/", cancelTransferRouteHandler);
+
+routes.get("/debug-sentry", () => {
+  throw new Error("My first Sentry error!");
+});
 
 routes
   .doc("/api", {
@@ -82,6 +96,10 @@ export default {
   // Cron trigger: 毎分発火して両レジストリを poll drain + 22 分経過した pendingTransfer を info reconcile。
   // wrangler.jsonc の triggers.crons ("* * * * *") で駆動される。
   async scheduled(controller: ScheduledController, env: CloudflareBindings, _ctx: ExecutionContext): Promise<void> {
-    await handleTransferCronPoll(env, new Date(controller.scheduledTime));
+    const scheduledAt = new Date(controller.scheduledTime);
+    console.info(`[cron] fire at=${scheduledAt.toISOString()} cron="${controller.cron}"`);
+    const startedAt = Date.now();
+    await handleTransferCronPoll(env, scheduledAt);
+    console.info(`[cron] done at=${scheduledAt.toISOString()} elapsedMs=${Date.now() - startedAt}`);
   },
 };

@@ -2,6 +2,7 @@ import { TransferStatusRepository } from "../../domains/transfer/repository";
 import { UserRepository } from "../../domains/user/repository";
 import { RegistryBridge } from "../../lib/bridge";
 import type { PollMessage, Registry } from "../../lib/bridge/types";
+import type { DBClient } from "../../lib/db";
 import { OutboundTransferRequestRepository } from "../../routes/transfers/outbound-repository";
 import { TransferCronPollRepository } from "./repository";
 
@@ -26,28 +27,35 @@ export interface CronPollSummary {
 }
 
 export async function runTransferCronPoll({
+  db,
   env,
   now,
 }: {
+  db: DBClient;
   env: CloudflareBindings;
   now: Date;
 }): Promise<CronPollSummary> {
   const summary: CronPollSummary = { polled: {}, reconciled: 0, expired: 0, serverApproved: 0 };
 
   // Phase 1: レジストリ poll drain (両レジストリ順に)
+  console.info(`[cron:phase1] poll drain start registries=${REGISTRIES.join(",")}`);
   for (const registry of REGISTRIES) {
-    summary.polled[registry] = await drainRegistry({ registry, env });
+    const drained = await drainRegistry({ registry, db, env });
+    summary.polled[registry] = drained;
+    console.info(`[cron:phase1] registry=${registry} processed=${drained} messages`);
   }
 
   // Phase 2: タイムアウトした pendingTransfer を info で reconcile
   const cutoff = new Date(now.getTime() - TIMEOUT_MINUTES * 60 * 1000);
-  const timedOut = await TransferCronPollRepository.findTimedOutPending({ olderThan: cutoff, env });
+  console.info(`[cron:phase2] reconcile timed-out pending (cutoff=${cutoff.toISOString()})`);
+  const timedOut = await TransferCronPollRepository.findTimedOutPending({ olderThan: cutoff, db });
   if (!timedOut.success) {
-    console.error("TransferCronPoll: findTimedOutPending failed", timedOut.error);
+    console.error("[cron:phase2] findTimedOutPending failed", timedOut.error);
     return summary;
   }
+  console.info(`[cron:phase2] candidates=${timedOut.data.length}`);
   for (const row of timedOut.data) {
-    const outcome = await reconcileTimedOut({ transfer: row.transfer, domain: row.domain, env });
+    const outcome = await reconcileTimedOut({ transfer: row.transfer, domain: row.domain, db, env });
     if (outcome === "serverApproved") {summary.serverApproved++;}
     if (outcome === "expired") {summary.expired++;}
     if (outcome !== "skipped") {summary.reconciled++;}
@@ -60,9 +68,11 @@ export async function runTransferCronPoll({
 // 何らかの理由で「先頭が動かない」状態になったら安全に break する (無限ループ防止)。
 async function drainRegistry({
   registry,
+  db,
   env,
 }: {
   registry: Registry;
+  db: DBClient;
   env: CloudflareBindings;
 }): Promise<number> {
   let processed = 0;
@@ -90,7 +100,7 @@ async function drainRegistry({
     }
     lastSeenId = msg.id;
 
-    await handleMessage({ registry, msg, env });
+    await handleMessage({ registry, msg, db, env });
     processed++;
   }
 
@@ -100,13 +110,19 @@ async function drainRegistry({
 async function handleMessage({
   registry,
   msg,
+  db,
   env,
 }: {
   registry: Registry;
   msg: PollMessage;
+  db: DBClient;
   env: CloudflareBindings;
 }): Promise<void> {
   const domainName = msg.payload.domain;
+
+  console.info(
+    `[event:${registry}] handle messageId=${msg.id} msgType="${msg.msgType}" domain="${domainName ?? "-"}" status="${msg.payload.status ?? "-"}" op="${msg.payload.op ?? "-"}"`,
+  );
 
   if (!domainName) {
     // payload.domain が無い = 対象ドメインが判別できない。
@@ -121,7 +137,7 @@ async function handleMessage({
 
   const found = await TransferCronPollRepository.findPendingTransferByDomainName({
     name: domainName,
-    env,
+    db,
   });
   if (!found.success) {
     console.error(
@@ -142,7 +158,7 @@ async function handleMessage({
     const outbound = await OutboundTransferRequestRepository.findPending({
       domainName,
       registry,
-      env,
+      db,
     });
     if (!outbound.success) {
       console.error(
@@ -152,14 +168,14 @@ async function handleMessage({
       return;
     }
     if (outbound.data) {
-      await handleOutboundMessage({ outbound: outbound.data, msg, registry, env });
+      await handleOutboundMessage({ outbound: outbound.data, msg, registry, db, env });
       return;
     }
 
     const op = msg.payload.op;
     const counterparty = msg.payload.counterpartyRegistrar;
     if (op === "request" && counterparty) {
-      const dom = await TransferCronPollRepository.findDomainByName({ name: domainName, env });
+      const dom = await TransferCronPollRepository.findDomainByName({ name: domainName, db });
       if (!dom.success) {
         console.error(
           `TransferCronPoll.handleMessage: findDomainByName failed for domain=${domainName}`,
@@ -173,7 +189,7 @@ async function handleMessage({
           domainId: dom.data.id,
           registry: dom.data.registry,
           gainingRegistrar: counterparty,
-          env,
+          db,
         });
         if (!inserted.success) {
           console.error(
@@ -185,7 +201,7 @@ async function handleMessage({
         // domain.status も pendingTransfer に揃える (owner 側 UI で「移管申請中」を出せるように)
         await TransferCronPollRepository.setDomainPendingTransfer({
           domainId: dom.data.id,
-          env,
+          db,
         });
         console.info(
           `TransferCronPoll.handleMessage: created external pending transfer for domain=${domainName} gainingRegistrar=${counterparty}`,
@@ -200,7 +216,7 @@ async function handleMessage({
 
     const hasAny = await TransferCronPollRepository.hasAnyTransferForDomainName({
       name: domainName,
-      env,
+      db,
     });
     if (!hasAny.success) {
       console.error(
@@ -256,6 +272,9 @@ async function handleMessage({
   if (isApproved) {
     const approvedStatus: "serverApproved" | "clientApproved" =
       status === "serverApproved" ? "serverApproved" : "clientApproved";
+    console.info(
+      `[event:${registry}] settle approved transferId=${transfer.id} domain=${domainName} decidedStatus=${approvedStatus} gainingUserId=${transfer.gainingUserId ?? "<external>"}`,
+    );
 
     if (transfer.gainingUserId === null) {
       // 外部 pending (別レジストラが gaining) の承認確定。
@@ -264,7 +283,7 @@ async function handleMessage({
         transferId: transfer.id,
         domainId: transfer.domainId,
         transferStatus: approvedStatus,
-        env,
+        db,
       });
       if (!commit.success) {
         console.error(
@@ -276,7 +295,7 @@ async function handleMessage({
     } else {
       // 自 backend 発 pending (gaining が自 user)。従来通り owner を書き換えて確定。
       // gaining user が消えていたら FK 制約違反で commitApproval が無限失敗するので expired にする。
-      const userExists = await UserRepository.exists({ id: transfer.gainingUserId, env });
+      const userExists = await UserRepository.exists({ id: transfer.gainingUserId, db });
       if (!userExists.success) {
         console.error(
           `TransferCronPoll.handleMessage: UserRepository.exists failed for transferId=${transfer.id}`,
@@ -291,7 +310,7 @@ async function handleMessage({
         const expire = await TransferStatusRepository.expireAndReleaseDomain({
           transferId: transfer.id,
           domainId: transfer.domainId,
-          env,
+          db,
         });
         if (!expire.success) {
           console.error(
@@ -308,7 +327,7 @@ async function handleMessage({
         domainId: transfer.domainId,
         transferStatus: approvedStatus,
         newOwnerUserId: transfer.gainingUserId,
-        env,
+        db,
       });
       if (!commit.success) {
         console.error(
@@ -321,11 +340,14 @@ async function handleMessage({
   } else {
     const cancelledStatus: "clientRejected" | "clientCancelled" =
       status === "clientRejected" || op === "reject" ? "clientRejected" : "clientCancelled";
+    console.info(
+      `[event:${registry}] settle cancelled transferId=${transfer.id} domain=${domainName} decidedStatus=${cancelledStatus}`,
+    );
     const commit = await TransferStatusRepository.settleAndReleaseDomain({
       transferId: transfer.id,
       domainId: transfer.domainId,
       transferStatus: cancelledStatus,
-      env,
+      db,
     });
     if (!commit.success) {
       console.error(
@@ -338,7 +360,7 @@ async function handleMessage({
 
   await tryAck({ messageId: msg.id, registry, env });
   console.info(
-    `TransferCronPoll.handleMessage: settled domain=${domain.name} status=${status} registry=${registry}`,
+    `[event:${registry}] settled messageId=${msg.id} domain=${domain.name} status="${status ?? "-"}" op="${op ?? "-"}"`,
   );
 }
 
@@ -347,10 +369,12 @@ async function handleMessage({
 async function reconcileTimedOut({
   transfer,
   domain,
+  db,
   env,
 }: {
   transfer: { id: string; domainId: string; gainingUserId: string | null; registry: Registry };
   domain: { name: string };
+  db: DBClient;
   env: CloudflareBindings;
 }): Promise<"serverApproved" | "expired" | "skipped"> {
   const infoResult = await RegistryBridge.info({
@@ -375,7 +399,7 @@ async function reconcileTimedOut({
     const expire = await TransferStatusRepository.expireAndReleaseDomain({
       transferId: transfer.id,
       domainId: transfer.domainId,
-      env,
+      db,
     });
     if (!expire.success) {
       console.error(
@@ -394,7 +418,7 @@ async function reconcileTimedOut({
       transferId: transfer.id,
       domainId: transfer.domainId,
       transferStatus: "serverApproved",
-      env,
+      db,
     });
     if (!commit.success) {
       console.error(
@@ -410,7 +434,7 @@ async function reconcileTimedOut({
   }
 
   // 自 backend 発 pending の場合。gaining user が存在するなら所有権移転、消えていれば expired。
-  const userExists = await UserRepository.exists({ id: transfer.gainingUserId, env });
+  const userExists = await UserRepository.exists({ id: transfer.gainingUserId, db });
   if (!userExists.success) {
     console.error(
       `TransferCronPoll.reconcileTimedOut: UserRepository.exists failed for transferId=${transfer.id}`,
@@ -425,7 +449,7 @@ async function reconcileTimedOut({
     const expire = await TransferStatusRepository.expireAndReleaseDomain({
       transferId: transfer.id,
       domainId: transfer.domainId,
-      env,
+      db,
     });
     if (!expire.success) {
       console.error(
@@ -442,7 +466,7 @@ async function reconcileTimedOut({
     domainId: transfer.domainId,
     transferStatus: "serverApproved",
     newOwnerUserId: transfer.gainingUserId,
-    env,
+    db,
   });
   if (!commit.success) {
     console.error(
@@ -484,15 +508,21 @@ async function handleOutboundMessage({
   outbound,
   msg,
   registry,
+  db,
   env,
 }: {
   outbound: { id: string; domainName: string; registry: "kitaqsign" | "kitaqnic"; gainingUserId: string; authInfo: string };
   msg: PollMessage;
   registry: Registry;
+  db: DBClient;
   env: CloudflareBindings;
 }): Promise<void> {
   const status = msg.payload.status;
   const op = msg.payload.op;
+
+  console.info(
+    `[event:${registry}] outbound message outboundId=${outbound.id} domain=${outbound.domainName} status="${status ?? "-"}" op="${op ?? "-"}"`,
+  );
 
   const isApproved = status === "serverApproved" || status === "clientApproved" || op === "approve";
   const isCancelled = status === "clientRejected" || status === "clientCancelled" || op === "reject" || op === "cancel";
@@ -501,7 +531,7 @@ async function handleOutboundMessage({
     // op=request 通知は自 backend が投げた request の反響なので無視 (ack しない、次で消化される想定)。
     // 中間 or 未知は次回 cron で状態が進んだメッセージを待つ。
     console.warn(
-      `TransferCronPoll.handleOutboundMessage: intermediate status="${status ?? "<none>"}" op="${op ?? "<none>"}" for domain=${outbound.domainName}. Not acking.`,
+      `[event:${registry}] outbound intermediate status="${status ?? "<none>"}" op="${op ?? "<none>"}" domain=${outbound.domainName}. Not acking.`,
     );
     return;
   }
@@ -537,7 +567,7 @@ async function handleOutboundMessage({
         authInfo: outbound.authInfo,
         ownerUserId: outbound.gainingUserId,
       },
-      env,
+      db,
     });
     if (!commit.success) {
       console.error(
@@ -556,7 +586,7 @@ async function handleOutboundMessage({
     const update = await OutboundTransferRequestRepository.updateStatus({
       id: outbound.id,
       status: cancelledStatus,
-      env,
+      db,
     });
     if (!update.success) {
       console.error(

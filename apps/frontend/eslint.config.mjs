@@ -100,7 +100,6 @@ const eslintConfig = [
       "**/vitest.config.ts", // vitestの設定ファイルを無視
       "**/playwright.config*.ts", // playwrightの設定ファイルを無視
       "next.config.ts", // next.config.tsを無視
-      "src/tests/e2e/global-setup.ts",
       "**/playwright-report/**",
       "**/.open-next/**",
       "**/.wrangler/**",

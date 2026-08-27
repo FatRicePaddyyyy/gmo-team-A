@@ -30,6 +30,14 @@ type TransferRequestFormData = z.infer<typeof transferRequestSchema>;
 
 interface TransferRequestFormProps {
   submitting: boolean;
+  /**
+   * すでにここで管理しているドメイン名。
+   *
+   * 「どれを移管できるのか」は持っているものを見ないと判断できないので並べて出す。
+   * あわせて、持っているドメインを打ってしまったときは送信前に止める
+   * （レジストリに投げても必ず失敗する上、理由が分かりにくいため）。
+   */
+  ownedNames: readonly string[];
   /** 成功したら true を返す。true のときだけ入力を消す */
   onSubmitRequest: (input: {
     name: string;
@@ -40,17 +48,31 @@ interface TransferRequestFormProps {
 export function TransferRequestForm({
   submitting,
   onSubmitRequest,
+  ownedNames,
 }: TransferRequestFormProps) {
   const {
     register,
     handleSubmit,
     reset,
+    setError,
     formState: { errors },
   } = useForm<TransferRequestFormData>({
     resolver: zodResolver(transferRequestSchema),
   });
 
+  const nameErrorId = "transfer-name-error";
+  const ownedHintId = "transfer-owned-hint";
+  const authInfoHintId = "transfer-auth-info-hint";
+  const authInfoErrorId = "transfer-auth-info-error";
+
   const onSubmit = async (data: TransferRequestFormData) => {
+    if (ownedNames.includes(data.name)) {
+      setError("name", {
+        message:
+          "このドメインはすでにここにあるので、引き取る必要はありません。他社へ渡したい場合は、下の「自分のドメインを他社へ渡す」から進んでください。",
+      });
+      return;
+    }
     const ok = await onSubmitRequest(data);
     if (ok) reset({ name: "", authInfo: "" });
   };
@@ -75,12 +97,29 @@ export function TransferRequestForm({
               placeholder="example.com"
               autoComplete="off"
               disabled={submitting}
-              aria-invalid={Boolean(errors.name)}
+              aria-invalid={errors.name ? true : undefined}
+              aria-describedby={
+                errors.name
+                  ? nameErrorId
+                  : ownedNames.length > 0
+                    ? ownedHintId
+                    : undefined
+              }
               className="h-11"
               {...register("name")}
             />
+            {ownedNames.length > 0 && (
+              <p id={ownedHintId} className="text-xs text-gray-500">
+                いま持っているドメイン:{" "}
+                <span className="break-all">{ownedNames.join(" / ")}</span>
+                <br />
+                これらはすでにここにあるので、引き取る必要はありません。
+              </p>
+            )}
             {errors.name && (
-              <p className="text-xs text-red-700">{errors.name.message}</p>
+              <p id={nameErrorId} role="alert" className="text-xs text-red-700">
+                {errors.name.message}
+              </p>
             )}
           </div>
 
@@ -96,15 +135,24 @@ export function TransferRequestForm({
               placeholder="移管元から受け取ったコード"
               autoComplete="off"
               disabled={submitting}
-              aria-invalid={Boolean(errors.authInfo)}
+              aria-invalid={errors.authInfo ? true : undefined}
+              aria-describedby={
+                errors.authInfo ? authInfoErrorId : authInfoHintId
+              }
               className="h-11"
               {...register("authInfo")}
             />
-            <p className="text-xs text-gray-500">
+            <p id={authInfoHintId} className="text-xs text-gray-500">
               いま契約している事業者の管理画面で発行できます。ドメインごとに違うコードです。
             </p>
             {errors.authInfo && (
-              <p className="text-xs text-red-700">{errors.authInfo.message}</p>
+              <p
+                id={authInfoErrorId}
+                role="alert"
+                className="text-xs text-red-700"
+              >
+                {errors.authInfo.message}
+              </p>
             )}
           </div>
 

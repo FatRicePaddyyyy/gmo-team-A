@@ -1,5 +1,6 @@
 /// <reference types="../../../worker-configuration" />
 import { beforeEach, describe, expect, test, vi } from "vitest";
+import { RegistryBridge } from "../../lib/bridge";
 import { deleteDomainRouteHandler } from "./[domain-id]/delete";
 import { getDomainRouteHandler } from "./[domain-id]/get";
 import { updateDomainRouteHandler } from "./[domain-id]/put";
@@ -37,6 +38,16 @@ const mockDomainDetail = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // POST /api/v1/secure/domains は registry 省略時に hello (supportedTlds) から自動判定するため、
+  // ハンドラー流しテストでも hello は成功前提で固定する。
+  vi.spyOn(RegistryBridge, "hello").mockImplementation(async ({ registry }) => ({
+    success: true,
+    data: {
+      registryCode: registry === "kitaqsign" ? "KITAQSIGN" : "KITAQNIC",
+      tlds: registry === "kitaqsign" ? ["com", "net", "org", "info"] : ["xyz", "shop", "store", "app", "dev", "io"],
+    },
+    error: null,
+  }));
 });
 
 // ─── check ───────────────────────────────────────────────────────────────────

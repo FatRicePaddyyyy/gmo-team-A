@@ -1,7 +1,9 @@
 import { createRoute, z } from "@hono/zod-openapi";
+import { RegistryBridge } from "../../lib/bridge";
+import { createDBClient } from "../../lib/db";
 import { toUserMessage } from "../../lib/error-messages";
 import { createOpenAPIHono } from "../../lib/openapi-hono";
-import { detectRegistry, FQDN_REGEX } from "../../lib/registry-policy";
+import { FQDN_REGEX } from "../../lib/registry-policy";
 import { TransferService } from "./service";
 
 // Issue #25: registry は省略可能。省略時は TLD から自動判定する。
@@ -66,12 +68,22 @@ const app = createOpenAPIHono();
 export const requestTransferRouteHandler = app.openapi(route, async (ctx) => {
   const { name, authInfo, registry: explicitRegistry } = ctx.req.valid("json");
   const gainingUserId = ctx.get("userId");
-  const registry = explicitRegistry ?? detectRegistry(name);
+  // 引数 registry があれば尊重、無ければ hello (supportedTlds) から解決する。
+  // 引数 registry が指定されている場合は service 層で hello との整合チェックが走る (B17)。
+  let registry = explicitRegistry;
   if (!registry) {
-    return ctx.json({ success: false as const, data: null, error: "ドメイン名の形式が正しくありません。TLD（.com など）を含めて入力してください。" }, 400);
+    const resolved = await RegistryBridge.resolveRegistry({ name, env: ctx.env });
+    if (!resolved.success) {
+      if (resolved.error === "unsupported_tld" || resolved.error === "invalid_domain_name") {
+        return ctx.json({ success: false as const, data: null, error: toUserMessage(resolved.error) }, 400);
+      }
+      return ctx.json({ success: false as const, data: null, error: toUserMessage(resolved.error) }, 500);
+    }
+    registry = resolved.data;
   }
 
-  const result = await TransferService.request({ name, authInfo, registry, gainingUserId, env: ctx.env });
+  const db = createDBClient(ctx.env);
+  const result = await TransferService.request({ name, authInfo, registry, gainingUserId, db, env: ctx.env });
   if (!result.success) {
     if (result.error === "domain_not_found") {
       return ctx.json({ success: false as const, data: null, error: toUserMessage(result.error) }, 404);

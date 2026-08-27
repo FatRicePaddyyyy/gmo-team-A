@@ -1,5 +1,5 @@
 import { eq } from "drizzle-orm";
-import { createDBClient } from "../../lib/db";
+import type { DBClient } from "../../lib/db";
 import { classifyDbError } from "../../lib/db-error";
 import { user } from "../../lib/schema/auth-schema";
 import type { Result } from "../../types/result";
@@ -11,13 +11,12 @@ type User = typeof user.$inferSelect;
 export class DomainUserRepository {
   static async findById({
     id,
-    env,
+    db,
   }: {
     id: string;
-    env: CloudflareBindings;
+    db: DBClient;
   }): Promise<Result<User | null>> {
     try {
-      const db = createDBClient(env);
       const rows = await db.select().from(user).where(eq(user.id, id));
       return { success: true, data: rows[0] ?? null, error: null };
     } catch (error) {

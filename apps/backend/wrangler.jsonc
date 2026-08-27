@@ -11,12 +11,25 @@
       "migrations_dir": "drizzle"
     }
   ],
+  // レジストリ hello (supportedTlds) の応答を短時間キャッシュする。
+  // ドメイン登録・移管申請のホットパスで hello を毎回叩くとレイテンシとエラー面が増えるので、
+  // TTL 10 分でキャッシュする。TLD 追加・削除は最大 10 分遅れて反映される。
+  "kv_namespaces": [
+    {
+      "binding": "REGISTRY_HELLO_CACHE",
+      "id": "9e1a28e8384a4582a06b56fbb0977e64"
+    }
+  ],
   "vars": {
     "BACKEND_URL": "http://localhost:8787",
     "FRONTEND_URL": "http://localhost:3000",
     "crossSubDomainCookies": "localhost",
     "KITAQSIGN_BASE_URL": "https://epp.kitaqsign.com",
-    "KITAQNIC_BASE_URL": "https://epp.kitaqnic.com"
+    "KITAQNIC_BASE_URL": "https://epp.kitaqnic.com",
+    // hello (supportedTlds) が長時間落ちたときだけ使う静的フォールバック。
+    // カンマ区切り。TLD の増減時は wrangler.jsonc の両環境を同期させる。
+    "KITAQSIGN_FALLBACK_TLDS": "com,net,org,info",
+    "KITAQNIC_FALLBACK_TLDS": "xyz,shop,store,app,dev,io,site,online,tech,space,click,link,top,world,life,cloud,email,fun"
   },
   "triggers": {
     // 移管ポーリングは 1 分ごとの cron で駆動する (scheduled/transfer-cron-poll)。
@@ -33,7 +46,9 @@
         "FRONTEND_URL": "https://frontend-production.fatricepaddy.workers.dev",
         "crossSubDomainCookies": ".fatricepaddy.workers.dev",
         "KITAQSIGN_BASE_URL": "https://epp.kitaqsign.com",
-        "KITAQNIC_BASE_URL": "https://epp.kitaqnic.com"
+        "KITAQNIC_BASE_URL": "https://epp.kitaqnic.com",
+        "KITAQSIGN_FALLBACK_TLDS": "com,net,org,info",
+        "KITAQNIC_FALLBACK_TLDS": "xyz,shop,store,app,dev,io,site,online,tech,space,click,link,top,world,life,cloud,email,fun"
       },
       "observability": {
         "logs": {
@@ -51,6 +66,12 @@
           "migrations_dir": "drizzle"
         }
       ],
+      "kv_namespaces": [
+        {
+          "binding": "REGISTRY_HELLO_CACHE",
+          "id": "806232c2ae224c58adab367b744b2777"
+        }
+      ],
       // B-C 対策: Wrangler の env override はトップレベル設定を継承しない項目もあるので、
       // 本番でも同じ cron 構成を明示的に再宣言する。
       // トップレベルと同じ値なので、変更時は両方を同期させること。
@@ -58,16 +79,8 @@
         "crons": ["* * * * *"]
       }
     }
-  }
-  // "compatibility_flags": [
-  //   "nodejs_compat"
-  // ],
-  // "kv_namespaces": [
-  //   {
-  //     "binding": "MY_KV_NAMESPACE",
-  //     "id": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-  //   }
-  // ],
+  },
+  "compatibility_flags": ["nodejs_compat"],
   // "r2_buckets": [
   //   {
   //     "binding": "MY_BUCKET",

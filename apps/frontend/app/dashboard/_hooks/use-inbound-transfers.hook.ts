@@ -8,13 +8,21 @@ import {
   type ListPendingInboundTransfersResponse,
 } from "@/clients";
 import { callApi } from "@/shared/lib/api-result";
-import type { DomainFeedback } from "./use-my-domains.hook";
+
 
 type InboundSuccess = Extract<
   ListPendingInboundTransfersResponse,
   { success: true }
 >;
 export type InboundTransfer = InboundSuccess["data"][number];
+
+/** 承認・却下の結果表示 */
+export interface DomainFeedback {
+  tone: "success" | "error";
+  message: string;
+  /** セッション切れ。帯にログイン導線を出すため */
+  unauthorized?: boolean;
+}
 
 export interface RunningTransferAction {
   domainId: string;
@@ -36,18 +44,21 @@ export function useInboundTransfers(
   // 一度でも取得を終えたか。取得前に空状態が描画されるのを防ぐために見る
   const [loaded, setLoaded] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [loadUnauthorized, setLoadUnauthorized] = useState(false);
   const [running, setRunning] = useState<RunningTransferAction | null>(null);
   const [feedback, setFeedback] = useState<DomainFeedback | null>(null);
 
   const refresh = useCallback(async () => {
     setLoading(true);
     setLoadError(null);
+    setLoadUnauthorized(false);
     const result = await callApi<InboundTransfer[]>(
       $listPendingInboundTransfers(),
     );
     if (!result.success) {
       // 直前の一覧は消さない（成功メッセージと空状態が同時に出るのを避ける）
       setLoadError(result.error);
+      setLoadUnauthorized(Boolean(result.unauthorized));
     } else {
       setTransfers(result.data);
     }
@@ -76,7 +87,11 @@ export function useInboundTransfers(
           : await callApi<null>($rejectTransfer(param));
 
       if (!result.success) {
-        setFeedback({ tone: "error", message: result.error });
+        setFeedback({
+          tone: "error",
+          message: result.error,
+          unauthorized: result.unauthorized,
+        });
       } else {
         setFeedback({
           tone: "success",
@@ -99,6 +114,7 @@ export function useInboundTransfers(
     // 初回取得が終わるまでは読み込み中として扱う。
     loading: loading || (enabled && !loaded),
     loadError,
+    loadUnauthorized,
     running,
     feedback,
     refresh,
