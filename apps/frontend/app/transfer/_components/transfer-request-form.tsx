@@ -69,7 +69,7 @@ export function TransferRequestForm({
     if (ownedNames.includes(data.name)) {
       setError("name", {
         message:
-          "このドメインはすでにここで管理しています。他社へ渡したい場合は、下の「自分のドメインを他社へ渡す」から進んでください。",
+          "このドメインはすでにここにあるので、引き取る必要はありません。他社へ渡したい場合は、下の「自分のドメインを他社へ渡す」から進んでください。",
       });
       return;
     }
@@ -110,8 +110,10 @@ export function TransferRequestForm({
             />
             {ownedNames.length > 0 && (
               <p id={ownedHintId} className="text-xs text-gray-500">
-                ここで管理中のドメイン（申請できません）:{" "}
+                いま持っているドメイン:{" "}
                 <span className="break-all">{ownedNames.join(" / ")}</span>
+                <br />
+                これらはすでにここにあるので、引き取る必要はありません。
               </p>
             )}
             {errors.name && (
