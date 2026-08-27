@@ -26,6 +26,9 @@ interface UsePollOptions {
  * - `enabled` が false（＝待っている移管が無い）なら動かさない
  * - タブが背面にある間は止め、戻ってきたら即座に 1 回叩いてから再開する
  *   （背面で 30 分放置されたぶんを取り戻すため、復帰時の 1 回が要る）
+ *
+ * 画面を離れた（アンマウントされた）あとは `onTick` を呼ばない。飛行中の通信が
+ * 返ってきても、すでに無いコンポーネントの状態を触らないようにするため。
  */
 export function usePoll({
   enabled,
@@ -43,6 +46,9 @@ export function usePoll({
     if (!enabled) return;
 
     let timer: ReturnType<typeof setInterval> | null = null;
+    // 片付けたあとに発火した分を無視する。setInterval を止めても、
+    // すでに走り出した onTick の非同期処理までは止められない。
+    let disposed = false;
 
     const stop = () => {
       if (timer !== null) {
@@ -53,7 +59,10 @@ export function usePoll({
 
     const start = () => {
       if (timer !== null) return;
-      timer = setInterval(() => void onTickRef.current(), intervalMs);
+      timer = setInterval(() => {
+        if (disposed) return;
+        void onTickRef.current();
+      }, intervalMs);
     };
 
     const handleVisibilityChange = () => {
@@ -62,6 +71,7 @@ export function usePoll({
         return;
       }
       // 背面にいた間の変化を拾うため、復帰した時点で 1 回取り直す
+      if (disposed) return;
       void onTickRef.current();
       start();
     };
@@ -70,6 +80,7 @@ export function usePoll({
     document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
+      disposed = true;
       stop();
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };

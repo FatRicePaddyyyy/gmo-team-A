@@ -37,6 +37,8 @@ export function useTransferRequests(enabled: boolean) {
   const [loaded, setLoaded] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [loadUnauthorized, setLoadUnauthorized] = useState(false);
+  // セッション切れを掴んだか。自動更新を止める判断に使う
+  const [sessionExpired, setSessionExpired] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<TransferFeedback | null>(null);
@@ -59,13 +61,21 @@ export function useTransferRequests(enabled: boolean) {
     const result = await callApi<MyTransfer[]>($listTransfers());
     if (!result.success) {
       // 直前の一覧は消さない（成功メッセージと空状態が同時に出るのを避ける）
-      // 自動更新のときはエラーも出さない。次の回で回復することが多く、
+      // 自動更新のときはエラーを出さない。次の回で回復することが多く、
       // 利用者が起こした操作でもないので伝える意味が薄い。
+      //
+      // ただしセッション切れだけは別。待っても回復せず、黙って叩き続けると
+      // 401 を無限に送ることになる。自動更新かどうかにかかわらず記録して、
+      // ポーリングを止める材料にする。
+      if (result.unauthorized) {
+        setLoadUnauthorized(true);
+        setSessionExpired(true);
+      }
       if (!silent) {
         setLoadError(result.error);
-        setLoadUnauthorized(Boolean(result.unauthorized));
       }
     } else {
+      setSessionExpired(false);
       setTransfers(result.data);
     }
     setLoaded(true);
@@ -83,7 +93,11 @@ export function useTransferRequests(enabled: boolean) {
   const hasPending = transfers.some(
     (transfer) => transfer.status === "pendingTransfer",
   );
-  usePoll({ enabled: enabled && hasPending, onTick: () => refresh({ silent: true }) });
+  // セッションが切れたら止める。待っても回復せず、401 を送り続けるだけになる。
+  usePoll({
+    enabled: enabled && hasPending && !sessionExpired,
+    onTick: () => refresh({ silent: true }),
+  });
 
   /** 成功したら true を返す。フォームの入力を消してよいかの判断に使う */
   const request = useCallback(
