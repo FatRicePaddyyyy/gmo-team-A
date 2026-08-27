@@ -6,6 +6,10 @@
  * `pendingDelete` だけが残り、その時点で復旧はできなくなる。
  */
 
+// EPP の `inactive` は「レジストリには登録されているが、ネームサーバーが
+// 1 件も設定されていないので DNS ゾーンが動いていない」状態
+// (RFC 5731 §2.3)。利用者から見ると「取得はできているのに、サイトも
+// メールも動かない」ように見えるので、次に何をすれば動くかまで言う。
 export const DOMAIN_STATUS_LABELS: Record<string, string> = {
   ok: "使えます",
   pendingCreate: "登録手続き中",
@@ -19,7 +23,13 @@ export const DOMAIN_STATUS_LABELS: Record<string, string> = {
   clientHold: "利用停止中",
   serverUpdateProhibited: "変更ロック中",
   clientUpdateProhibited: "変更ロック中",
+  inactive: "ネームサーバー未設定",
 };
+
+// 未知の status が来たときに素の英語コードを画面に出さないためのラベル。
+// 「英語のまま inactive と出る」ような事故を、登録漏れがあっても最低限
+// 意味の通る表示で受け止める（issue #133）。
+const UNKNOWN_STATUS_LABEL = "確認中";
 
 /**
  * 状態バッジだけでは「で、どうすればいいのか」が分からないので、
@@ -38,6 +48,8 @@ export const DOMAIN_STATUS_HINTS: Record<string, string> = {
   clientHold: "掲載を止めているので、サイトが見られません。",
   serverUpdateProhibited: "変更が禁止されています。",
   clientUpdateProhibited: "変更が禁止されています。",
+  inactive:
+    "ネームサーバーが設定されていないため、サイトもメールも動きません。詳細ページからネームサーバーを設定してください。",
 };
 
 export function statusHintOf(status: string): string | null {
@@ -58,7 +70,7 @@ export function detailActionLabelOf(status: string): string {
 export type DomainStatusTone = "ok" | "warning" | "danger" | "neutral";
 
 export function statusLabelOf(status: string): string {
-  return DOMAIN_STATUS_LABELS[status] ?? status;
+  return DOMAIN_STATUS_LABELS[status] ?? UNKNOWN_STATUS_LABEL;
 }
 
 export function statusToneOf(status: string): DomainStatusTone {
