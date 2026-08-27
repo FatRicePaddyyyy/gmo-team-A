@@ -6,6 +6,8 @@ import { getDomainRouteHandler } from "./[domain-id]/get";
 import { updateDomainRouteHandler } from "./[domain-id]/put";
 import { renewDomainRouteHandler } from "./[domain-id]/renew/post";
 import { restoreDomainRouteHandler } from "./[domain-id]/restore/post";
+import { approveTransferRouteHandler } from "./[domain-id]/transfer/approve/post";
+import { rejectTransferRouteHandler } from "./[domain-id]/transfer/reject/post";
 import { checkDomainRouteHandler } from "./check/post";
 import { listDomainsRouteHandler } from "./get";
 import { createDomainRouteHandler } from "./post";
@@ -668,5 +670,174 @@ describe("POST /api/v1/secure/domains/{domain-id}/restore", () => {
     );
 
     expect(res.status).toBe(403);
+  });
+});
+
+// ─── メンテナンス中のステータスコード（Issue #87）────────────────────────────
+//
+// レジストリのメンテナンス中、これまでは 500 を返していた。
+// 500 は「サーバー内部で異常が起きた」、503 は「一時的に使えない（後で戻る）」で、
+// メンテナンスは後者。監視やログを見る側が、定期メンテと本物の障害を
+// 取り違えないようにするための区別。
+describe("メンテナンス中は 503 を返す", () => {
+  const MAINTENANCE = "registry_maintenance";
+  // bridge はレジストリ由来の理由を "code: detail" の形で付けて返すことがある。
+  // コード部分だけを見て判定できているかも確かめる。
+  const MAINTENANCE_WITH_REASON = "registry_maintenance: scheduled maintenance";
+
+  test("[異常系] ドメイン登録は 503", async () => {
+    vi.spyOn(DomainService, "create").mockResolvedValue({
+      success: false, data: null, error: MAINTENANCE,
+    });
+
+    const res = await createDomainRouteHandler.request(
+      "/api/v1/secure/domains",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: "example.com", registry: "kitaqsign", period: { unit: "Y", value: 1 } }),
+      },
+      mockEnv,
+    );
+
+    expect(res.status).toBe(503);
+    const json = await res.json() as any;
+    expect(json.error).toContain("メンテナンス");
+  });
+
+  test("[異常系] 設定変更は 503（理由付きのコードでも判定できる）", async () => {
+    vi.spyOn(DomainService, "update").mockResolvedValue({
+      success: false, data: null, error: MAINTENANCE_WITH_REASON,
+    });
+
+    const res = await updateDomainRouteHandler.request(
+      "/api/v1/secure/domains/dom-001",
+      {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ nameServers: ["ns1.example.com"] }),
+      },
+      mockEnv,
+    );
+
+    expect(res.status).toBe(503);
+  });
+
+  test("[異常系] 有効期限の延長は 503", async () => {
+    vi.spyOn(DomainService, "renew").mockResolvedValue({
+      success: false, data: null, error: MAINTENANCE,
+    });
+
+    const res = await renewDomainRouteHandler.request(
+      "/api/v1/secure/domains/dom-001/renew",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ period: { unit: "Y", value: 1 } }),
+      },
+      mockEnv,
+    );
+
+    expect(res.status).toBe(503);
+  });
+
+  test("[異常系] 廃止は 503", async () => {
+    vi.spyOn(DomainService, "delete").mockResolvedValue({
+      success: false, error: MAINTENANCE,
+    } as any);
+
+    const res = await deleteDomainRouteHandler.request(
+      "/api/v1/secure/domains/dom-001",
+      { method: "DELETE" },
+      mockEnv,
+    );
+
+    expect(res.status).toBe(503);
+  });
+
+  test("[異常系] 復旧は 503", async () => {
+    vi.spyOn(DomainService, "restore").mockResolvedValue({
+      success: false, data: null, error: MAINTENANCE,
+    } as any);
+
+    const res = await restoreDomainRouteHandler.request(
+      "/api/v1/secure/domains/dom-001/restore",
+      { method: "POST" },
+      mockEnv,
+    );
+
+    expect(res.status).toBe(503);
+  });
+
+  // 503 にするのはメンテナンスだけ。ほかのエラーまで巻き込むと、
+  // 本物の障害が「待てば直るもの」に見えてしまう。
+  test("[異常系] メンテナンス以外のエラーは従来どおり 500", async () => {
+    vi.spyOn(DomainService, "update").mockResolvedValue({
+      success: false, data: null, error: "registry_error",
+    });
+
+    const res = await updateDomainRouteHandler.request(
+      "/api/v1/secure/domains/dom-001",
+      {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ nameServers: ["ns1.example.com"] }),
+      },
+      mockEnv,
+    );
+
+    expect(res.status).toBe(500);
+  });
+
+  test("[異常系] 移管の承認は 503", async () => {
+    vi.spyOn(DomainService, "approveTransfer").mockResolvedValue({
+      success: false, data: null, error: MAINTENANCE,
+    } as any);
+
+    const res = await approveTransferRouteHandler.request(
+      "/api/v1/secure/domains/dom-001/transfer/approve",
+      { method: "POST" },
+      mockEnv,
+    );
+
+    expect(res.status).toBe(503);
+  });
+
+  test("[異常系] 移管の却下は 503", async () => {
+    vi.spyOn(DomainService, "rejectTransfer").mockResolvedValue({
+      success: false, data: null, error: MAINTENANCE,
+    } as any);
+
+    const res = await rejectTransferRouteHandler.request(
+      "/api/v1/secure/domains/dom-001/transfer/reject",
+      { method: "POST" },
+      mockEnv,
+    );
+
+    expect(res.status).toBe(503);
+  });
+
+  // PR #77 で入れた「メンテ中でも詳細ページは見られる」挙動を壊さないための番人。
+  // 詳細取得は失敗せず、DB にある分を 200 で返す。ここを 503 にしてはいけない。
+  test("[正常系] 詳細取得はメンテナンス中でも 200 のまま", async () => {
+    vi.spyOn(DomainService, "info").mockResolvedValue({
+      success: true,
+      data: {
+        ...mockDomainDetail,
+        registryAvailable: false,
+        registryUnavailableReason: "ただいまドメイン登録機関がメンテナンス中のため、この操作は行えません。時間をおいてからお試しください。",
+      },
+      error: null,
+    } as any);
+
+    const res = await getDomainRouteHandler.request(
+      "/api/v1/secure/domains/dom-001",
+      { method: "GET" },
+      mockEnv,
+    );
+
+    expect(res.status).toBe(200);
+    const json = await res.json() as any;
+    expect(json.data.registryAvailable).toBe(false);
   });
 });

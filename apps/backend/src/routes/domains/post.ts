@@ -2,7 +2,7 @@ import { createRoute, z } from "@hono/zod-openapi";
 import { RegistryBridge } from "../../lib/bridge";
 import { createDBClient } from "../../lib/db";
 import { domainNameSchema } from "../../lib/domain-name-schema";
-import { toUserMessage } from "../../lib/error-messages";
+import { isMaintenanceError, toUserMessage } from "../../lib/error-messages";
 import { createOpenAPIHono } from "../../lib/openapi-hono";
 import { DomainService } from "./service";
 
@@ -54,6 +54,7 @@ const route = createRoute({
     409: { content: { "application/json": { schema: ErrorSchema } }, description: "ドメイン既存" },
     422: { content: { "application/json": { schema: ErrorSchema } }, description: "TLD違反" },
     500: { content: { "application/json": { schema: ErrorSchema } }, description: "サーバーエラー" },
+    503: { content: { "application/json": { schema: ErrorSchema } }, description: "レジストリがメンテナンス中のため一時的に利用できない" },
   },
 });
 
@@ -70,6 +71,11 @@ export const createDomainRouteHandler = app.openapi(route, async (ctx) => {
     if (!resolved.success) {
       if (resolved.error === "unsupported_tld" || resolved.error === "invalid_domain_name") {
         return ctx.json({ success: false as const, data: null, error: toUserMessage(resolved.error) }, 400);
+      }
+      // メンテナンスは「内部で異常が起きた」のではなく「待てば戻る」状態なので、
+      // 500 ではなく 503 を返す。監視側で定期メンテと障害を切り分けられるようにする。
+      if (isMaintenanceError(resolved.error)) {
+        return ctx.json({ success: false as const, data: null, error: toUserMessage(resolved.error) }, 503);
       }
       return ctx.json({ success: false as const, data: null, error: toUserMessage(resolved.error) }, 500);
     }
@@ -91,6 +97,11 @@ export const createDomainRouteHandler = app.openapi(route, async (ctx) => {
       // createContact が レジストリの postalInfo 制約 (許可名 / 予約ドメインメール / cc: JP US 等) で
       // 弾かれたケース。ユーザーの氏名やメールに起因するので 400 で意図を伝える。
       return ctx.json({ success: false as const, data: null, error: toUserMessage(result.error) }, 400);
+    }
+    // メンテナンスは「内部で異常が起きた」のではなく「待てば戻る」状態なので、
+    // 500 ではなく 503 を返す。監視側で定期メンテと障害を切り分けられるようにする。
+    if (isMaintenanceError(result.error)) {
+      return ctx.json({ success: false as const, data: null, error: toUserMessage(result.error) }, 503);
     }
     return ctx.json({ success: false as const, data: null, error: toUserMessage(result.error) }, 500);
   }

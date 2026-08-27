@@ -87,3 +87,18 @@ export function toUserMessage(error: string): string {
 export function hasUserMessage(code: string): boolean {
   return code in errorMessages;
 }
+
+/**
+ * レジストリのメンテナンス中に出るエラーかどうか。
+ *
+ * メンテナンスは「サーバー内部で異常が起きた」のではなく
+ * 「いまは受け付けられない、待てば戻る」状態なので、HTTP は 500 ではなく
+ * 503 を返す。監視やログを見る側が、障害と定期メンテを取り違えずに済む。
+ *
+ * bridge は `"registry_maintenance: 理由"` の形でも返すため、
+ * ":" より前のコードで判定する。
+ */
+export function isMaintenanceError(error: string): boolean {
+  const code = error.indexOf(":") > 0 ? error.slice(0, error.indexOf(":")).trim() : error.trim();
+  return code === "registry_maintenance";
+}
