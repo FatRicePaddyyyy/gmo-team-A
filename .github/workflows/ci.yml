@@ -199,6 +199,8 @@ jobs:
         working-directory: apps/frontend
         env:
           NEXT_PUBLIC_BACKEND_URL: http://localhost:8787
+          # /api/v1/secret/create-seed-user を叩いてテストユーザーを作るために必要
+          SECRET_KEY: ${{ secrets.SECRET_KEY }}
         run: pnpm exec playwright test
       - name: Upload Playwright report
         if: always()
