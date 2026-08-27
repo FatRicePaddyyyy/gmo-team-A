@@ -2,6 +2,7 @@ import { TransferStatusRepository } from "../../domains/transfer/repository";
 import { RegistryBridge } from "../../lib/bridge";
 import type { Registry } from "../../lib/bridge/types";
 import type { DBClient } from "../../lib/db";
+import { toUserMessage } from "../../lib/error-messages";
 import { isValidFqdn } from "../../lib/registry-policy";
 import type { Result } from "../../types/result";
 import { DomainMapper   } from "./mapper";
@@ -51,10 +52,34 @@ function pickPrimaryStatus(statuses: string[], fallback: string): string {
 }
 
 export interface DomainCheckItem {
+  /**
+   * 確認できなかった理由（`failed: true` のときだけ入る）。
+   *
+   * これまで理由を捨てていたため、レジストリのメンテナンス中でも画面には
+   * 「一時的な問題」としか出せず、利用者は何度も検索し直すことになっていた。
+   * 内部エラーコード（registry_maintenance など）をそのまま載せず、
+   * ハンドラで日本語に変換してから返す。
+   */
+  reason?: string;
   name: string;
   avail: boolean;
   /** 通信障害・レジストリ障害などで確認自体ができなかった */
   failed: boolean;
+}
+
+/**
+ * レジストリに届かなかった（＝相手側の都合）エラーかどうか。
+ *
+ * これらは「このドメインが変」なのではなく「いま問い合わせられない」だけなので、
+ * 手元にある情報を返す判断ができる。ドメイン不在や権限エラーとは扱いを分ける。
+ */
+function isRegistryUnreachable(error: string): boolean {
+  const code = error.split(":")[0]?.trim();
+  return (
+    code === "registry_maintenance" ||
+    code === "network_error" ||
+    code === "invalid_registry_response"
+  );
 }
 
 export class DomainService {
@@ -110,7 +135,12 @@ export class DomainService {
         groups.kitaqnic.push(name);
       } else if (!ks.success || !kn.success) {
         // 片方でも hello に失敗している場合は「非対応」と断定できない（疎通エラーの可能性）
-        results.push({ name, avail: false, failed: true });
+        results.push({
+          name,
+          avail: false,
+          failed: true,
+          reason: (ks.success ? kn.error : ks.error) ?? undefined,
+        });
       } else {
         // 両方 hello 成功 + どちらの対応TLDにも無い → 非対応TLDとして確定（障害ではない）
         results.push({ name, avail: false, failed: false });
@@ -122,7 +152,9 @@ export class DomainService {
       if (groupNames.length === 0) {continue;}
       const checkResult = await RegistryBridge.check({ names: groupNames, registry, env });
       if (!checkResult.success) {
-        for (const name of groupNames) {results.push({ name, avail: false, failed: true });}
+        for (const name of groupNames) {
+          results.push({ name, avail: false, failed: true, reason: checkResult.error });
+        }
         continue;
       }
       for (const name of groupNames) {
@@ -250,7 +282,26 @@ export class DomainService {
     const domain = domainResult.data;
 
     const infoResult = await RegistryBridge.info({ name: domain.name, registry: domain.registry, env });
-    if (!infoResult.success) {return infoResult;}
+    if (!infoResult.success) {
+      // レジストリが落ちていても、ドメイン名・有効期限・状態は自社 DB にある。
+      // ここで打ち切ると詳細ページの中身が丸ごと消えるので、DB の分だけ返す。
+      // 「取得できなかった」ことは registryAvailable: false で伝える。
+      //
+      // ただし通信できないこと自体が異常なケース（認証切れ・不正なドメイン）は
+      // そのまま失敗として返す。メンテナンス・疎通不良だけを対象にする。
+      if (isRegistryUnreachable(infoResult.error)) {
+        console.warn(`DomainService.info: registry unreachable (${infoResult.error}); returning DB-only detail for ${domain.name}`);
+        return {
+          success: true,
+          data: DomainMapper.toDetailResponseWithoutRegistry(
+            domain,
+            toUserMessage(infoResult.error),
+          ),
+          error: null,
+        };
+      }
+      return infoResult;
+    }
 
     // exDate は Swagger 上 ISO8601 文字列だが、レジストリ実装によっては非 ISO を返しうる。
     // Invalid Date のまま DB に流すと NaN epoch で保存されるので明示的に検証する。

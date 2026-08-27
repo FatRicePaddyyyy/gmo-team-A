@@ -73,6 +73,7 @@ export function IncomingTransferCard({
 
         {feedback && (
           <FeedbackBanner
+              context="transferDecision"
             tone={feedback.tone}
             message={feedback.message}
             unauthorized={feedback.unauthorized}

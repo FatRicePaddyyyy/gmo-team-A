@@ -151,6 +151,7 @@ export function TransferOutCard({
 
           {authInfoFeedback && (
             <FeedbackBanner
+              context="authInfo"
               tone={authInfoFeedback.tone}
               message={authInfoFeedback.message}
               unauthorized={authInfoFeedback.unauthorized}

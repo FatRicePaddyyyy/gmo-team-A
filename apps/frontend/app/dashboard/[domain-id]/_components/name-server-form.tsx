@@ -17,6 +17,12 @@ const HOSTNAME_REGEX = /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$
 
 interface NameServerFormProps {
   current: string[];
+  /**
+   * レジストリから現在値を取得できていない。
+   * このとき current は「空」ではなく「不明」なので、
+   * 「変更がありません」のような現在値を前提にした案内を出さない。
+   */
+  unavailable?: boolean;
   disabled: boolean;
   running: boolean;
   /** この操作の結果。押した場所の近くに出したいので、ページ上部ではなくここに置く */
@@ -32,6 +38,7 @@ interface NameServerFormProps {
  */
 export function NameServerForm({
   current,
+  unavailable = false,
   disabled,
   running,
   feedback,
@@ -141,6 +148,7 @@ export function NameServerForm({
 
         {feedback && (
           <FeedbackBanner
+              context="nameServers"
             tone={feedback.tone}
             message={feedback.message}
             unauthorized={feedback.unauthorized}
@@ -155,7 +163,9 @@ export function NameServerForm({
           >
             {running ? "保存中..." : "ネームサーバーを保存"}
           </Button>
-          {isUnchanged && !running && (
+          {/* レジストリの現在値が取れていないときは「変更がない」とは言えない。
+              空欄と比べて同じに見えるだけなので、誤った断定をしない。 */}
+          {isUnchanged && !running && !unavailable && (
             <p className="mt-2 text-xs text-gray-500">
               現在の設定から変更がありません。
             </p>

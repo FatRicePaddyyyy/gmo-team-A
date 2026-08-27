@@ -31,6 +31,9 @@ function extractResData<T>(
     // レジストリの result.message をユーザー応答まで届ける (メンテ中や制約違反の理由を判別可能にする)。
     // 形式は "registry_error: <生メッセージ>"。toUserMessage で ':' 前のコードを見て
     // 定型文言 + ':' 後を「(理由: ...)」で末尾付加する。
+    if (body.result.code === EPP_MAINTENANCE_CODE) {
+      return { success: false, data: null, error: "registry_maintenance" };
+    }
     const detail = attachDetail("registry_error", body.result.message);
     return { success: false, data: null, error: detail };
   }
@@ -101,6 +104,34 @@ function readResultReason(result: unknown): string | undefined {
   if (typeof result !== "object" || result === null || !("reason" in result)) {return undefined;}
   const reason = result.reason;
   return typeof reason === "string" ? reason : undefined;
+}
+
+// レジストリの EPP result.code を安全に取り出す。
+function readResultCode(body: unknown): number | undefined {
+  if (typeof body !== "object" || body === null || !("result" in body)) {return undefined;}
+  const result = body.result;
+  if (typeof result !== "object" || result === null || !("code" in result)) {return undefined;}
+  const code = result.code;
+  return typeof code === "number" ? code : undefined;
+}
+
+// EPP 2500 = Command failed; server closing connection。
+// この擬似レジストリはメンテナンス中にこのコードと HTTP 503 を返す。
+const EPP_MAINTENANCE_CODE = 2500;
+
+/**
+ * レジストリのエラー応答を内部エラーコードに落とす。
+ *
+ * メンテナンスは「予期しない応答」ではなく予期できる状態で、利用者が取れる行動
+ * （時間をおく）も違う。汎用エラーに丸めると原因が伝わらないので分けて扱う。
+ */
+export function mapRegistryError(errorBody: unknown, status?: number): string {
+  const isMaintenance =
+    readResultCode(errorBody) === EPP_MAINTENANCE_CODE || status === 503;
+  // メンテナンスはレジストリ側の文言も「メンテナンス中です。」なので、
+  // 理由として付け足すと同じことを二度言うことになる。コードだけ返す。
+  if (isMaintenance) {return "registry_maintenance";}
+  return attachDetail("invalid_registry_response", extractResultMessage(errorBody));
 }
 
 function normalizeGreeting(
@@ -271,7 +302,7 @@ export class RegistryBridge {
         () => getClient(registry, env).GET("/api/v1/epp/sessions/hello"),
       );
       if (!response.ok || !data) {
-        return { success: false, data: null, error: attachDetail("invalid_registry_response", extractResultMessage(error)) };
+        return { success: false, data: null, error: mapRegistryError(error, response.status) };
       }
       const extracted = extractResData(data);
       if (!extracted.success) {return extracted;}
@@ -368,7 +399,7 @@ export class RegistryBridge {
         }),
       );
       if (response.status === 422) {return { success: false, data: null, error: "invalid_tld" };}
-      if (error) {return { success: false, data: null, error: attachDetail("invalid_registry_response", extractResultMessage(error)) };}
+      if (error) {return { success: false, data: null, error: mapRegistryError(error, response.status) };}
       const extracted = extractResData(data);
       if (!extracted.success) {return extracted;}
       if (!extracted.data) {return { success: false, data: null, error: "invalid_registry_response" };}
@@ -440,7 +471,20 @@ export class RegistryBridge {
         if (response.status === 400) {return { success: false, data: null, error: "invalid_contact_payload" };}
         // 全 retry を使い切って 409 のままのケース。極めて稀。
         if (response.status === 409) {return { success: false, data: null, error: "contact_id_conflict" };}
-        if (error) {return { success: false, data: null, error: "contact_create_failed" };}
+        // メンテナンス中はここで落ちる（ドメイン作成はコンタクト作成から始まるため）。
+        // contact_create_failed に丸めると「接続中に問題が発生しました」としか出せず、
+        // 待てば直るのか設定が悪いのか伝わらない。
+        if (error) {
+          const mapped = mapRegistryError(error, response.status);
+          return {
+            success: false,
+            data: null,
+            error: mapped.startsWith("registry_maintenance") ? mapped : "contact_create_failed",
+          };
+        }
+        if (data.result.code === EPP_MAINTENANCE_CODE) {
+          return { success: false, data: null, error: "registry_maintenance" };
+        }
         if (data.result.code !== 1000) {return { success: false, data: null, error: "contact_create_failed" };}
         const returnedId = data.resData?.id ?? contactId;
         return { success: true, data: { contactId: returnedId }, error: null };
@@ -527,7 +571,7 @@ export class RegistryBridge {
       // contactId がレジストリに存在しないと 404 を返す実装がある。ユーザー起因の不整合を
       // "レジストリ疎通異常" に丸めず、contact_not_found として routes 側で意味付けできるようにする。
       if (response.status === 404) {return { success: false, data: null, error: "contact_not_found" };}
-      if (error) {return { success: false, data: null, error: attachDetail("invalid_registry_response", extractResultMessage(error)) };}
+      if (error) {return { success: false, data: null, error: mapRegistryError(error, response.status) };}
       const extracted = extractResData(data);
       if (!extracted.success) {return extracted;}
       if (!extracted.data?.exDate) {return { success: false, data: null, error: "invalid_registry_response" };}
@@ -555,7 +599,7 @@ export class RegistryBridge {
         }),
       );
       if (response.status === 404) {return { success: false, data: null, error: "domain_not_found" };}
-      if (error) {return { success: false, data: null, error: attachDetail("invalid_registry_response", extractResultMessage(error)) };}
+      if (error) {return { success: false, data: null, error: mapRegistryError(error, response.status) };}
       const extracted = extractResData(data);
       if (!extracted.success) {return extracted;}
       if (!extracted.data?.exDate) {return { success: false, data: null, error: "invalid_registry_response" };}
@@ -595,7 +639,7 @@ export class RegistryBridge {
       }
       if (response.status === 404) {return { success: false, data: null, error: "domain_not_found" };}
       if (response.status === 400) {return { success: false, data: null, error: "invalid_period" };}
-      if (error) {return { success: false, data: null, error: attachDetail("invalid_registry_response", extractResultMessage(error)) };}
+      if (error) {return { success: false, data: null, error: mapRegistryError(error, response.status) };}
       const extracted = extractResData(data);
       if (!extracted.success) {return extracted;}
       if (!extracted.data?.exDate) {return { success: false, data: null, error: "invalid_registry_response" };}
@@ -696,7 +740,7 @@ export class RegistryBridge {
       }
 
       if (response.status === 404) {return { success: false, data: null, error: "domain_not_found" };}
-      if (error) {return { success: false, data: null, error: attachDetail("invalid_registry_response", extractResultMessage(error)) };}
+      if (error) {return { success: false, data: null, error: mapRegistryError(error, response.status) };}
       const extracted = extractResData(data);
       if (!extracted.success) {return extracted;}
       // Kitaqnic は update 成功時に resData を返さない（Unit）。呼び出し側は info で最新状態を取り直すこと。
@@ -730,7 +774,7 @@ export class RegistryBridge {
       if (isOperationProhibited(response, error ?? data)) {
         return { success: false, data: null, error: "operation_prohibited" };
       }
-      if (error) {return { success: false, data: null, error: attachDetail("invalid_registry_response", extractResultMessage(error)) };}
+      if (error) {return { success: false, data: null, error: mapRegistryError(error, response.status) };}
       const extracted = extractResData(data);
       if (!extracted.success) {return extracted;}
       return { success: true, data: {}, error: null };
@@ -762,7 +806,7 @@ export class RegistryBridge {
       if (isOperationProhibited(response, error ?? data)) {
         return { success: false, data: null, error: "operation_prohibited" };
       }
-      if (error) {return { success: false, data: null, error: attachDetail("invalid_registry_response", extractResultMessage(error)) };}
+      if (error) {return { success: false, data: null, error: mapRegistryError(error, response.status) };}
       const extracted = extractResData(data);
       if (!extracted.success) {return extracted;}
       return { success: true, data: {}, error: null };
@@ -799,7 +843,7 @@ export class RegistryBridge {
       if (response.status === 403) {return { success: false, data: null, error: "authInfo_mismatch" };}
       // ドメイン不在 (両レジストリ Swagger 定義)
       if (response.status === 404) {return { success: false, data: null, error: "domain_not_found" };}
-      if (error) {return { success: false, data: null, error: attachDetail("invalid_registry_response", extractResultMessage(error)) };}
+      if (error) {return { success: false, data: null, error: mapRegistryError(error, response.status) };}
       if (data.result.code === 2202) {return { success: false, data: null, error: "authInfo_mismatch" };}
       // 成功: 1000（同期完了）または 1001（非同期受付）
       // B5: Swagger 上 resData? は optional。空の resData でも result.code が成功値なら受付として扱う。
@@ -839,7 +883,7 @@ export class RegistryBridge {
       // 「API キー / レジストラ ID が無効」= backend 設定不備 = 運用エラー。
       // ユーザーに "権限がない" と誤って伝えず、invalid_registry_response で 500 化して
       // 運用チームがログで気付けるようにする (実測 401 の body: result.code 2200 "Authentication error")。
-      if (response.status === 401) {return { success: false, data: null, error: attachDetail("invalid_registry_response", extractResultMessage(error)) };}
+      if (response.status === 401) {return { success: false, data: null, error: mapRegistryError(error, response.status) };}
       // 403 は sponsoring registrar 以外の呼び出し (Kitaqsign Swagger 定義)。
       if (response.status === 403) {return { success: false, data: null, error: "forbidden" };}
       // 404 は "対象ドメイン不在" (実測: result.code 2303 "Object does not exist")。
@@ -847,7 +891,7 @@ export class RegistryBridge {
       // どちらもユーザー視点では「その移管申請は無い」ので transfer_not_found に集約する。
       if (response.status === 404) {return { success: false, data: null, error: "transfer_not_found" };}
       if (response.status === 409) {return { success: false, data: null, error: "transfer_not_found" };}
-      if (error) {return { success: false, data: null, error: attachDetail("invalid_registry_response", extractResultMessage(error)) };}
+      if (error) {return { success: false, data: null, error: mapRegistryError(error, response.status) };}
       // B8: レジストリ実装によっては HTTP 200 でも result.code に失敗コード (例: 2303 "object does not exist")
       // を返すことがある。extractResData で 1000 のみを success とする既存契約を維持し、
       // 2303 のような "存在しない対象" は transfer_not_found にマッピングする。
