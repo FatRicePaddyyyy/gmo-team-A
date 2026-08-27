@@ -28,7 +28,6 @@ export function DomainList({ state }: DomainListProps) {
             それぞれのドメインを開くと、期限の延長・ネームサーバーの変更・他の
             <GlossaryTerm
               description={GLOSSARY.registrar.description}
-              className="underline decoration-dotted underline-offset-4"
             >
               {GLOSSARY.registrar.term}
             </GlossaryTerm>

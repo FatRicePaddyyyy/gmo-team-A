@@ -80,7 +80,6 @@ export default function DashboardPage() {
                     他の
                     <GlossaryTerm
                       description={GLOSSARY.registrar.description}
-                      className="underline decoration-dotted underline-offset-4"
                     >
                       {GLOSSARY.registrar.term}
                     </GlossaryTerm>
