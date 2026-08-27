@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/test";
 import { createSeedUser, hasSeedEnv } from "../helpers/seed-user";
 import { loginAndExpectDashboard } from "../helpers/login";
-import { fireCron, setupInboundPending, t2TransferOp } from "../helpers/transfer";
+import { clickRefresh, setupInboundPending, t2TransferOp } from "../helpers/transfer";
 
 /**
  * @registry-kitaqsign-normal — 移管 inbound cancel (kitaqsign / .com)
@@ -22,14 +22,15 @@ test.describe(
 
       const { fullDomain } = await setupInboundPending(page, "kitaqsign", "tr-in-c");
 
-      // incoming transfer カードが出ていることを確認
+      // incoming transfer カードが出ていることを確認 (承認ボタンで見る)
       await expect(
-        page.getByRole("heading", { name: "他のレジストラへの引き渡しを求められています" }),
+        page.getByRole("button", { name: "承認して引き渡す" }),
       ).toBeVisible({ timeout: 20_000 });
 
-      // teama-2 側で cancel + teama backend cron
+      // teama-2 側で cancel
       await t2TransferOp("kitaqsign", fullDomain, "cancel");
-      await fireCron();
+      // 詳細ページの「最新にする」で poll-now を叩いて反映を待つ
+      await clickRefresh(page);
 
       // ドメインは手元に残っている
       await page.goto("/dashboard");
@@ -43,7 +44,7 @@ test.describe(
         .click();
       await page.getByRole("tab", { name: "他のレジストラへ渡す" }).click();
       await expect(
-        page.getByRole("heading", { name: "他のレジストラへの引き渡しを求められています" }),
+        page.getByRole("button", { name: "承認して引き渡す" }),
       ).toHaveCount(0);
     });
   },

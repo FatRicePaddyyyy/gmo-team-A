@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/test";
 import { createSeedUser, hasSeedEnv } from "../helpers/seed-user";
 import { loginAndExpectDashboard } from "../helpers/login";
-import { fireCron, setupInboundPending, t2TransferOp } from "../helpers/transfer";
+import { clickRefresh, setupInboundPending, t2TransferOp } from "../helpers/transfer";
 
 /**
  * @registry-kitaqnic-normal — 移管 inbound cancel (kitaqnic / .xyz)
@@ -23,11 +23,12 @@ test.describe(
       const { fullDomain } = await setupInboundPending(page, "kitaqnic", "tr-in-c-xyz");
 
       await expect(
-        page.getByRole("heading", { name: "他のレジストラへの引き渡しを求められています" }),
+        page.getByRole("button", { name: "承認して引き渡す" }),
       ).toBeVisible({ timeout: 20_000 });
 
       await t2TransferOp("kitaqnic", fullDomain, "cancel");
-      await fireCron();
+      // 詳細ページの「最新にする」で poll-now を叩いて反映を待つ
+      await clickRefresh(page);
 
       await page.goto("/dashboard");
       await expect(
@@ -39,7 +40,7 @@ test.describe(
         .click();
       await page.getByRole("tab", { name: "他のレジストラへ渡す" }).click();
       await expect(
-        page.getByRole("heading", { name: "他のレジストラへの引き渡しを求められています" }),
+        page.getByRole("button", { name: "承認して引き渡す" }),
       ).toHaveCount(0);
     });
   },
