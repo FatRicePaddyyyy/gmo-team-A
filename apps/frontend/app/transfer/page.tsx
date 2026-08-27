@@ -11,13 +11,12 @@ import { TransferList } from "./_components/transfer-list";
 import { TransferRequestForm } from "./_components/transfer-request-form";
 import { useTransferRequests } from "./_hooks/use-transfer-requests.hook";
 import { useMyDomains } from "../dashboard/_hooks/use-my-domains.hook";
-import { OutgoingDomainPicker } from "./_components/outgoing-domain-picker";
 
 export default function TransferPage() {
   const { data: session, isPending } = useSession();
   const isSignedIn = Boolean(session?.user);
   const state = useTransferRequests(isSignedIn);
-  // 「渡す」側の入口として、自分のドメインも並べる
+  // 入力欄に「いま持っているドメイン」を出すためだけに使う
   const myDomains = useMyDomains(isSignedIn);
 
   if (isPending) {
@@ -37,36 +36,30 @@ export default function TransferPage() {
 
         <div>
           <h1 className="font-heading text-2xl font-bold text-gray-900">
-            ドメインの引っ越し
+            他社のドメインをここへ移す
           </h1>
           <p className="mt-2 text-sm text-gray-600">
-            ドメインは事業者をまたいで移せます。移すには相手の事業者が発行した「認証コード」が必要で、
+            いま他の事業者で管理しているドメインを、こちらへ引き取ります。
+            引き取るには移管元の管理画面で発行した「認証コード」が必要で、
             現在の管理者が承認するまで完了しません。数日かかることもあります。
           </p>
 
-          {/* 「移管元」「移管先」という言葉は初めての人には向きが分からないので、
-              どちらの立場なのかを日本語で言い換える。
-              カードや枠で囲むと押せるものに見えてしまうため、地の文として置く。 */}
-          <dl className="mt-4 space-y-2 border-l-2 border-gray-300 pl-4 text-sm text-gray-600">
-            <div>
-              <dt className="inline font-semibold text-gray-900">
-                もらう（移管先になる）
-              </dt>
-              <dd className="inline">
-                … 他社にあるドメインを、こちらへ引き取ることです。
-                相手から認証コードをもらって申請します。
-              </dd>
-            </div>
-            <div>
-              <dt className="inline font-semibold text-gray-900">
-                渡す（移管元になる）
-              </dt>
-              <dd className="inline">
-                … いま持っているドメインを、他社へ引き渡すことです。
-                こちらで認証コードを発行して相手に伝えます。
-              </dd>
-            </div>
-          </dl>
+          {/* 逆向き（自分のドメインを他社へ渡す）はドメインごとの操作なので、
+              ここには置かず設定画面へ案内するだけにする */}
+          <p className="mt-3 border-l-2 border-gray-300 pl-4 text-sm text-gray-600">
+            逆に
+            <span className="font-semibold text-gray-900">
+              自分のドメインを他社へ渡したい
+            </span>
+            ときは、この画面ではなく
+            <Link
+              href="/dashboard"
+              className="font-semibold text-[var(--brand)] underline underline-offset-2"
+            >
+              マイドメイン
+            </Link>
+            から対象のドメインを開き、設定の中で手続きします。
+          </p>
         </div>
 
         {isSignedIn ? (
@@ -79,31 +72,13 @@ export default function TransferPage() {
               />
             )}
 
-            {/* --- もらう側（他社 → ここ） --- */}
-            <section className="space-y-4">
-              <div>
-                <h2 className="font-heading text-xl font-bold text-gray-900">
-                  他社のドメインをここへ移す
-                </h2>
-                <p className="mt-1 text-sm text-gray-600">
-                  いま他の事業者で管理しているドメインを、こちらへ引き取ります。
-                  移管元の管理画面で発行した認証コードを用意してください。
-                </p>
-              </div>
+            <TransferRequestForm
+              submitting={state.submitting}
+              onSubmitRequest={state.request}
+              ownedNames={myDomains.domains.map((domain) => domain.name)}
+            />
 
-              <TransferRequestForm
-                submitting={state.submitting}
-                onSubmitRequest={state.request}
-                ownedNames={myDomains.domains.map((domain) => domain.name)}
-              />
-
-              <TransferList state={state} />
-            </section>
-
-            <hr className="border-gray-200" />
-
-            {/* --- 渡す側（ここ → 他社） --- */}
-            <OutgoingDomainPicker state={myDomains} />
+            <TransferList state={state} />
           </>
         ) : (
           <div className="mx-auto max-w-md space-y-4 rounded-xl bg-white p-8 text-center shadow-sm">

@@ -11,9 +11,6 @@ import type { DetailFeedback } from "../_hooks/use-domain-detail.hook";
 
 /** バックエンド (PUT /secure/domains/:id) の chg.authInfo は 1〜64 文字 */
 const AUTH_INFO_MAX = 64;
-
-/** 移管ページからこのカードへ直接飛ぶためのアンカー ID */
-export const TRANSFER_OUT_ANCHOR = "transfer-out";
 const AUTH_INFO_MIN = 8;
 
 interface TransferOutCardProps {
@@ -69,9 +66,7 @@ export function TransferOutCard({
   };
 
   return (
-    // 移管ページの「渡す手続きへ」から直接ここへ飛ばすためのアンカー。
-    // scroll-mt はヘッダーに隠れないための余白。
-    <Card id={TRANSFER_OUT_ANCHOR} className="scroll-mt-20">
+    <Card>
       <CardContent className="space-y-5">
         <div>
           <h2 className="font-heading text-lg font-bold text-gray-900">
