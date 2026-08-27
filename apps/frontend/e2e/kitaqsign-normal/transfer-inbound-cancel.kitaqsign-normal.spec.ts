@@ -24,7 +24,7 @@ test.describe(
 
       // incoming transfer カードが出ていることを確認
       await expect(
-        page.getByRole("heading", { name: "他社への引き渡しを求められています" }),
+        page.getByRole("heading", { name: "他のレジストラへの引き渡しを求められています" }),
       ).toBeVisible({ timeout: 10_000 });
 
       // teama-2 側で cancel + teama backend cron
@@ -41,9 +41,9 @@ test.describe(
       await page
         .getByRole("link", { name: new RegExp(fullDomain.replace(".", "\\.")) })
         .click();
-      await page.getByRole("tab", { name: "他社へ渡す" }).click();
+      await page.getByRole("tab", { name: "他のレジストラへ渡す" }).click();
       await expect(
-        page.getByRole("heading", { name: "他社への引き渡しを求められています" }),
+        page.getByRole("heading", { name: "他のレジストラへの引き渡しを求められています" }),
       ).toHaveCount(0);
     });
   },

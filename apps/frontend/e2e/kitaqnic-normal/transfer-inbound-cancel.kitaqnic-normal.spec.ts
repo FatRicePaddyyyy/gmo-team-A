@@ -23,7 +23,7 @@ test.describe(
       const { fullDomain } = await setupInboundPending(page, "kitaqnic", "tr-in-c-xyz");
 
       await expect(
-        page.getByRole("heading", { name: "他社への引き渡しを求められています" }),
+        page.getByRole("heading", { name: "他のレジストラへの引き渡しを求められています" }),
       ).toBeVisible({ timeout: 10_000 });
 
       await t2TransferOp("kitaqnic", fullDomain, "cancel");
@@ -37,9 +37,9 @@ test.describe(
       await page
         .getByRole("link", { name: new RegExp(fullDomain.replace(".", "\\.")) })
         .click();
-      await page.getByRole("tab", { name: "他社へ渡す" }).click();
+      await page.getByRole("tab", { name: "他のレジストラへ渡す" }).click();
       await expect(
-        page.getByRole("heading", { name: "他社への引き渡しを求められています" }),
+        page.getByRole("heading", { name: "他のレジストラへの引き渡しを求められています" }),
       ).toHaveCount(0);
     });
   },
