@@ -10,11 +10,15 @@ import { SiteHeader } from "@/components/site-header";
 import { TransferList } from "./_components/transfer-list";
 import { TransferRequestForm } from "./_components/transfer-request-form";
 import { useTransferRequests } from "./_hooks/use-transfer-requests.hook";
+import { useMyDomains } from "../dashboard/_hooks/use-my-domains.hook";
+import { OutgoingDomainPicker } from "./_components/outgoing-domain-picker";
 
 export default function TransferPage() {
   const { data: session, isPending } = useSession();
   const isSignedIn = Boolean(session?.user);
   const state = useTransferRequests(isSignedIn);
+  // 「渡す」側の入口として、自分のドメインも並べる
+  const myDomains = useMyDomains(isSignedIn);
 
   if (isPending) {
     return (
@@ -33,12 +37,37 @@ export default function TransferPage() {
 
         <div>
           <h1 className="font-heading text-2xl font-bold text-gray-900">
-            他社のドメインをここへ移す
+            ドメインの引っ越し
           </h1>
           <p className="mt-2 text-sm text-gray-600">
-            いま他の事業者で管理しているドメインを、こちらへ引っ越します。
-            移管には現在の管理者の承認が必要なので、申請してもすぐには完了しません。
+            ドメインは事業者をまたいで移せます。移すには相手の事業者が発行した「認証コード」が必要で、
+            現在の管理者が承認するまで完了しません。数日かかることもあります。
           </p>
+
+          {/* 「移管元」「移管先」という言葉は初めての人には向きが分からないので、
+              どちらの立場なのかを日本語で並べて示す */}
+          <dl className="mt-4 grid gap-3 sm:grid-cols-2">
+            <div className="rounded-lg border border-gray-200 bg-white p-3">
+              <dt className="text-sm font-semibold text-gray-900">
+                もらう（移管先になる）
+              </dt>
+              <dd className="mt-1 text-xs text-gray-600">
+                他社にあるドメインを、こちらへ引き取ります。
+                <span className="font-medium">相手から認証コードをもらって</span>
+                申請します。
+              </dd>
+            </div>
+            <div className="rounded-lg border border-gray-200 bg-white p-3">
+              <dt className="text-sm font-semibold text-gray-900">
+                渡す（移管元になる）
+              </dt>
+              <dd className="mt-1 text-xs text-gray-600">
+                いま持っているドメインを、他社へ引き渡します。
+                <span className="font-medium">こちらで認証コードを発行して</span>
+                相手に伝えます。
+              </dd>
+            </div>
+          </dl>
         </div>
 
         {isSignedIn ? (
@@ -51,12 +80,30 @@ export default function TransferPage() {
               />
             )}
 
-            <TransferRequestForm
-              submitting={state.submitting}
-              onSubmitRequest={state.request}
-            />
+            {/* --- もらう側（他社 → ここ） --- */}
+            <section className="space-y-4">
+              <div>
+                <h2 className="font-heading text-xl font-bold text-gray-900">
+                  他社のドメインをここへ移す
+                </h2>
+                <p className="mt-1 text-sm text-gray-600">
+                  いま他の事業者で管理しているドメインを、こちらへ引き取ります。
+                  移管元の管理画面で発行した認証コードを用意してください。
+                </p>
+              </div>
 
-            <TransferList state={state} />
+              <TransferRequestForm
+                submitting={state.submitting}
+                onSubmitRequest={state.request}
+              />
+
+              <TransferList state={state} />
+            </section>
+
+            <hr className="border-gray-200" />
+
+            {/* --- 渡す側（ここ → 他社） --- */}
+            <OutgoingDomainPicker state={myDomains} />
           </>
         ) : (
           <div className="mx-auto max-w-md space-y-4 rounded-xl bg-white p-8 text-center shadow-sm">
