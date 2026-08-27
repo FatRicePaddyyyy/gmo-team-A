@@ -15,6 +15,9 @@ const errorMessages: Record<string, string> = {
   invalid_expires_at: "有効期限の取得に失敗しました。しばらく待ってから再試行してください。",
   invalid_domain_name: `${DOMAIN_NAME_RULE_MESSAGE}末尾（.com など）まで含めて入力してください。`,
   unsupported_tld: "このドメインの拡張子（TLD）には対応していません。別のドメインをお試しください。",
+  // EPP 一般の上限。フロントは「入力欄を増やす」ボタンで 13 台で打ち止めするが、
+  // DevTools で強引に送られたときはここで弾く。
+  too_many_name_servers: "ネームサーバーは 13 台までです。台数を減らしてから保存してください。",
 
   // 操作制限
   operation_prohibited: "現在の状態ではこの操作はできません。ドメインのステータスを確認してください。",

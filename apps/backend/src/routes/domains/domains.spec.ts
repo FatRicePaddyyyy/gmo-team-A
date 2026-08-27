@@ -544,6 +544,22 @@ describe("PUT /api/v1/secure/domains/{domain-id}", () => {
     expect(res.status).toBe(400);
   });
 
+  test("[異常系] NSを14台以上送ると400で弾く", async () => {
+    // フロントは 13 台で「入力欄を増やす」ボタンを消すが、DevTools で強引に増やされたときの受け皿。
+    const tooMany = Array.from({ length: 14 }, (_, i) => `ns${i + 1}.example.com`);
+    const res = await updateDomainRouteHandler.request(
+      "/api/v1/secure/domains/dom-001",
+      {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ nameServers: tooMany }),
+      },
+      mockEnv,
+    );
+
+    expect(res.status).toBe(400);
+  });
+
   test("[異常系] operation_prohibited（2304）", async () => {
     vi.spyOn(DomainService, "update").mockResolvedValue({
       success: false,
