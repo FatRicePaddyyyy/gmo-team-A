@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
 
 /**
  * @registry-none — 入力バリデーション（issue #76）。レジストリ疎通は要らない。
@@ -23,21 +23,21 @@ const RULE_MESSAGE =
  * React はハイドレーション時に DOM ノードへ `__react*` プロパティを生やすので、
  * それを検知に使う。
  */
-async function waitForHydration(page: import("@playwright/test").Page) {
+async function waitForHydration(page: Page) {
   await page.waitForFunction(() => {
     const el = document.querySelector('input[name="domain"]');
     return !!el && Object.keys(el).some((key) => key.startsWith("__react"));
   });
 }
 
-async function searchFor(page: import("@playwright/test").Page, value: string) {
+async function searchFor(page: Page, value: string) {
   await waitForHydration(page);
   await page.getByLabel("取得したいドメイン名").fill(value);
   await page.getByRole("button", { name: "空き状況を調べる" }).click();
 }
 
 /** 空き確認 API が呼ばれたら記録する。呼ばれないことをテストで断言するため。 */
-function watchCheckRequests(page: import("@playwright/test").Page): string[] {
+function watchCheckRequests(page: Page): string[] {
   const called: string[] = [];
   page.on("request", (request) => {
     if (request.url().includes("/domains/check")) {
