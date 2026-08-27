@@ -46,11 +46,11 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="flex min-h-screen flex-col bg-gray-50">
       {/* ヘッダー／フッターが無いと、ここから検索にも解説にも帰れない行き止まりになる */}
       <SiteHeader />
 
-      <main className="mx-auto max-w-4xl px-4 py-8">
+      <main className="w-full flex-1 mx-auto max-w-4xl px-4 py-8">
         {isSignedIn ? (
           <div className="space-y-8">
             <div className="flex flex-wrap items-start justify-between gap-3">

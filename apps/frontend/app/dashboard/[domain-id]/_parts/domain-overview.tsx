@@ -1,4 +1,4 @@
-import { CalendarClock, RefreshCw, ShieldAlert, User } from "lucide-react";
+import { CalendarClock, ShieldAlert, User } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { formatDate } from "@/shared/lib/format-date";
 import { StatusBadge } from "../../_parts/status-badge";
@@ -74,18 +74,6 @@ export function DomainOverview({ domain }: DomainOverviewProps) {
               }
             />
             <Row label="取得日" value={formatDate(domain.createdAt)} />
-            <Row
-              label="自動更新"
-              value={
-                <span className="inline-flex items-center gap-1.5">
-                  <RefreshCw
-                    className="size-4 text-gray-400"
-                    aria-hidden="true"
-                  />
-                  {domain.autoRenew ? "オン" : "オフ"}
-                </span>
-              }
-            />
             <Row label="レジストリ" value={domain.registry} />
             <Row
               label="登録者"

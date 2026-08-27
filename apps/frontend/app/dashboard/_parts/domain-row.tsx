@@ -69,9 +69,6 @@ export function DomainRow({
             <CalendarClock className="size-4 text-gray-400" aria-hidden="true" />
             有効期限 {formatDate(domain.expiresAt)}
           </span>
-          <span className="text-xs text-gray-500">
-            自動更新 {domain.autoRenew ? "オン" : "オフ"}
-          </span>
         </div>
 
         {confirmingDelete ? (

@@ -50,10 +50,10 @@ export default function DomainDetailPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="flex min-h-screen flex-col bg-gray-50">
       <SiteHeader />
 
-      <main className="mx-auto max-w-3xl space-y-6 px-4 py-8">
+      <main className="w-full flex-1 mx-auto max-w-3xl space-y-6 px-4 py-8">
         <BackLink href="/dashboard" label="マイドメインに戻る" />
 
         {!isSignedIn ? (
