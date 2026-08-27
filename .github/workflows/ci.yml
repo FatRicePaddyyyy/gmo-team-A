@@ -146,9 +146,28 @@ jobs:
         run: pnpm test:run
 
   playwright:
-    name: E2E tests (Playwright)
+    # レジストリ疎通の要件で project を分割している (apps/frontend/playwright.config.ts 参照)。
+    # secret は 5 ジョブすべてに同じ内容を渡す。CI 側で意図的に片方を落とす操作はしない
+    # (現実のレジストリのメンテ時間帯に normal/outage の緑赤が入れ替わる想定)。
+    #
+    # - registry-none    : レジストリ疎通が無くても動くべき UI テスト。常時緑。
+    # - kitaqsign-normal : kitaqsign 稼働時にだけ緑になる正常系 (.com 検索・購入)
+    # - kitaqsign-outage : kitaqsign 障害時にだけ緑になる異常系 (.com が「確認できませんでした」枠)
+    # - kitaqnic-normal  : kitaqnic 稼働時にだけ緑になる正常系 (.xyz 検索・購入)
+    # - kitaqnic-outage  : kitaqnic 障害時にだけ緑になる異常系 (.xyz が「確認できませんでした」枠)
+    name: E2E tests (Playwright / ${{ matrix.project }})
     needs: [tsc-frontend, tsc-backend, lint]
     runs-on: ubuntu-latest
+    strategy:
+      # normal ジョブと outage ジョブは片方が失敗しても他方の実行結果が要る。
+      fail-fast: false
+      matrix:
+        project:
+          - registry-none
+          - kitaqsign-normal
+          - kitaqsign-outage
+          - kitaqnic-normal
+          - kitaqnic-outage
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -179,10 +198,7 @@ jobs:
         env:
           BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
           SECRET_KEY: ${{ secrets.SECRET_KEY }}
-          # E2E は実 kitaqsign / kitaqnic を叩く (POST /api/v1/public/domains/check の resolveRegistry が
-          # 両レジストリの hello を叩く)。CI で認証情報が無いと backend が 500 を返し、
-          # 検索結果が出ずに「このドメインで進む」ボタンが描画されなくなる。
-          # Repository Secrets に KITAQSIGN_* / KITAQNIC_* を登録しておくこと。
+          # 全ジョブに両レジストリの secret を渡す。CI で疎通を意図的に切らない。
           KITAQSIGN_BASIC_USER: ${{ secrets.KITAQSIGN_BASIC_USER }}
           KITAQSIGN_BASIC_PASS: ${{ secrets.KITAQSIGN_BASIC_PASS }}
           KITAQSIGN_REGISTRAR_ID: ${{ secrets.KITAQSIGN_REGISTRAR_ID }}
@@ -217,18 +233,18 @@ jobs:
             echo "Waiting for backend... ($i/30) (HTTP $STATUS)"
             sleep 2
           done
-      - name: Run Playwright tests
+      - name: Run Playwright tests (${{ matrix.project }})
         working-directory: apps/frontend
         env:
           NEXT_PUBLIC_BACKEND_URL: http://localhost:8787
           # /api/v1/secret/create-seed-user を叩いてテストユーザーを作るために必要
           SECRET_KEY: ${{ secrets.SECRET_KEY }}
-        run: pnpm exec playwright test
+        run: pnpm exec playwright test --project=${{ matrix.project }}
       - name: Upload Playwright report
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-html-report
+          name: playwright-html-report-${{ matrix.project }}
           path: apps/frontend/playwright-report
           retention-days: 7
 

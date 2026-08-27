@@ -90,27 +90,33 @@ export default function CartDonePage() {
     <div className="min-h-screen bg-gray-50">
       <SiteHeader />
 
-      <main className="relative mx-auto max-w-3xl px-4 py-10">
-        {/* 紙吹雪。装飾なので支援技術には見せない。position:fixed で本文の上をふわっと落ちる */}
-        <div
-          className="pointer-events-none fixed inset-0 -z-0 overflow-hidden motion-reduce:hidden"
-          aria-hidden="true"
-        >
-          {confetti.map((p, i) => (
-            <span
-              key={i}
-              className="brand-confetti-piece absolute -top-4 block size-2 rounded-sm"
-              style={{
-                left: `${p.left}%`,
-                animationDelay: `${p.delay}s`,
-                animationDuration: `${p.duration}s`,
-                background: `hsl(${p.hue} 85% 60%)`,
-              }}
-            />
-          ))}
-        </div>
+      {/*
+        紙吹雪は本文と別レイヤ。装飾なので支援技術には見せない。
+        SiteHeader (sticky z-50) より下、本文コンテンツ (z-10) より下に来るよう
+        z-0 を指定する。main 内に fixed で置くと main の relative が
+        スタッキングコンテキストを作り、SiteHeader との積層が壊れるので、
+        兄弟要素として置く。
+      */}
+      <div
+        className="pointer-events-none fixed inset-0 z-0 overflow-hidden motion-reduce:hidden"
+        aria-hidden="true"
+      >
+        {confetti.map((p, i) => (
+          <span
+            key={i}
+            className="brand-confetti-piece absolute -top-4 block size-2 rounded-sm"
+            style={{
+              left: `${p.left}%`,
+              animationDelay: `${p.delay}s`,
+              animationDuration: `${p.duration}s`,
+              background: `hsl(${p.hue} 85% 60%)`,
+            }}
+          />
+        ))}
+      </div>
 
-        <div className="relative rounded-2xl border border-border bg-white px-6 py-10 text-center shadow-sm">
+      <main className="relative z-10 mx-auto max-w-3xl px-4 py-10">
+        <div className="rounded-2xl border border-border bg-white px-6 py-10 text-center shadow-sm">
           {/* 大きめのチェックマーク。pop-in で「決まった」感を出す */}
           <div className="brand-check-pop mx-auto mb-4 flex size-16 items-center justify-center rounded-full bg-green-100">
             <CheckCircle2 className="size-10 text-green-600" aria-hidden="true" />
