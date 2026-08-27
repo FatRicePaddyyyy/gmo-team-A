@@ -23,6 +23,8 @@ const DomainSchema = z.object({
   // レジストリに問い合わせられたか。false のとき statuses / registrant /
   // contacts / nameservers は「空」ではなく「取得できていない」。
   registryAvailable: z.boolean(),
+  // 登録者の氏名（自社 DB 由来）。レジストリの registrant は内部 ID なので画面には出さない。
+  ownerName: z.string(),
   registryUnavailableReason: z.string().nullable(),
   statuses: z.array(z.string()),
   registrant: z.string(),

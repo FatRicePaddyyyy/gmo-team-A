@@ -82,6 +82,27 @@ function isRegistryUnreachable(error: string): boolean {
   );
 }
 
+/**
+ * 登録者の氏名を自社 DB から引く。
+ *
+ * レジストリの registrant は `C-01054F4E` のような内部 ID で利用者には読めない。
+ * コンタクトは登録時に自社のユーザー情報から作っているので、氏名は DB 側にある。
+ * DB 由来なのでレジストリがメンテナンス中でも出せる。
+ *
+ * 引けなくても詳細の表示自体は続けたいので、失敗はログに残して空文字を返す。
+ */
+async function fetchOwnerName(
+  ownerUserId: string,
+  db: DBClient,
+): Promise<string> {
+  const result = await DomainUserRepository.findById({ id: ownerUserId, db });
+  if (!result.success) {
+    console.error("fetchOwnerName: owner lookup failed:", result.error);
+    return "";
+  }
+  return result.data?.name ?? "";
+}
+
 export class DomainService {
   /**
    * 複数ドメインの空き確認をまとめて行う（Issue #45 B-3）。
@@ -281,6 +302,8 @@ export class DomainService {
     }
     const domain = domainResult.data;
 
+    const ownerName = await fetchOwnerName(domain.ownerUserId, db);
+
     const infoResult = await RegistryBridge.info({ name: domain.name, registry: domain.registry, env });
     if (!infoResult.success) {
       // レジストリが落ちていても、ドメイン名・有効期限・状態は自社 DB にある。
@@ -296,6 +319,7 @@ export class DomainService {
           data: DomainMapper.toDetailResponseWithoutRegistry(
             domain,
             toUserMessage(infoResult.error),
+            ownerName,
           ),
           error: null,
         };
@@ -320,7 +344,7 @@ export class DomainService {
     }
 
     const updatedRow = { ...domain, expiresAt, status };
-    return { success: true, data: DomainMapper.toDetailResponse(updatedRow, infoResult.data), error: null };
+    return { success: true, data: DomainMapper.toDetailResponse(updatedRow, infoResult.data, ownerName), error: null };
   }
 
   static async renew({
@@ -408,7 +432,15 @@ export class DomainService {
       // レジストリからの最新情報はないので info を呼ぶ
       const infoResult = await RegistryBridge.info({ name: domain.name, registry: domain.registry, env });
       if (!infoResult.success) {return infoResult;}
-      return { success: true, data: DomainMapper.toDetailResponse(updatedRow, infoResult.data), error: null };
+      return {
+        success: true,
+        data: DomainMapper.toDetailResponse(
+          updatedRow,
+          infoResult.data,
+          await fetchOwnerName(domain.ownerUserId, db),
+        ),
+        error: null,
+      };
     }
 
     // nameServers の差分展開:
@@ -464,7 +496,15 @@ export class DomainService {
         ...domain,
         ...(autoRenew !== undefined ? { autoRenew } : {}),
       };
-      return { success: true, data: DomainMapper.toDetailResponse(updatedRow, infoOnly.data), error: null };
+      return {
+        success: true,
+        data: DomainMapper.toDetailResponse(
+          updatedRow,
+          infoOnly.data,
+          await fetchOwnerName(domain.ownerUserId, db),
+        ),
+        error: null,
+      };
     }
 
     // add.nameservers に指定するホストは事前にレジストリに登録されている必要がある
@@ -520,7 +560,15 @@ export class DomainService {
       ...(chg?.authInfo ? { authInfo: chg.authInfo } : {}),
       ...(autoRenew !== undefined ? { autoRenew } : {}),
     };
-    return { success: true, data: DomainMapper.toDetailResponse(updatedRow, registryData), error: null };
+    return {
+      success: true,
+      data: DomainMapper.toDetailResponse(
+        updatedRow,
+        registryData,
+        await fetchOwnerName(domain.ownerUserId, db),
+      ),
+      error: null,
+    };
   }
 
   static async delete({
