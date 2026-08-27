@@ -29,7 +29,22 @@ export type RunningDetailAction =
   | "restore"
   | "nameServers"
   | "authInfo"
+  | "locks"
   | null;
+
+/**
+ * `add.statuses` / `rem.statuses` に指定できる 5 種類 (Swagger DomainChangeSet.statuses)。
+ * server* 系はレジストリのみ設定可、pending* / ok / inactive は自動導出なので、
+ * ここではクライアント側で設定・解除できる値だけを扱う。
+ */
+export const CLIENT_LOCK_STATUSES = [
+  "clientHold",
+  "clientTransferProhibited",
+  "clientUpdateProhibited",
+  "clientDeleteProhibited",
+  "clientRenewProhibited",
+] as const;
+export type ClientLockStatus = (typeof CLIENT_LOCK_STATUSES)[number];
 
 /**
  * ドメイン1件の詳細と、その設定変更（ネームサーバー・AuthCode・移管ロック）。
@@ -253,6 +268,56 @@ export function useDomainDetail(domainId: string, enabled: boolean) {
     [update],
   );
 
+  /**
+   * ロック (client*Prohibited / clientHold) の一括更新。
+   *
+   * 会員 API は「宣言的な最終状態」= target 集合を受け取り、
+   * ここで現状 (`domain.statuses`) との差分を addStatuses / remStatuses に分解する。
+   * (backend の NS 差分と同じ流儀。宣言→差分の変換は client 側で完結させる)
+   *
+   * レジストリが受理してもフラグを反映しないケース (実測: 修正前の kitaqsign) を
+   * 弾くため、verify で「取り直した statuses が target と一致する」ことを確認する。
+   */
+  const updateLocks = useCallback(
+    async (target: readonly ClientLockStatus[]): Promise<boolean> => {
+      if (!domain) return false;
+      const targetSet = new Set<ClientLockStatus>(target);
+      const currentLocks = new Set<ClientLockStatus>(
+        (domain.statuses ?? []).filter((s): s is ClientLockStatus =>
+          (CLIENT_LOCK_STATUSES as readonly string[]).includes(s),
+        ),
+      );
+      const addStatuses = [...targetSet].filter((s) => !currentLocks.has(s));
+      const remStatuses = [...currentLocks].filter((s) => !targetSet.has(s));
+      if (addStatuses.length === 0 && remStatuses.length === 0) {
+        // 何も変わらないなら何も送らない (backend が no-op に丸めるが、
+        // 「変更しました」の帯を出さないためにここで止める)
+        return true;
+      }
+      return update(
+        "locks",
+        {
+          ...(addStatuses.length > 0 ? { addStatuses } : {}),
+          ...(remStatuses.length > 0 ? { remStatuses } : {}),
+        },
+        "保護設定を更新しました。反映まで少し時間がかかることがあります。",
+        (updated) => {
+          const after = new Set(
+            (updated.statuses ?? []).filter((s) =>
+              (CLIENT_LOCK_STATUSES as readonly string[]).includes(s),
+            ),
+          );
+          if (after.size !== targetSet.size) return false;
+          for (const t of targetSet) {
+            if (!after.has(t)) return false;
+          }
+          return true;
+        },
+      );
+    },
+    [domain, update],
+  );
+
   return {
     domain,
     // enabled が後から true になる（セッション解決後）ケースを含めて、
@@ -268,5 +333,6 @@ export function useDomainDetail(domainId: string, enabled: boolean) {
     restore,
     updateNameServers,
     updateAuthInfo,
+    updateLocks,
   };
 }

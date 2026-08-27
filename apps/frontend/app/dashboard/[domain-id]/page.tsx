@@ -26,6 +26,7 @@ import { TransferOutSteps, type TransferOutStepKey } from "./_parts/transfer-out
 import { NameServerForm } from "./_components/name-server-form";
 import { IncomingTransferCard } from "./_components/incoming-transfer-card";
 import { LifecycleCard } from "./_components/lifecycle-card";
+import { LocksCard } from "./_components/locks-card";
 import { RenewCard } from "./_components/renew-card";
 import { TransferOutCard } from "./_components/transfer-out-card";
 import { useDomainDetail } from "./_hooks/use-domain-detail.hook";
@@ -175,11 +176,12 @@ export default function DomainDetailPage() {
                 className="gap-4"
               >
                 {/*
-                  タブは 5 つ:
+                  タブは 6 つ:
                     - overview: 現在の状態 (dl 一覧)
                     - renew:    有効期限を延ばす
                     - ns:       ネームサーバー
                     - transfer: 他社へ渡す (ステップインジケーター付き)
+                    - locks:    保護 (client*Prohibited の 5 種トグル、Issue #107)
                     - lifecycle: 廃止・復旧
                 */}
                 <TabsList className="h-auto w-full flex-wrap gap-1 sm:flex-nowrap">
@@ -187,6 +189,7 @@ export default function DomainDetailPage() {
                   <TabsTrigger value="renew">有効期限を延ばす</TabsTrigger>
                   <TabsTrigger value="ns">ネームサーバー</TabsTrigger>
                   <TabsTrigger value="transfer">他社へ渡す</TabsTrigger>
+                  <TabsTrigger value="locks">保護</TabsTrigger>
                   <TabsTrigger value="lifecycle">廃止・復旧</TabsTrigger>
                 </TabsList>
 
@@ -270,6 +273,25 @@ export default function DomainDetailPage() {
                       feedback?.source === "authInfo" ? feedback : null
                     }
                     onUpdateAuthInfo={state.updateAuthInfo}
+                  />
+                </TabsContent>
+
+                <TabsContent value="locks" className="space-y-4">
+                  {/* Issue #107 (2): client*Prohibited フラグの管理 UI。
+                       レジストリが info を返せない状態 (メンテ等) では現状値が読めないので
+                       操作は止める。廃止済み・移管中も現在は変更できないので同じ扱い。 */}
+                  {!settingsEditable && !registryDown && (
+                    <p className="rounded-lg border border-gray-200 bg-white p-3 text-sm text-gray-600">
+                      {statusHintOf(domain.status) ??
+                        "このドメインはいま手続き中のため、保護設定を変更できません。"}
+                    </p>
+                  )}
+                  <LocksCard
+                    currentStatuses={domain.statuses ?? []}
+                    disabled={!settingsEditable || busy}
+                    running={running === "locks"}
+                    feedback={feedback?.source === "locks" ? feedback : null}
+                    onSave={state.updateLocks}
                   />
                 </TabsContent>
 
