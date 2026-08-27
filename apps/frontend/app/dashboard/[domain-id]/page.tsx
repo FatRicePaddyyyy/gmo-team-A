@@ -152,6 +152,7 @@ export default function DomainDetailPage() {
 
                 {renewable && (
                   <RenewCard
+                    domainName={domain.name}
                     expiresAt={domain.expiresAt}
                     disabled={busy}
                     running={running === "renew"}
