@@ -121,8 +121,10 @@ export function useInboundTransfers(
   // ここは他方（申請中の一覧）と違い、0 件でも止めない。
   // 「まだ 1 件も無い」状態から届くのを待つのが、この一覧の役目だから。
   // セッションが切れたら止める。待っても回復せず、401 を送り続けるだけになる。
+  // 承認・却下の実行中も止める。処理の途中で一覧が入れ替わると、
+  // 押した対象が画面から消えたり、結果の表示と食い違ったりする。
   usePoll({
-    enabled: enabled && !sessionExpired,
+    enabled: enabled && !sessionExpired && running === null,
     onTick: () => refresh({ silent: true }),
   });
 

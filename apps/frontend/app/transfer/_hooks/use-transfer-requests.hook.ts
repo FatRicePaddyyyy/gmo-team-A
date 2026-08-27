@@ -94,8 +94,11 @@ export function useTransferRequests(enabled: boolean) {
     (transfer) => transfer.status === "pendingTransfer",
   );
   // セッションが切れたら止める。待っても回復せず、401 を送り続けるだけになる。
+  // 申請・取消の実行中も止める。処理の途中で一覧が入れ替わると、
+  // 押した対象が画面から消えたり、結果の表示と食い違ったりする。
   usePoll({
-    enabled: enabled && hasPending && !sessionExpired,
+    enabled:
+      enabled && hasPending && !sessionExpired && !submitting && !cancellingId,
     onTick: () => refresh({ silent: true }),
   });
 
