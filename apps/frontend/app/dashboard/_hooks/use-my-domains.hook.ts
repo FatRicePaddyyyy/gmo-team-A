@@ -1,35 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import {
-  $deleteDomain,
-  $listDomains,
-  $renewDomain,
-  $restoreDomain,
-  type ListDomainsResponse,
-} from "@/clients";
+import { $listDomains, type ListDomainsResponse } from "@/clients";
 import { callApi } from "@/shared/lib/api-result";
 
 type ListDomainsSuccess = Extract<ListDomainsResponse, { success: true }>;
 export type MyDomain = ListDomainsSuccess["data"][number];
-
-export type RenewPeriodUnit = "Y" | "M";
-
-export interface DomainFeedback {
-  tone: "success" | "error";
-  message: string;
-  /** セッション切れ。帯にログイン導線を出すため */
-  unauthorized?: boolean;
-}
-
-/**
- * 実行中の操作。どの行のどの操作かを表示に使う（「更新中...」を出す行の特定）。
- * 同時に走らせられるのは 1 件だけ。
- */
-export interface RunningDomainAction {
-  domainId: string;
-  kind: "renew" | "delete" | "restore";
-}
 
 /**
  * 取得済みドメインの一覧と、その行に対する操作（更新・廃止・復旧）をまとめて持つ。
@@ -45,8 +21,6 @@ export function useMyDomains(enabled: boolean) {
   const [loaded, setLoaded] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [loadUnauthorized, setLoadUnauthorized] = useState(false);
-  const [running, setRunning] = useState<RunningDomainAction | null>(null);
-  const [feedback, setFeedback] = useState<DomainFeedback | null>(null);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -69,83 +43,8 @@ export function useMyDomains(enabled: boolean) {
     void refresh();
   }, [enabled, refresh]);
 
-  const renew = useCallback(
-    async (domain: MyDomain, period: { unit: RenewPeriodUnit; value: number }) => {
-      if (running) return;
-      setRunning({ domainId: domain.id, kind: "renew" });
-      setFeedback(null);
-      const result = await callApi<MyDomain>(
-        $renewDomain({ param: { "domain-id": domain.id }, json: { period } }),
-      );
-      if (!result.success) {
-        setFeedback({
-          tone: "error",
-          message: result.error,
-          unauthorized: result.unauthorized,
-        });
-      } else {
-        setFeedback({
-          tone: "success",
-          message: `${domain.name} の有効期限を延長しました。`,
-        });
-        await refresh();
-      }
-      setRunning(null);
-    },
-    [refresh, running],
-  );
 
-  const remove = useCallback(
-    async (domain: MyDomain) => {
-      if (running) return;
-      setRunning({ domainId: domain.id, kind: "delete" });
-      setFeedback(null);
-      const result = await callApi<MyDomain>(
-        $deleteDomain({ param: { "domain-id": domain.id } }),
-      );
-      if (!result.success) {
-        setFeedback({
-          tone: "error",
-          message: result.error,
-          unauthorized: result.unauthorized,
-        });
-      } else {
-        setFeedback({
-          tone: "success",
-          message: `${domain.name} を廃止しました。しばらくの間は復旧できます。`,
-        });
-        await refresh();
-      }
-      setRunning(null);
-    },
-    [refresh, running],
-  );
 
-  const restore = useCallback(
-    async (domain: MyDomain) => {
-      if (running) return;
-      setRunning({ domainId: domain.id, kind: "restore" });
-      setFeedback(null);
-      const result = await callApi<MyDomain>(
-        $restoreDomain({ param: { "domain-id": domain.id } }),
-      );
-      if (!result.success) {
-        setFeedback({
-          tone: "error",
-          message: result.error,
-          unauthorized: result.unauthorized,
-        });
-      } else {
-        setFeedback({
-          tone: "success",
-          message: `${domain.name} を復旧しました。`,
-        });
-        await refresh();
-      }
-      setRunning(null);
-    },
-    [refresh, running],
-  );
 
   return {
     domains,
@@ -155,11 +54,6 @@ export function useMyDomains(enabled: boolean) {
     loading: loading || (enabled && !loaded),
     loadError,
     loadUnauthorized,
-    running,
-    feedback,
     refresh,
-    renew,
-    remove,
-    restore,
   };
 }

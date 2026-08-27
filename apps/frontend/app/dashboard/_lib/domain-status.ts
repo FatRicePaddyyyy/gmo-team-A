@@ -7,17 +7,53 @@
  */
 
 export const DOMAIN_STATUS_LABELS: Record<string, string> = {
-  ok: "有効",
+  ok: "使えます",
   pendingCreate: "登録手続き中",
-  pendingTransfer: "移管手続き中",
+  // 「移管」だけでは渡す側か受け取る側か分からない。自分のドメインに対して
+  // 起きている以上、必ず「他社へ渡す」側なのでそう書く。
+  pendingTransfer: "他社へ渡す手続き中",
   pendingUpdate: "変更手続き中",
-  redemptionPeriod: "廃止済み（復旧できます）",
-  pendingDelete: "削除待ち（復旧できません）",
+  redemptionPeriod: "廃止済み（まだ戻せます）",
+  pendingDelete: "削除待ち（もう戻せません）",
   serverHold: "利用停止中",
   clientHold: "利用停止中",
   serverUpdateProhibited: "変更ロック中",
   clientUpdateProhibited: "変更ロック中",
 };
+
+/**
+ * 状態バッジだけでは「で、どうすればいいのか」が分からないので、
+ * 一言の補足を添える。ドメインを初めて持つ人が読む前提で書く。
+ */
+export const DOMAIN_STATUS_HINTS: Record<string, string> = {
+  ok: "サイトやメールに使えます。",
+  pendingCreate: "登録が終わるまで少し待ってください。",
+  pendingTransfer:
+    "他社から引き渡しの申請が来ています。承認するか却下するか決めてください。放置すると自動で承認されます。",
+  pendingUpdate: "変更が反映されるまで少し待ってください。",
+  redemptionPeriod:
+    "廃止しましたが、猶予期間のうちなら元に戻せます。過ぎると他の人が取得できるようになります。",
+  pendingDelete: "猶予期間を過ぎたため、元に戻せません。",
+  serverHold: "レジストリの判断で止まっています。",
+  clientHold: "掲載を止めているので、サイトが見られません。",
+  serverUpdateProhibited: "変更が禁止されています。",
+  clientUpdateProhibited: "変更が禁止されています。",
+};
+
+export function statusHintOf(status: string): string | null {
+  return DOMAIN_STATUS_HINTS[status] ?? null;
+}
+
+/**
+ * 一覧のボタンに「この先で何ができるか」を出すための文言。
+ * 「設定・詳細」だけでは中身が想像できないので、状態ごとに変える。
+ */
+export function detailActionLabelOf(status: string): string {
+  if (status === "redemptionPeriod") return "復旧する・詳しく見る";
+  if (status === "pendingTransfer") return "承認・却下する";
+  if (status === "pendingDelete") return "詳しく見る";
+  return "更新・設定を変える";
+}
 
 export type DomainStatusTone = "ok" | "warning" | "danger" | "neutral";
 
@@ -58,13 +94,6 @@ export function canUpdateSettings(status: string): boolean {
   return !isDeleted(status) && !status.startsWith("pending");
 }
 
-/** レジストラロック（移管防止）に使う EPP ステータス */
-export const TRANSFER_LOCK_STATUS = "clientTransferProhibited";
-
-/** 詳細 API の statuses からロック中かを判定する */
-export function isTransferLocked(statuses: readonly string[]): boolean {
-  return statuses.includes(TRANSFER_LOCK_STATUS);
-}
 
 /**
  * 廃止したドメインが復旧できなくなるまでの残り日数。
@@ -112,3 +141,46 @@ export function redemptionDaysLeft(params: {
  * 片方だけ変えると、同じ操作なのに選べる年数が食い違う。
  */
 export const RENEW_YEARS = [1, 2, 3, 5, 10] as const;
+
+/**
+ * 更新後の有効期限の上限。レジストリは「現在 + 10 年」を超える更新を
+ * 2004 (Parameter value range error) で拒否する。
+ * 選べない年数を出しておいて後から失敗させるより、最初から出さない。
+ */
+export const MAX_YEARS_FROM_NOW = 10;
+
+export function renewableYears(
+  expiresAt: string,
+  now: Date = new Date(),
+): readonly number[] {
+  const current = new Date(expiresAt);
+  if (Number.isNaN(current.getTime())) return RENEW_YEARS;
+
+  const limit = new Date(now);
+  limit.setFullYear(limit.getFullYear() + MAX_YEARS_FROM_NOW);
+
+  return RENEW_YEARS.filter((years) => {
+    const after = new Date(current);
+    after.setFullYear(after.getFullYear() + years);
+    return after.getTime() <= limit.getTime();
+  });
+}
+
+/**
+ * RGP（Registry Grace Period）の状態。レジストリは英語のコードを返すので、
+ * そのまま出しても何のことか分からない。
+ * 「いま何が起きていて、自分は何をすべきか」が分かる言葉にする。
+ */
+export const RGP_STATUS_LABELS: Record<string, string> = {
+  addPeriod: "取得直後（取得から数日間）",
+  autoRenewPeriod: "自動更新の直後",
+  renewPeriod: "更新の直後",
+  transferPeriod: "移管の直後",
+  redemptionPeriod: "廃止後の猶予期間（まだ戻せます）",
+  pendingRestore: "復旧の手続き中",
+  pendingDelete: "削除待ち（もう戻せません）",
+};
+
+export function rgpStatusLabelOf(status: string): string {
+  return RGP_STATUS_LABELS[status] ?? status;
+}

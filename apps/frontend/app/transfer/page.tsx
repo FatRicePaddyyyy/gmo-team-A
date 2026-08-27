@@ -10,11 +10,14 @@ import { SiteHeader } from "@/components/site-header";
 import { TransferList } from "./_components/transfer-list";
 import { TransferRequestForm } from "./_components/transfer-request-form";
 import { useTransferRequests } from "./_hooks/use-transfer-requests.hook";
+import { useMyDomains } from "../dashboard/_hooks/use-my-domains.hook";
 
 export default function TransferPage() {
   const { data: session, isPending } = useSession();
   const isSignedIn = Boolean(session?.user);
   const state = useTransferRequests(isSignedIn);
+  // 入力欄に「いま持っているドメイン」を出すためだけに使う
+  const myDomains = useMyDomains(isSignedIn);
 
   if (isPending) {
     return (
@@ -25,19 +28,37 @@ export default function TransferPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="flex min-h-screen flex-col bg-gray-50">
       <SiteHeader />
 
-      <main className="mx-auto max-w-3xl space-y-8 px-4 py-8">
+      <main className="w-full flex-1 mx-auto max-w-3xl space-y-8 px-4 py-8">
         <BackLink href="/dashboard" label="マイドメインに戻る" />
 
         <div>
           <h1 className="font-heading text-2xl font-bold text-gray-900">
-            他社のドメインを移管する
+            他社のドメインをここへ移す
           </h1>
           <p className="mt-2 text-sm text-gray-600">
-            いま他の事業者で管理しているドメインを、こちらへ引っ越します。
-            移管には現在の管理者の承認が必要なので、申請してもすぐには完了しません。
+            いま他の事業者で管理しているドメインを、こちらへ引き取ります。
+            引き取るには移管元の管理画面で発行した「認証コード」が必要で、
+            現在の管理者が承認するまで完了しません。数日かかることもあります。
+          </p>
+
+          {/* 逆向き（自分のドメインを他社へ渡す）はドメインごとの操作なので、
+              ここには置かず設定画面へ案内するだけにする */}
+          <p className="mt-3 border-l-2 border-gray-300 pl-4 text-sm text-gray-600">
+            逆に
+            <span className="font-semibold text-gray-900">
+              自分のドメインを他社へ渡したい
+            </span>
+            ときは、この画面ではなく
+            <Link
+              href="/dashboard"
+              className="font-semibold text-[var(--brand)] underline underline-offset-2"
+            >
+              マイドメイン
+            </Link>
+            から対象のドメインを開き、設定の中で手続きします。
           </p>
         </div>
 
@@ -54,6 +75,7 @@ export default function TransferPage() {
             <TransferRequestForm
               submitting={state.submitting}
               onSubmitRequest={state.request}
+              ownedNames={myDomains.domains.map((domain) => domain.name)}
             />
 
             <TransferList state={state} />

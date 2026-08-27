@@ -1,8 +1,11 @@
-import { CalendarClock, RefreshCw, ShieldAlert, User } from "lucide-react";
+import { CalendarClock, ShieldAlert, User } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { formatDate } from "@/shared/lib/format-date";
 import { StatusBadge } from "../../_parts/status-badge";
-import { redemptionDaysLeft } from "../../_lib/domain-status";
+import {
+  redemptionDaysLeft,
+  rgpStatusLabelOf,
+} from "../../_lib/domain-status";
 import type { DomainDetail } from "../_hooks/use-domain-detail.hook";
 
 /** ラベルと値を並べる行。値が空なら「—」を出して、欠落と空文字を区別しない */
@@ -74,18 +77,6 @@ export function DomainOverview({ domain }: DomainOverviewProps) {
               }
             />
             <Row label="取得日" value={formatDate(domain.createdAt)} />
-            <Row
-              label="自動更新"
-              value={
-                <span className="inline-flex items-center gap-1.5">
-                  <RefreshCw
-                    className="size-4 text-gray-400"
-                    aria-hidden="true"
-                  />
-                  {domain.autoRenew ? "オン" : "オフ"}
-                </span>
-              }
-            />
             <Row label="レジストリ" value={domain.registry} />
             <Row
               label="登録者"
@@ -131,16 +122,17 @@ export function DomainOverview({ domain }: DomainOverviewProps) {
               }
             />
             <Row
-              label="猶予期間（RGP）"
+              label="いまの段階"
               value={
                 domain.rgpStatus?.length ? (
                   <span className="flex flex-wrap gap-1">
+                    {/* レジストリは英語のコードを返す。そのまま出しても伝わらないので言い換える */}
                     {domain.rgpStatus.map((s) => (
                       <span
                         key={s}
-                        className="rounded bg-gray-100 px-1.5 py-0.5 font-mono text-xs break-all text-gray-700"
+                        className="rounded bg-gray-100 px-1.5 py-0.5 text-xs text-gray-700"
                       >
-                        {s}
+                        {rgpStatusLabelOf(s)}
                       </span>
                     ))}
                   </span>

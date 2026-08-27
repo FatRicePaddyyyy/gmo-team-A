@@ -10,7 +10,6 @@ import {
   type GetDomainResponse,
 } from "@/clients";
 import { callApi } from "@/shared/lib/api-result";
-import { TRANSFER_LOCK_STATUS } from "../../_lib/domain-status";
 
 type GetDomainSuccess = Extract<GetDomainResponse, { success: true }>;
 export type DomainDetail = GetDomainSuccess["data"];
@@ -30,7 +29,6 @@ export type RunningDetailAction =
   | "restore"
   | "nameServers"
   | "authInfo"
-  | "transferLock"
   | null;
 
 /**
@@ -117,7 +115,7 @@ export function useDomainDetail(domainId: string, enabled: boolean) {
           tone: "error",
           source: kind,
           message:
-            "レジストリが変更を受け付けましたが、まだ反映されていません。時間をおいて「最新にする」で確認してください。反映されない場合はレジストリ側の制限が考えられます。",
+            "レジストリは変更を受け付けましたが、実際には反映されませんでした。このレジストリが未対応の設定である可能性が高く、待っても変わりません。設定が必要な場合はサポートへご連絡ください。",
         });
         setRunning(null);
         return false;
@@ -255,22 +253,6 @@ export function useDomainDetail(domainId: string, enabled: boolean) {
     [update],
   );
 
-  const setTransferLock = useCallback(
-    (locked: boolean) =>
-      update(
-        "transferLock",
-        locked
-          ? { addStatuses: [TRANSFER_LOCK_STATUS] }
-          : { remStatuses: [TRANSFER_LOCK_STATUS] },
-        locked
-          ? "移管ロックをかけました。他社への移管ができなくなります。"
-          : "移管ロックを解除しました。他社への移管ができるようになります。",
-        (updated) =>
-          (updated.statuses ?? []).includes(TRANSFER_LOCK_STATUS) === locked,
-      ),
-    [update],
-  );
-
   return {
     domain,
     // enabled が後から true になる（セッション解決後）ケースを含めて、
@@ -286,6 +268,5 @@ export function useDomainDetail(domainId: string, enabled: boolean) {
     restore,
     updateNameServers,
     updateAuthInfo,
-    setTransferLock,
   };
 }

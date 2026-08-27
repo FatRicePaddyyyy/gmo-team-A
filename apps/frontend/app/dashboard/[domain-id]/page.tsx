@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useSession } from "@/auth-client";
+import { useInboundTransfers } from "../_hooks/use-inbound-transfers.hook";
 import { BackLink } from "@/components/back-link";
 import { RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -14,10 +15,11 @@ import {
   canRenew,
   canRestore,
   canUpdateSettings,
-  isTransferLocked,
+  statusHintOf,
 } from "../_lib/domain-status";
 import { DomainOverview } from "./_parts/domain-overview";
 import { NameServerForm } from "./_components/name-server-form";
+import { IncomingTransferCard } from "./_components/incoming-transfer-card";
 import { LifecycleCard } from "./_components/lifecycle-card";
 import { RenewCard } from "./_components/renew-card";
 import { TransferOutCard } from "./_components/transfer-out-card";
@@ -30,6 +32,10 @@ export default function DomainDetailPage() {
   const isSignedIn = Boolean(session?.user);
 
   const state = useDomainDetail(domainId, isSignedIn);
+  // このドメインに対して他社への引き渡し申請が来ていないか。
+  // 一覧と同じ API を使い、対象の 1 件だけを取り出す。
+  const inbound = useInboundTransfers(isSignedIn, state.refresh);
+  const incoming = inbound.transfers.find((t) => t.domainId === domainId) ?? null;
   const { domain, loading, loadError, loadUnauthorized, running, feedback } =
     state;
 
@@ -41,6 +47,7 @@ export default function DomainDetailPage() {
   const renewable = domain ? canRenew(domain.status) : false;
   const busy = running !== null;
 
+
   if (isPending) {
     return (
       <div className="flex min-h-screen items-center justify-center">
@@ -50,10 +57,10 @@ export default function DomainDetailPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="flex min-h-screen flex-col bg-gray-50">
       <SiteHeader />
 
-      <main className="mx-auto max-w-3xl space-y-6 px-4 py-8">
+      <main className="w-full flex-1 mx-auto max-w-3xl space-y-6 px-4 py-8">
         <BackLink href="/dashboard" label="マイドメインに戻る" />
 
         {!isSignedIn ? (
@@ -126,9 +133,20 @@ export default function DomainDetailPage() {
               <>
                 <DomainOverview domain={domain} />
 
-                {!settingsEditable && (
+                {incoming && (
+                  <IncomingTransferCard
+                    transfer={incoming}
+                    running={inbound.running}
+                    feedback={inbound.feedback}
+                    onApprove={inbound.approve}
+                    onReject={inbound.reject}
+                  />
+                )}
+
+                {!settingsEditable && !incoming && (
                   <p className="rounded-lg border border-gray-200 bg-white p-3 text-sm text-gray-600">
-                    このドメインはいま手続き中か廃止済みのため、設定を変更できません。
+                    {statusHintOf(domain.status) ??
+                      "このドメインはいま手続き中のため、設定を変更できません。"}
                   </p>
                 )}
 
@@ -153,18 +171,12 @@ export default function DomainDetailPage() {
                 />
 
                 <TransferOutCard
-                  locked={isTransferLocked(domain.statuses ?? [])}
                   disabled={!settingsEditable || busy}
                   runningAuthInfo={running === "authInfo"}
-                  runningLock={running === "transferLock"}
                   authInfoFeedback={
                     feedback?.source === "authInfo" ? feedback : null
                   }
-                  lockFeedback={
-                    feedback?.source === "transferLock" ? feedback : null
-                  }
                   onUpdateAuthInfo={state.updateAuthInfo}
-                  onSetLock={state.setTransferLock}
                 />
 
                 <LifecycleCard

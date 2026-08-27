@@ -12,7 +12,7 @@ const footerLinks = [
       { label: "ドメインを検索する", href: "/search" },
       { label: "カートを見る", href: "/cart" },
       { label: "マイドメイン", href: "/dashboard" },
-      { label: "他社ドメインを移管する", href: "/transfer" },
+      { label: "他社のドメインをここへ移す", href: "/transfer" },
     ],
   },
   {
