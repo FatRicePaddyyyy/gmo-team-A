@@ -148,3 +148,46 @@ export function redemptionDaysLeft(params: {
  * 片方だけ変えると、同じ操作なのに選べる年数が食い違う。
  */
 export const RENEW_YEARS = [1, 2, 3, 5, 10] as const;
+
+/**
+ * 更新後の有効期限の上限。レジストリは「現在 + 10 年」を超える更新を
+ * 2004 (Parameter value range error) で拒否する。
+ * 選べない年数を出しておいて後から失敗させるより、最初から出さない。
+ */
+export const MAX_YEARS_FROM_NOW = 10;
+
+export function renewableYears(
+  expiresAt: string,
+  now: Date = new Date(),
+): readonly number[] {
+  const current = new Date(expiresAt);
+  if (Number.isNaN(current.getTime())) return RENEW_YEARS;
+
+  const limit = new Date(now);
+  limit.setFullYear(limit.getFullYear() + MAX_YEARS_FROM_NOW);
+
+  return RENEW_YEARS.filter((years) => {
+    const after = new Date(current);
+    after.setFullYear(after.getFullYear() + years);
+    return after.getTime() <= limit.getTime();
+  });
+}
+
+/**
+ * RGP（Registry Grace Period）の状態。レジストリは英語のコードを返すので、
+ * そのまま出しても何のことか分からない。
+ * 「いま何が起きていて、自分は何をすべきか」が分かる言葉にする。
+ */
+export const RGP_STATUS_LABELS: Record<string, string> = {
+  addPeriod: "取得直後（取得から数日間）",
+  autoRenewPeriod: "自動更新の直後",
+  renewPeriod: "更新の直後",
+  transferPeriod: "移管の直後",
+  redemptionPeriod: "廃止後の猶予期間（まだ戻せます）",
+  pendingRestore: "復旧の手続き中",
+  pendingDelete: "削除待ち（もう戻せません）",
+};
+
+export function rgpStatusLabelOf(status: string): string {
+  return RGP_STATUS_LABELS[status] ?? status;
+}

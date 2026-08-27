@@ -117,7 +117,7 @@ export function useDomainDetail(domainId: string, enabled: boolean) {
           tone: "error",
           source: kind,
           message:
-            "レジストリが変更を受け付けましたが、まだ反映されていません。時間をおいて「最新にする」で確認してください。反映されない場合はレジストリ側の制限が考えられます。",
+            "レジストリは変更を受け付けましたが、実際には反映されませんでした。このレジストリが未対応の設定である可能性が高く、待っても変わりません。設定が必要な場合はサポートへご連絡ください。",
         });
         setRunning(null);
         return false;
