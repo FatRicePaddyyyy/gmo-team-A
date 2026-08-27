@@ -25,7 +25,9 @@ const RequestSchema = z.object({
   // Issue #76: ネームサーバーもホスト名なので、ドメイン名と同じ形式で検証する。
   // ここだけ素通りだと、日本語や打ち間違いがレジストリまで届いて
   // referenced_object_not_found など理由の分かりにくいエラーになる。
-  nameServers: z.array(domainNameSchema()).optional(),
+  // 台数の上限 (EPP 一般の 13) はフロントも見ているが、DevTools で強引に
+  // 増やされたときの受け皿としてここでも弾く。
+  nameServers: z.array(domainNameSchema()).max(13, "too_many_name_servers").optional(),
   addStatuses: z.array(ClientProhibitedStatus).optional(),
   remStatuses: z.array(ClientProhibitedStatus).optional(),
   chg: z.object({
