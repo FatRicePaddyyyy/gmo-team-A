@@ -26,6 +26,14 @@ export type DomainDetailResponse = DomainResponse & {
    */
   registryAvailable: boolean;
   /**
+   * 登録者の氏名。自社 DB の user から引く。
+   *
+   * レジストリの registrant は `C-01054F4E` のような内部 ID で、利用者には読めない。
+   * コンタクトは登録時に自社のユーザー情報から作っているので、氏名は DB 側にある。
+   * DB 由来なので、レジストリがメンテナンス中でも表示できる。
+   */
+  ownerName: string;
+  /**
    * レジストリに問い合わせられなかった理由（日本語）。
    * registryAvailable が true のときは null。
    *
@@ -65,11 +73,16 @@ export class DomainMapper {
   // info 用: DB + レジストリの詳細情報を合成
   // Swagger 上 required だが実装によって欠落しうるフィールド (contacts/nameservers/rgpStatus) は
   // Zod 応答スキーマを 500 で落とさないよう空値でフォールバックする。
-  static toDetailResponse(row: DomainRow, registryData: RegistryDomainResponse): DomainDetailResponse {
+  static toDetailResponse(
+    row: DomainRow,
+    registryData: RegistryDomainResponse,
+    ownerName: string,
+  ): DomainDetailResponse {
     return {
       ...DomainMapper.toResponse(row),
       registryAvailable: true,
       registryUnavailableReason: null,
+      ownerName,
       statuses: registryData.status ?? [],
       registrant: registryData.registrant ?? "",
       contacts: registryData.contacts ?? {},
@@ -93,11 +106,13 @@ export class DomainMapper {
   static toDetailResponseWithoutRegistry(
     row: DomainRow,
     reason: string,
+    ownerName: string,
   ): DomainDetailResponse {
     return {
       ...DomainMapper.toResponse(row),
       registryAvailable: false,
       registryUnavailableReason: reason,
+      ownerName,
       statuses: [],
       registrant: "",
       contacts: {},

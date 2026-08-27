@@ -48,6 +48,8 @@ const DomainSchema = z.object({
   autoRenew: z.boolean(),
   // GET と同じ形。update 直後は必ずレジストリに届いているので常に true。
   registryAvailable: z.boolean(),
+  // 登録者の氏名（自社 DB 由来）。レジストリの registrant は内部 ID なので画面には出さない。
+  ownerName: z.string(),
   registryUnavailableReason: z.string().nullable(),
   statuses: z.array(z.string()),
   registrant: z.string(),
