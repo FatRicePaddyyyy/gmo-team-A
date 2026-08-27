@@ -22,9 +22,9 @@ test.describe(
 
       const { fullDomain } = await setupInboundPending(page, "kitaqsign", "tr-in-c");
 
-      // incoming transfer カードが出ていることを確認
+      // incoming transfer カードが出ていることを確認 (承認ボタンで見る)
       await expect(
-        page.getByRole("heading", { name: "他のレジストラへの引き渡しを求められています" }),
+        page.getByRole("button", { name: "承認して引き渡す" }),
       ).toBeVisible({ timeout: 20_000 });
 
       // teama-2 側で cancel
@@ -44,7 +44,7 @@ test.describe(
         .click();
       await page.getByRole("tab", { name: "他のレジストラへ渡す" }).click();
       await expect(
-        page.getByRole("heading", { name: "他のレジストラへの引き渡しを求められています" }),
+        page.getByRole("button", { name: "承認して引き渡す" }),
       ).toHaveCount(0);
     });
   },

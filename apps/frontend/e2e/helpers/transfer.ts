@@ -235,14 +235,16 @@ export async function t2PollAndDrain(registry: Registry, maxRounds = 5): Promise
  * 事前条件: 既に上記いずれかのページを開いている前提。
  */
 export async function clickRefresh(page: Page): Promise<void> {
-  // ボタン名は「最新にする」(loading 中は「読み込み中...」に変わる)
-  const button = page.getByRole("button", { name: "最新にする" });
+  // ボタン名は「最新にする」(loading 中は「読み込み中...」に変わる)。
+  // 隣の InfoHint (Tooltip trigger) が aria-label="「最新にする」で何が更新されるか"
+  // で「最新にする」を含むため、exact: true でボタン本体だけを掴む。
+  const button = page.getByRole("button", { name: "最新にする", exact: true });
   await button.click();
   // ボタンが「読み込み中...」→「最新にする」に戻るまで待つのがもっとも堅実
   // (詳細ページでは loading=false になったら戻る)。ただし短時間で終わる画面も多いので
   // タイムアウトは緩めに。
   await page
-    .getByRole("button", { name: "読み込み中..." })
+    .getByRole("button", { name: "読み込み中...", exact: true })
     .waitFor({ state: "hidden", timeout: 10_000 })
     .catch(() => {
       // すでに読み込み中の表示が無いケース (超高速で終わった、またはそもそも出なかった)
@@ -318,7 +320,8 @@ export async function setupInboundPending(
   await page.getByText("お支払い方法の選択に進む").click();
   await expect(page).toHaveURL(/\/cart\/payment/);
   await page.getByRole("button", { name: /この内容で確定する/ }).click();
-  await expect(page).toHaveURL(/\/cart\/done/, { timeout: 15_000 });
+  // レジストリが遅いと create 呼び出しに数秒〜十数秒かかる。余裕を持たせる。
+  await expect(page).toHaveURL(/\/cart\/done/, { timeout: 30_000 });
 
   await page.goto("/dashboard");
   await page
@@ -334,18 +337,21 @@ export async function setupInboundPending(
 
   await t2TransferRequest(registry, fullDomain, authInfo);
 
-  // /dashboard に戻って「最新にする」を押す。
-  // dashboard の refresh は inbound 一覧を GET する前に poll-now を叩くため、
-  // これで backend cron 相当を発火 + 一覧再取得ができる。
-  // レジストリの transfer message が poll → DB 反映 → inbound 一覧
-  // 更新までの 1 cycle に収まらないことがあるので、間を空けて 2 回押す。
-  await page.goto("/dashboard");
-  await clickRefresh(page);
-  await page.waitForTimeout(1_000);
-  await clickRefresh(page);
+  // ヘルパー内では前提作りとして backend cron を直接発火して drain を確定させる。
+  // spec 本文 (承認・却下・取消の反映確認) は clickRefresh を使うが、
+  // ここは「テストの前提」を作る場所なので、レジストリ↔backend の poll cycle を
+  // 確実に完了させるほうを優先する。
+  //
+  // cron 1 回では、レジストリの transfer message が poll → DB 反映 → inbound 一覧
+  // 更新までの 1 cycle に収まらないことがある。3 回発火 + 少し間を空けて確実に吸収する。
+  await fireCron();
+  await page.waitForTimeout(1_500);
+  await fireCron();
+  await page.waitForTimeout(1_500);
+  await fireCron();
 
-  // 詳細ページに戻って、「他のレジストラへ渡す」タブに incoming transfer カードが
-  // 出るのを待つ
+  // 詳細ページを開いて「他のレジストラへ渡す」タブに移動する。
+  await page.goto("/dashboard");
   await page
     .getByRole("link", { name: new RegExp(fullDomain.replace(".", "\\.")) })
     .click();

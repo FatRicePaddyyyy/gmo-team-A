@@ -168,7 +168,12 @@ export default function DomainDetailPage() {
                   variant="outline"
                   size="sm"
                   disabled={loading || busy}
-                  onClick={() => void state.refresh()}
+                  onClick={() => {
+                    // ドメイン本体だけでなく、引き渡し申請の一覧も取り直す。
+                    // ボタンの意図は「今の画面を最新に」なので、両方の情報を巻き込む。
+                    void state.refresh();
+                    void inbound.refresh();
+                  }}
                 >
                   <RefreshCw aria-hidden="true" />
                   {loading ? "読み込み中..." : "最新にする"}
