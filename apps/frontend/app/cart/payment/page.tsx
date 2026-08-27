@@ -13,7 +13,12 @@ import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { $createDomain } from "@/clients";
 import { callApi } from "@/shared/lib/api-result";
-import { loadConfirmedOrder, type ConfirmedOrder } from "@/shared/lib/order-store";
+import { isRetryableFailure } from "@/shared/lib/maintenance";
+import {
+  clearConfirmedOrder,
+  loadConfirmedOrder,
+  type ConfirmedOrder,
+} from "@/shared/lib/order-store";
 import { buildFlowSteps } from "@/shared/lib/progress-store";
 import { findTld } from "@/shared/lib/tld-catalog";
 import { PAYMENT_METHODS, type PaymentMethod } from "@/shared/lib/payment-methods";
@@ -42,6 +47,10 @@ export default function CartPaymentPage() {
   const [failures, setFailures] = useState<string[]>([]);
   // 401 のときだけログインし直す導線を出すため、理由まで持っておく。
   const [failureUnauthorized, setFailureUnauthorized] = useState(false);
+  // 「すでに登録されています」等、押し直しても直らない失敗が起きたか。
+  // order 自体は消さない（消すと NoOrderNotice に切り替わり、下の失敗メッセージが
+  // 表示されないまま消えてしまうため）。表示はそのままに、確定ボタンだけ止める。
+  const [orderInvalidated, setOrderInvalidated] = useState(false);
 
   useEffect(() => {
     setOrder(loadConfirmedOrder());
@@ -120,7 +129,11 @@ export default function CartPaymentPage() {
         );
         return result.success
           ? null
-          : { message: `${fullName}: ${result.error}`, unauthorized: result.unauthorized };
+          : {
+              message: `${fullName}: ${result.error}`,
+              rawError: result.error,
+              unauthorized: result.unauthorized,
+            };
       }),
     );
     setSubmitting(false);
@@ -128,9 +141,17 @@ export default function CartPaymentPage() {
     const failed = failedResults.map((failure) => failure.message);
     if (failed.length > 0) {
       setFailureUnauthorized(failedResults.some((failure) => failure.unauthorized));
-      // 部分失敗のケースは payment ページに残ってエラー表示。ConfirmedOrder は消さない
-      // （ユーザーが「別のドメインを試す」を選ぶかもしれず、確定情報を失うと戻せない）
       setFailures(failed);
+      // セッション切れ・メンテナンス・通信断は時間をおけば直るので、注文を残して
+      // 再試行できるようにする。「すでに登録されています」のような直らない失敗が
+      // 1件でもあれば、再試行させても無駄なので注文を消して別の名前を探させる。
+      const hasNonRetryable = failedResults.some(
+        (failure) => !failure.unauthorized && !isRetryableFailure(failure.rawError),
+      );
+      if (hasNonRetryable) {
+        clearConfirmedOrder();
+        setOrderInvalidated(true);
+      }
       return;
     }
     // 全件成功。取得完了ページで「何が取れたか」を出すため、ConfirmedOrder は
@@ -215,32 +236,51 @@ export default function CartPaymentPage() {
                 <li key={failure}>{failure}</li>
               ))}
             </ul>
-            <Link
-              href="/dashboard"
-              className="mt-2 inline-block text-sm font-semibold text-[var(--brand-dark)] underline underline-offset-2"
-            >
-              ダッシュボードへ進む
-            </Link>
+            {orderInvalidated ? (
+              <p className="mt-2 text-sm text-red-900">
+                この名前ではこれ以上お申し込みを進められません。別のドメイン名で探し直してください。
+              </p>
+            ) : (
+              <Link
+                href="/dashboard"
+                className="mt-2 inline-block text-sm font-semibold text-[var(--brand-dark)] underline underline-offset-2"
+              >
+                ダッシュボードへ進む
+              </Link>
+            )}
           </div>
         )}
 
         <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:justify-end">
-          <Button
-            variant="outline"
-            className="h-11 px-5"
-            nativeButton={false}
-            render={<Link href="/cart/complete" />}
-          >
-            確認画面に戻る
-          </Button>
-          <Button
-            className="h-11 px-6 text-white"
-            style={{ background: "var(--brand)" }}
-            onClick={handleConfirm}
-            disabled={submitting}
-          >
-            {submitting ? "登録中..." : "この内容で確定する"}
-          </Button>
+          {orderInvalidated ? (
+            <Button
+              className="h-11 px-6 text-white"
+              style={{ background: "var(--brand)" }}
+              nativeButton={false}
+              render={<Link href="/" />}
+            >
+              ドメインを探し直す
+            </Button>
+          ) : (
+            <>
+              <Button
+                variant="outline"
+                className="h-11 px-5"
+                nativeButton={false}
+                render={<Link href="/cart/complete" />}
+              >
+                確認画面に戻る
+              </Button>
+              <Button
+                className="h-11 px-6 text-white"
+                style={{ background: "var(--brand)" }}
+                onClick={handleConfirm}
+                disabled={submitting}
+              >
+                {submitting ? "登録中..." : "この内容で確定する"}
+              </Button>
+            </>
+          )}
         </div>
       </main>
 
