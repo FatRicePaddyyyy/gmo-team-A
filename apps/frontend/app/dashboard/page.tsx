@@ -105,7 +105,11 @@ export default function DashboardPage() {
                   </p>
                   <p className="mt-1 text-sm text-gray-700">
                     いま他の事業者で管理しているドメインを、この画面でまとめて管理できるようになります。
-                    移管元で発行した認証コードが必要です。
+                    移管元で発行した
+                    <GlossaryTerm description={GLOSSARY.authCode.description}>
+                      {GLOSSARY.authCode.term}
+                    </GlossaryTerm>
+                    が必要です。
                   </p>
                 </div>
               </div>

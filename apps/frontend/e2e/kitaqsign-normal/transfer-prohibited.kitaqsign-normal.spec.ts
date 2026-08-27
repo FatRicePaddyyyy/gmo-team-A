@@ -9,7 +9,7 @@ import { login, loginAndExpectDashboard } from "../helpers/login";
  *
  * 期待挙動:
  *   owner が自分のドメインを検索・購入 → 詳細ページの「保護」タブで
- *   「他社への移管を禁止する」トグルを ON → 別ユーザーが /transfer から
+ *   「他のレジストラへの移管を禁止する」トグルを ON → 別ユーザーが /transfer から
  *   同ドメインへの移管を申請 →
  *     - HTTP 409 相当 (フロントは「移管が禁止されています」の日本語アラートで見せる)
  *     - backend の transfers テーブルには pending 行が入らない (事前チェックで弾かれる)
@@ -52,14 +52,14 @@ test.describe(
       await page.getByRole("button", { name: /この内容で確定する/ }).click();
       await expect(page).toHaveURL(/\/cart\/done/, { timeout: 15_000 });
 
-      // 2. マイドメイン → 詳細ページ → 「保護」タブ → 「他社への移管を禁止する」ON → 保存
+      // 2. マイドメイン → 詳細ページ → 「保護」タブ → 「他のレジストラへの移管を禁止する」ON → 保存
       await page.goto("/dashboard");
       await page
         .getByRole("link", { name: new RegExp(fullDomain.replace(".", "\\.")) })
         .click();
       await page.getByRole("tab", { name: "保護" }).click();
       await page
-        .getByRole("checkbox", { name: /他社への移管を禁止する/ })
+        .getByRole("checkbox", { name: /他のレジストラへの移管を禁止する/ })
         .check();
       await page.getByRole("button", { name: "保護設定を保存する" }).click();
 

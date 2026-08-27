@@ -10,6 +10,8 @@ import { ConfirmAction } from "@/components/confirm-action";
 import { FeedbackBanner } from "@/components/feedback-banner";
 import { InfoHint } from "@/components/info-hint";
 import { formatDate } from "@/shared/lib/format-date";
+import { GlossaryTerm } from "@/components/glossary-term";
+import { GLOSSARY } from "@/shared/lib/glossary";
 import type { useTransferRequests } from "../_hooks/use-transfer-requests.hook";
 import {
   isApproved,
@@ -32,7 +34,10 @@ export function TransferList({ state }: TransferListProps) {
     <section className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="font-heading text-xl font-bold text-gray-900">
-          申請中の移管
+          申請中の
+          <GlossaryTerm description={GLOSSARY.transfer.description}>
+            {GLOSSARY.transfer.term}
+          </GlossaryTerm>
         </h2>
         <div className="flex items-center gap-1">
           <Button
