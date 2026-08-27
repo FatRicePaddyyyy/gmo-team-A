@@ -126,6 +126,37 @@ export function canUpdateLocks(status: string): boolean {
   return !isDeleted(status) && !status.startsWith("pending");
 }
 
+/**
+ * ある操作が「保護タブでロックされているために出来ない」なら、
+ * ユーザーに「なぜ操作できないか + 解除方法」を返す。ロックが原因でなければ null。
+ *
+ * clientDeleteProhibited などは domain.status (DB カラム) には出ないので、
+ * これを説明しないと「タブを開いても何も出ない」「ボタンだけ消えている」ように見え、
+ * 誰も理由が分からなくなる。
+ *
+ * 文言に「保護タブ」と書くのは、この文言を出している画面自体がタブ UI で、
+ * 隣に「保護」タブがあるため。他の場所から呼ぶときは書き換える。
+ */
+const LOCK_REASONS: Record<string, string> = {
+  clientDeleteProhibited:
+    "「保護」タブで廃止を禁止する設定にしているため、このドメインを廃止できません。廃止するには先に「保護」タブで解除してください。",
+  clientRenewProhibited:
+    "「保護」タブで更新を禁止する設定にしているため、有効期限を延ばせません。延長するには先に「保護」タブで解除してください。",
+  clientUpdateProhibited:
+    "「保護」タブで設定変更を禁止する設定にしているため、この操作はできません。変更するには先に「保護」タブで解除してください。",
+  clientTransferProhibited:
+    "「保護」タブで他のレジストラへの移管を禁止する設定にしているため、AuthCode の再発行はできません。移管するには先に「保護」タブで解除してください。",
+  clientHold:
+    "「保護」タブでサイト掲載を止める設定にしているため、この操作はできません。",
+};
+
+export function lockReason(
+  lock: keyof typeof LOCK_REASONS,
+  statuses: readonly string[] | undefined,
+): string | null {
+  return hasLock(statuses, lock) ? LOCK_REASONS[lock] : null;
+}
+
 
 /**
  * 廃止したドメインが復旧できなくなるまでの残り日数。

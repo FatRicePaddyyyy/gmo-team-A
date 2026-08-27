@@ -21,6 +21,7 @@ import {
   canRestore,
   canUpdateLocks,
   canUpdateSettings,
+  lockReason,
   statusHintOf,
 } from "../_lib/domain-status";
 import { DomainOverview } from "./_parts/domain-overview";
@@ -234,7 +235,10 @@ export default function DomainDetailPage() {
                     />
                   ) : (
                     <p className="rounded-lg border border-gray-200 bg-white p-4 text-sm text-gray-600">
-                      {statusHintOf(domain.status) ??
+                      {/* clientRenewProhibited は status に出ないので、ロック起因なら
+                          先に「保護タブで解除して」の導線を出す。 */}
+                      {lockReason("clientRenewProhibited", domain.statuses) ??
+                        statusHintOf(domain.status) ??
                         "このドメインはいま延長できない状態です。"}
                     </p>
                   )}
@@ -255,7 +259,8 @@ export default function DomainDetailPage() {
                 <TabsContent value="ns" className="space-y-4">
                   {!settingsEditable && !registryDown && (
                     <p className="rounded-lg border border-gray-200 bg-white p-3 text-sm text-gray-600">
-                      {statusHintOf(domain.status) ??
+                      {lockReason("clientUpdateProhibited", domain.statuses) ??
+                        statusHintOf(domain.status) ??
                         "このドメインはいま手続き中のため、設定を変更できません。"}
                     </p>
                   )}
@@ -288,7 +293,8 @@ export default function DomainDetailPage() {
 
                   {!settingsEditable && !incoming && !registryDown && (
                     <p className="rounded-lg border border-gray-200 bg-white p-3 text-sm text-gray-600">
-                      {statusHintOf(domain.status) ??
+                      {lockReason("clientUpdateProhibited", domain.statuses) ??
+                        statusHintOf(domain.status) ??
                         "このドメインはいま手続き中のため、設定を変更できません。"}
                     </p>
                   )}
@@ -326,6 +332,16 @@ export default function DomainDetailPage() {
                 </TabsContent>
 
                 <TabsContent value="lifecycle" className="space-y-4">
+                  {/* clientDeleteProhibited は domain.status に出ないので、
+                       LifecycleCard がカードを消しても statusHintOf からは理由を出せない。
+                       保護タブでロックしていることを明示して、解除導線を示す。 */}
+                  {!canDelete(domain.status, domain.statuses) &&
+                    !canRestore(domain.status) &&
+                    lockReason("clientDeleteProhibited", domain.statuses) && (
+                      <p className="rounded-lg border border-gray-200 bg-white p-3 text-sm text-gray-600">
+                        {lockReason("clientDeleteProhibited", domain.statuses)}
+                      </p>
+                    )}
                   <LifecycleCard
                     domainName={domain.name}
                     canDelete={canDelete(domain.status, domain.statuses)}
