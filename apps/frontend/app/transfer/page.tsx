@@ -34,7 +34,7 @@ export default function TransferPage() {
       <SiteHeader />
 
       <main className="w-full flex-1 mx-auto max-w-3xl space-y-8 px-4 py-8">
-        <BackLink href="/dashboard" label="マイドメインに戻る" />
+        {isSignedIn && <BackLink href="/dashboard" label="マイドメインに戻る" />}
 
         <div>
           {/* 「レジストラ」は初見では通じないので、その場で読める説明を添える (Issue #91) */}
@@ -119,7 +119,7 @@ export default function TransferPage() {
           </div>
         )}
 
-        <BackLink href="/dashboard" label="マイドメインに戻る" />
+        {isSignedIn && <BackLink href="/dashboard" label="マイドメインに戻る" />}
       </main>
 
       <SiteFooter />
