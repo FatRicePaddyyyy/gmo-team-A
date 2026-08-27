@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { toast } from "sonner";
 import { Check, Copy, Eye, EyeOff, KeyRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -74,6 +75,15 @@ export function TransferOutCard({
     try {
       await navigator.clipboard.writeText(issuedAuthInfo);
       setCopied(true);
+      // コピーで「次に何をすればいいか」を右下トーストで伝える。
+      // 認証コードを渡した後の相手側の申請 → 承認、という流れを事前に見せておく。
+      toast.success("認証コードをコピーしました", {
+        description:
+          "移管先のレジストラに伝えて申請してもらうと、この画面に承認ボタンが出ます。",
+        // 次の一手の案内はグローバルな 4 秒だと読み切る前に消える。
+        // このトーストだけ長めに置く。
+        duration: 15_000,
+      });
       // 一定時間で「コピー済み」表示を戻す。UX 上「押した→反応」が伝われば良く、
       // 何秒もチェックのままにしておく必要はない
       window.setTimeout(() => setCopied(false), 2000);
