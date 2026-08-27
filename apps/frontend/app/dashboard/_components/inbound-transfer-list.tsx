@@ -38,7 +38,11 @@ export function InboundTransferList({ state }: InboundTransferListProps) {
     <section className="space-y-4">
       <div>
         <h2 className="font-heading text-xl font-bold text-gray-900">
-          あなたのドメインへの移管申請
+          あなたのドメインへの
+          <GlossaryTerm description={GLOSSARY.transfer.description}>
+            {GLOSSARY.transfer.term}
+          </GlossaryTerm>
+          申請
         </h2>
         <p className="mt-1 text-sm text-gray-600">
           他の

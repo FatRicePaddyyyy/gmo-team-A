@@ -49,7 +49,11 @@ export default function TransferPage() {
           </h1>
           <p className="mt-2 text-sm text-gray-600">
             いま他の事業者で管理しているドメインを、こちらへ引き取ります。
-            引き取るには移管元の管理画面で発行した「認証コード」が必要で、
+            引き取るには移管元の管理画面で発行した
+            <GlossaryTerm description={GLOSSARY.authCode.description}>
+              {GLOSSARY.authCode.term}
+            </GlossaryTerm>
+            が必要で、
             現在の管理者が承認するまで完了しません。数日かかることもあります。
           </p>
 

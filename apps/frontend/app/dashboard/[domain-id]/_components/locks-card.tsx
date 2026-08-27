@@ -30,8 +30,8 @@ interface LockOption {
 const LOCK_OPTIONS: readonly LockOption[] = [
   {
     key: "clientTransferProhibited",
-    label: "他社への移管を禁止する",
-    hint: "第三者が勝手にドメインを他社へ移せなくなります。乗っ取り対策として推奨。",
+    label: "他のレジストラへの移管を禁止する",
+    hint: "第三者が勝手にドメインを他のレジストラへ移せなくなります。乗っ取り対策として推奨。",
   },
   {
     key: "clientDeleteProhibited",

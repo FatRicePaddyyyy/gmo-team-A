@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { FeedbackBanner } from "@/components/feedback-banner";
+import { GlossaryTerm } from "@/components/glossary-term";
+import { GLOSSARY } from "@/shared/lib/glossary";
 import type { DetailFeedback } from "../_hooks/use-domain-detail.hook";
 
 /** バックエンド (PUT /secure/domains/:id) の chg.authInfo は 1〜64 文字 */
@@ -88,7 +90,11 @@ export function TransferOutCard({
             このドメインを他のレジストラへ渡す
           </h2>
           <p className="mt-1 text-sm text-gray-600">
-            このドメインを他の事業者に引っ越すための設定です。渡すには、ここで発行した認証コードを移管先の事業者に伝えます。
+            このドメインを他の事業者に引っ越すための設定です。渡すには、ここで発行した
+            <GlossaryTerm description={GLOSSARY.authCode.description}>
+              {GLOSSARY.authCode.term}
+            </GlossaryTerm>
+            を移管先の事業者に伝えます。
           </p>
         </div>
 
