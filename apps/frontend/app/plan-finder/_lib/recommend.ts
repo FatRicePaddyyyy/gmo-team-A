@@ -12,7 +12,6 @@ import {
   findTld,
   formatYen,
   recommendedTldFor,
-  WHOIS_LESSON,
   type TldInfo,
 } from "@/shared/lib/tld-catalog";
 
@@ -29,9 +28,7 @@ export interface QuizAnswers {
   scene?: Scene;
   /** Q2: 法人登記が済んでいるか（Q1 が company のときだけ聞く） */
   registered?: YesNo;
-  /** Q3: 個人情報を公開したくないか */
-  privacy?: YesNo;
-  /** Q4: 乗っ取り・誤操作が心配か */
+  /** Q3: 乗っ取り・誤操作が心配か */
   security?: YesNo;
 }
 
@@ -107,24 +104,6 @@ export const QUESTIONS: Question[] = [
     shouldAsk: (answers) => answers.scene === "company",
   },
   {
-    id: "privacy",
-    title: "氏名や住所を、できるだけ公開したくないですか？",
-    help: "ドメインを取ると登録者の氏名・住所・電話番号がインターネットに公開されます（Whois）。",
-    options: [
-      {
-        value: "yes",
-        label: "公開したくない",
-        description: "自分の情報の代わりに、代行会社の情報を出したい",
-      },
-      {
-        value: "no",
-        label: "公開されても構わない",
-        description: "会社の所在地など、もともと公開している情報を使う",
-      },
-    ],
-    shouldAsk: () => true,
-  },
-  {
     id: "security",
     title: "乗っ取りや、うっかり操作が心配ですか？",
     help: "ドメインを他人に移されたり、自分で消してしまうと、サイトもメールも止まります。",
@@ -184,7 +163,7 @@ export function purposeFromAnswers(answers: QuizAnswers): Purpose | null {
  * おすすめのオプション
  * ------------------------------------------------------------------ */
 
-export type PlanOptionId = "diagnosis" | "whois-proxy" | "protection";
+export type PlanOptionId = "diagnosis" | "protection";
 
 export interface PlanOption {
   id: PlanOptionId;
@@ -201,12 +180,6 @@ export const PLAN_OPTIONS: Record<PlanOptionId, PlanOption> = {
     price: "無料",
     summary:
       "ドメインの設定に問題がないかを自動で点検します。メールが届かない・サイトが表示されないといった、気づきにくい設定ミスを見つけられます。",
-  },
-  "whois-proxy": {
-    id: "whois-proxy",
-    name: "Whois 情報公開代行",
-    price: "無料",
-    summary: WHOIS_LESSON.body,
   },
   protection: {
     id: "protection",
@@ -269,14 +242,6 @@ function optionsFor(answers: QuizAnswers): RecommendedOption[] {
       reason: "無料で使えて損がないため、どなたにもおすすめしています。",
     },
   ];
-
-  if (answers.privacy === "yes") {
-    recommended.push({
-      ...PLAN_OPTIONS["whois-proxy"],
-      reason:
-        "「氏名や住所を公開したくない」と答えたためです。無料なので、迷ったら使う設定のままにしてください。",
-    });
-  }
 
   if (answers.security === "yes" || answers.scene === "company" || answers.scene === "shop") {
     recommended.push({

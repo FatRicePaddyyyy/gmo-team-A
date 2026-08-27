@@ -215,18 +215,20 @@ export class RegistryBridge {
     return { success: false, data: null, error: "unsupported_tld" };
   }
 
+  // names は複数まとめて渡せる（レジストリの Swagger 上 body.names は配列）。
+  // 同じ registry 宛のチェックをまとめて1リクエストにするために使う（Issue #45 B-3）。
   static async check({
-    name,
+    names,
     registry,
     env,
   }: {
-    name: string;
+    names: string[];
     registry: Registry;
     env: CloudflareBindings;
   }): Promise<Result<DomainCheckResponse>> {
     try {
       const { data, error, response } = await getClient(registry, env).POST("/api/v1/epp/domains/check", {
-        body: { names: [name] },
+        body: { names },
       });
       if (response.status === 422) {return { success: false, data: null, error: "invalid_tld" };}
       if (error) {return { success: false, data: null, error: attachDetail("invalid_registry_response", extractResultMessage(error)) };}

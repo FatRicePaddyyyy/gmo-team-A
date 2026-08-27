@@ -1,11 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { AlertCircle, ArrowRight } from "lucide-react";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DomainSearchResult, type DomainResult } from "@/components/domain-search-result";
-import { PurposePicker } from "@/components/purpose-picker";
+import { FeedbackBanner } from "@/components/feedback-banner";
 import { useCart } from "@/shared/hooks/use-cart.hook";
 import { useProgress } from "@/shared/hooks/use-progress.hook";
 import { DecisionAxes } from "./decision-axes";
@@ -57,26 +56,11 @@ export function SearchResultSection({
     <>
       {error && (
         <div className="mx-auto max-w-4xl px-4 pt-6">
-          <Alert variant="destructive">
-            <AlertCircle aria-hidden="true" />
-            <AlertTitle>検索できませんでした</AlertTitle>
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
+          <FeedbackBanner tone="error" message={error} />
         </div>
       )}
 
-      {/*
-        用途は取得可否に直結するので検索直後に1回だけ聞く。
-        診断（/plan-finder）で決まっている場合は `PurposePicker` 側が
-        質問ではなく確認の1行になるため、同じことを2回聞かれることはない。
-      */}
-      {hasSearched && !loading && !error && (
-        <div className="mx-auto max-w-4xl px-4 pt-6">
-          <PurposePicker value={state.purpose} onChange={setPurpose} showQuizLink />
-        </div>
-      )}
-
-      <section aria-label="検索結果" aria-live="polite" aria-busy={loading}>
+      <section id="search-results" aria-label="検索結果" aria-live="polite" aria-busy={loading}>
         {/* 状況を必ず1文で読み上げる（視覚的にはスケルトン／結果本体で伝える） */}
         <p className="sr-only">
           {loading

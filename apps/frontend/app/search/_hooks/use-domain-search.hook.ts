@@ -23,13 +23,19 @@ export function useDomainSearch() {
   const latestRequestIdRef = useRef(0);
 
   const search = useCallback(
-    async (value: string) => {
+    async (value: string, options?: { syncUrl?: boolean }) => {
       const requestId = latestRequestIdRef.current + 1;
       latestRequestIdRef.current = requestId;
 
       setQuery(value);
-      // 学習は行き来する行為。リロード・戻る・共有で同じ結果に戻れるよう URL を合わせる
-      router.replace(`/search?q=${encodeURIComponent(value)}`, { scroll: false });
+      // 学習は行き来する行為。リロード・戻る・共有で同じ結果に戻れるよう URL を合わせる。
+      // ただし URL の ?q= から初期表示する場合は既に URL が正しいので呼ばない
+      // （呼ぶと、この環境では replace がフルリロードを起こし、マウント→search→replace→
+      // リロード…の無限ループになる）。
+      // 検索がトップページ（/）になったため、? q= もルートに書く。
+      if (options?.syncUrl !== false) {
+        router.replace(`/?q=${encodeURIComponent(value)}`, { scroll: false });
+      }
       setLoading(true);
       setError(null);
 

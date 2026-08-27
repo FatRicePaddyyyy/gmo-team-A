@@ -18,43 +18,17 @@ export interface CartItem {
   tld: string;
 }
 
-/**
- * 申し込み時の設定。取り消しにくい選択なので、選んだ値をローカル状態で終わらせず
- * ここに保存して確認画面・完了画面から同じ値を読む。
- */
-export interface CartSettings {
-  /** Whois 情報公開代行を使うか（既定はオン＝安全側） */
-  whoisProxy: boolean;
-  /** 自動更新をオンにするか（既定はオン＝安全側） */
-  autoRenew: boolean;
-}
-
-export const DEFAULT_CART_SETTINGS: CartSettings = {
-  whoisProxy: true,
-  autoRenew: true,
-};
-
 const STORAGE_KEY = "manabi-domain:cart";
-const SETTINGS_KEY = "manabi-domain:cart-settings";
 
 /** SSR と初回レンダリングで同じ参照を返すための空配列 */
 const EMPTY: CartItem[] = [];
 
 let items: CartItem[] = EMPTY;
-let settings: CartSettings = DEFAULT_CART_SETTINGS;
 let hydrated = false;
 const listeners = new Set<() => void>();
 
 function emit(): void {
   for (const listener of listeners) listener();
-}
-
-function persistSettings(): void {
-  try {
-    localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
-  } catch (error) {
-    console.error("設定の保存に失敗しました:", error);
-  }
 }
 
 function persist(): void {
@@ -94,37 +68,10 @@ export const cartStore = {
   },
 
   /** クライアントで一度だけ localStorage から復元する */
-  getSettings(): CartSettings {
-    return settings;
-  },
-
-  getServerSettings(): CartSettings {
-    return DEFAULT_CART_SETTINGS;
-  },
-
-  setSettings(patch: Partial<CartSettings>): void {
-    const next = { ...settings, ...patch };
-    if (next.whoisProxy === settings.whoisProxy && next.autoRenew === settings.autoRenew) return;
-    settings = next;
-    persistSettings();
-    emit();
-  },
-
   hydrate(): void {
     if (hydrated) return;
     hydrated = true;
     try {
-      const rawSettings = localStorage.getItem(SETTINGS_KEY);
-      if (rawSettings) {
-        const parsedSettings: unknown = JSON.parse(rawSettings);
-        if (typeof parsedSettings === "object" && parsedSettings !== null) {
-          const candidate = parsedSettings as Record<string, unknown>;
-          settings = {
-            whoisProxy: candidate.whoisProxy !== false,
-            autoRenew: candidate.autoRenew !== false,
-          };
-        }
-      }
       const raw = localStorage.getItem(STORAGE_KEY);
       if (!raw) {
         emit();

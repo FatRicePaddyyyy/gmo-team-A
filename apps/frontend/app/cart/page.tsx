@@ -13,7 +13,6 @@ import { useCart } from "@/shared/hooks/use-cart.hook";
 import { useProgress } from "@/shared/hooks/use-progress.hook";
 import { saveConfirmedOrder } from "@/shared/lib/order-store";
 import { buildFlowSteps } from "@/shared/lib/progress-store";
-import { WhoisConsent } from "./_components/whois-consent";
 import {
   checkEligibility,
   findTld,
@@ -28,14 +27,9 @@ const CART_STEPS = buildFlowSteps("review");
 
 export default function CartPage() {
   const router = useRouter();
-  const { items, remove, settings, setSettings } = useCart();
+  const { items, remove } = useCart();
   const { state: progress } = useProgress();
-  const [acknowledged, setAcknowledged] = useState(false);
-  const [showConsentError, setShowConsentError] = useState(false);
   const [showEligibilityError, setShowEligibilityError] = useState(false);
-
-  const whoisProxy = settings.whoisProxy;
-  const autoRenew = settings.autoRenew;
 
   const lines = useMemo(
     () =>
@@ -67,15 +61,9 @@ export default function CartPage() {
       setShowEligibilityError(true);
       return;
     }
-    // 危険側（代行なし）を選んだときだけ、明示的な確認を求める
-    if (!whoisProxy && !acknowledged) {
-      setShowConsentError(true);
-      return;
-    }
 
     saveConfirmedOrder({
       items: items.map((item) => ({ name: item.name, tld: item.tld })),
-      settings,
       purpose: progress.purpose,
       confirmedAt: new Date().toISOString(),
     });
@@ -230,44 +218,6 @@ export default function CartPage() {
             <LearningNote title={RENEWAL_LESSON.title}>
               <p>{RENEWAL_LESSON.body}</p>
             </LearningNote>
-
-            {/* 更新の設定を選ぶ、まさにその場で出す勘違い1つだけ */}
-            <LearningNote title={MISCONCEPTION.renewal.title} tone="warn">
-              <p>{MISCONCEPTION.renewal.body}</p>
-            </LearningNote>
-
-            <label className="flex items-start gap-3 rounded-lg border border-border bg-white px-4 py-3 text-sm text-gray-900">
-              <input
-                type="checkbox"
-                checked={autoRenew}
-                onChange={(e) => {
-                  setSettings({ autoRenew: e.target.checked });
-                }}
-                className="mt-0.5 size-5 shrink-0 accent-[var(--brand)]"
-              />
-              <span>
-                <span className="font-semibold">自動更新をオンにする（推奨）</span>
-                <span className="mt-1 block text-gray-600">
-                  オフにすると、毎年ご自身で更新手続きが必要です。忘れるとドメインは失効します。
-                </span>
-              </span>
-            </label>
-
-            <WhoisConsent
-              proxyEnabled={whoisProxy}
-              purpose={progress.purpose}
-              onProxyChange={(value) => {
-                setSettings({ whoisProxy: value });
-                if (value) setShowConsentError(false);
-              }}
-              acknowledged={acknowledged}
-              onAcknowledgedChange={(value) => {
-                setAcknowledged(value);
-                if (value) setShowConsentError(false);
-              }}
-              showError={showConsentError}
-              errorId="whois-consent-error"
-            />
 
             {/* 申し込み確認の直前に出す勘違い1つだけ */}
             <LearningNote title={MISCONCEPTION.publish.title} tone="info">

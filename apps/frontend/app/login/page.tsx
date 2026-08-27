@@ -1,17 +1,16 @@
 "use client";
 
-import Link from "next/link";
 import { useId, useState } from "react";
 import { Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { FeedbackBanner } from "@/components/feedback-banner";
 import { Input } from "@/components/ui/input";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { usePasswordLogin } from "./_hooks/use-password-login.hook";
 
 export default function LoginPage() {
-  const { register, handleSubmit, errors, onSubmit, isLoading, error, domainFailures } =
-    usePasswordLogin();
+  const { register, handleSubmit, errors, onSubmit, isLoading, error } = usePasswordLogin();
   const [showPassword, setShowPassword] = useState(false);
   const emailErrorId = useId();
   const passwordErrorId = useId();
@@ -90,14 +89,7 @@ export default function LoginPage() {
                 )}
               </div>
 
-              {error && (
-                <div
-                  role="alert"
-                  className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700"
-                >
-                  {error}
-                </div>
-              )}
+              {error && <FeedbackBanner tone="error" message={error} />}
 
               <Button
                 type="submit"
@@ -108,28 +100,6 @@ export default function LoginPage() {
                 {isLoading ? "ログイン中..." : "ログインする"}
               </Button>
             </form>
-
-            {domainFailures.length > 0 && (
-              <div
-                role="alert"
-                className="mt-6 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900"
-              >
-                <p className="font-semibold">
-                  ログインは完了しましたが、一部のドメインの登録に失敗しました。
-                </p>
-                <ul className="mt-1 list-disc space-y-1 pl-5">
-                  {domainFailures.map((failure) => (
-                    <li key={failure}>{failure}</li>
-                  ))}
-                </ul>
-                <Link
-                  href="/dashboard"
-                  className="mt-2 inline-block font-semibold underline underline-offset-2"
-                >
-                  ダッシュボードへ進む
-                </Link>
-              </div>
-            )}
 
             <div className="mt-6 space-y-2 border-t border-border pt-6 text-sm">
               <p className="text-gray-600">

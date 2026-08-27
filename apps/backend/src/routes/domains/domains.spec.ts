@@ -42,77 +42,62 @@ beforeEach(() => {
 // ─── check ───────────────────────────────────────────────────────────────────
 
 describe("POST /api/v1/public/domains/check", () => {
-  test("[正常系] 空きドメイン", async () => {
-    vi.spyOn(DomainService, "check").mockResolvedValue({
-      success: true,
-      data: { avail: true, registry: "kitaqsign" },
-      error: null,
-    });
+  test("[正常系] 複数ドメインの空き確認結果をまとめて返す", async () => {
+    vi.spyOn(DomainService, "checkBulk").mockResolvedValue([
+      { name: "example.com", avail: true, failed: false },
+      { name: "taken.com", avail: false, failed: false },
+    ]);
 
     const res = await checkDomainRouteHandler.request(
       "/api/v1/public/domains/check",
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: "example.com", registry: "kitaqsign" }),
+        body: JSON.stringify({ names: ["example.com", "taken.com"] }),
       },
       mockEnv,
     );
 
     expect(res.status).toBe(200);
     const json = await res.json() as any;
-    expect(json).toMatchObject({ success: true, data: { avail: true } });
+    expect(json).toMatchObject({
+      success: true,
+      data: {
+        results: [
+          { name: "example.com", avail: true, failed: false },
+          { name: "taken.com", avail: false, failed: false },
+        ],
+      },
+    });
   });
 
-  test("[正常系] 取得済みドメイン（avail: false）", async () => {
-    vi.spyOn(DomainService, "check").mockResolvedValue({
-      success: true,
-      data: { avail: false, registry: "kitaqsign" },
-      error: null,
-    });
+  test("[正常系] 確認できなかった項目は failed: true で返す", async () => {
+    vi.spyOn(DomainService, "checkBulk").mockResolvedValue([
+      { name: "example.com", avail: false, failed: true },
+    ]);
 
     const res = await checkDomainRouteHandler.request(
       "/api/v1/public/domains/check",
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: "taken.com", registry: "kitaqsign" }),
+        body: JSON.stringify({ names: ["example.com"] }),
       },
       mockEnv,
     );
 
     expect(res.status).toBe(200);
     const json = await res.json() as any;
-    expect(json).toMatchObject({ success: true, data: { avail: false } });
+    expect(json.data.results[0]).toMatchObject({ avail: false, failed: true });
   });
 
-  test("[異常系] 非対応TLD", async () => {
-    vi.spyOn(DomainService, "check").mockResolvedValue({
-      success: false,
-      data: null,
-      error: "unsupported_tld",
-    });
-
+  test("[異常系] namesが空配列", async () => {
     const res = await checkDomainRouteHandler.request(
       "/api/v1/public/domains/check",
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: "example.zzz" }),
-      },
-      mockEnv,
-    );
-
-    expect(res.status).toBe(400);
-  });
-
-  test("[異常系] nameが空", async () => {
-    const res = await checkDomainRouteHandler.request(
-      "/api/v1/public/domains/check",
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: "", registry: "kitaqsign" }),
+        body: JSON.stringify({ names: [] }),
       },
       mockEnv,
     );
