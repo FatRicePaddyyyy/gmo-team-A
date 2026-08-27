@@ -1,13 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useSession } from "@/auth-client";
 import { BackLink } from "@/components/back-link";
 import { Button } from "@/components/ui/button";
+import { ConnectionErrorNotice } from "@/components/connection-error-notice";
 import { FeedbackBanner } from "@/components/feedback-banner";
 import { GlossaryTerm } from "@/components/glossary-term";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
+import { useAuthStatus } from "@/shared/hooks/use-auth-status.hook";
 import { GLOSSARY } from "@/shared/lib/glossary";
 import { TransferList } from "./_components/transfer-list";
 import { TransferRequestForm } from "./_components/transfer-request-form";
@@ -15,8 +16,7 @@ import { useTransferRequests } from "./_hooks/use-transfer-requests.hook";
 import { useMyDomains } from "../dashboard/_hooks/use-my-domains.hook";
 
 export default function TransferPage() {
-  const { data: session, isPending } = useSession();
-  const isSignedIn = Boolean(session?.user);
+  const { isPending, isSignedIn, isConnectionError } = useAuthStatus();
   const state = useTransferRequests(isSignedIn);
   // 入力欄に「いま持っているドメイン」を出すためだけに使う
   const myDomains = useMyDomains(isSignedIn);
@@ -80,7 +80,9 @@ export default function TransferPage() {
           </p>
         </div>
 
-        {isSignedIn ? (
+        {isConnectionError ? (
+          <ConnectionErrorNotice />
+        ) : isSignedIn ? (
           <>
             {state.feedback && (
               <FeedbackBanner
