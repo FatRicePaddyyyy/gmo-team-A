@@ -39,13 +39,18 @@ test.describe("カート機能廃止後の購入フロー", () => {
   });
 
   test("「このドメインで進む」を押すと選んだドメインが確認画面に渡る", async ({ page }) => {
-    await page.goto("/?q=aa");
+    // 短い名前は実レジストリで既に取得済みで avail=false のことが多い。
+    // e2e-<ランダム> のような十中八九空いている名前を使う
+    const name = `e2e-nc-${Date.now()}${Math.floor(Math.random() * 1_000_000)
+      .toString()
+      .padStart(6, "0")}`;
+    await page.goto(`/?q=${name}`);
     await expect(page.getByRole("region", { name: "検索結果" })).toBeVisible();
 
-    // aa.com の「このドメインで進む」を押す。
-    // アクセシブルネームには sr-only の「（aa.com）」が付いている。
+    // <name>.com の「このドメインで進む」を押す。
+    // アクセシブルネームには sr-only の「（<name>.com）」が付いている。
     const proceedButton = page.getByRole("button", {
-      name: /このドメインで進む.*aa\.com/,
+      name: new RegExp(`このドメインで進む.*${name}\\.com`),
     });
     await expect(proceedButton).toBeVisible();
     await proceedButton.click();
@@ -54,12 +59,12 @@ test.describe("カート機能廃止後の購入フロー", () => {
     // 確定内容が引き継がれているかで検証する（保存先が変わっても要件は満たされる）。
     await page.goto("/cart/complete");
 
-    // 「確認したドメイン」の欄に aa と .com が並んで表示される
+    // 「確認したドメイン」の欄に <name> と .com が並んで表示される
     const confirmedSection = page.getByRole("region", {
       name: /確認したドメイン/,
     });
     await expect(confirmedSection).toBeVisible();
-    await expect(confirmedSection.getByText("aa", { exact: false })).toBeVisible();
+    await expect(confirmedSection.getByText(name, { exact: false })).toBeVisible();
     await expect(confirmedSection.getByText(".com", { exact: false })).toBeVisible();
   });
 });

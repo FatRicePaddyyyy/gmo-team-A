@@ -12,11 +12,7 @@ import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { $createDomain } from "@/clients";
 import { callApi } from "@/shared/lib/api-result";
-import {
-  clearConfirmedOrder,
-  loadConfirmedOrder,
-  type ConfirmedOrder,
-} from "@/shared/lib/order-store";
+import { loadConfirmedOrder, type ConfirmedOrder } from "@/shared/lib/order-store";
 import { buildFlowSteps } from "@/shared/lib/progress-store";
 import { findTld } from "@/shared/lib/tld-catalog";
 
@@ -90,14 +86,17 @@ export default function CartPaymentPage() {
         return result.success ? null : `${fullName}: ${result.error}`;
       }),
     );
-    clearConfirmedOrder();
     setSubmitting(false);
     const failed = results.filter((failure): failure is string => failure !== null);
     if (failed.length > 0) {
+      // 部分失敗のケースは payment ページに残ってエラー表示。ConfirmedOrder は消さない
+      // （ユーザーが「別のドメインを試す」を選ぶかもしれず、確定情報を失うと戻せない）
       setFailures(failed);
       return;
     }
-    router.push("/dashboard");
+    // 全件成功。取得完了ページで「何が取れたか」を出すため、ConfirmedOrder は
+    // ここでは消さず /cart/done 側で表示後に消す（clearConfirmedOrder は /cart/done 内）
+    router.push("/cart/done");
   };
 
   return (

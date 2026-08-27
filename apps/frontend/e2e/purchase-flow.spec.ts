@@ -63,12 +63,22 @@ test.describe("ログイン→検索→ドメイン取得のフルフロー", ()
     await expect(page).toHaveURL(/\/cart\/payment/);
     await page.getByRole("button", { name: /この内容で確定する/ }).click();
 
-    // 6. 取得成功でマイドメインへ。$createDomain が実 D1 に書き込む
-    await expect(page).toHaveURL(/\/dashboard/, { timeout: 15_000 });
+    // 6. 取得完了ページ（/cart/done）に遷移し、達成の演出が出る。
+    //    dashboard 直行だった旧フローの反対。ここに寄って初めて「取れた」実感を出す
+    await expect(page).toHaveURL(/\/cart\/done/, { timeout: 15_000 });
+    await expect(
+      page.getByRole("heading", { name: "ドメインを取得しました" }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("list", { name: "取得したドメイン" }).getByText(`${domainName}.com`),
+    ).toBeVisible();
+
+    // 7. 「マイドメインで管理する」で /dashboard へ
+    await page.getByText("マイドメインで管理する").click();
+    await expect(page).toHaveURL(/\/dashboard/);
     await expect(page.getByRole("heading", { name: "マイドメイン" })).toBeVisible();
 
-    // 7. 取得したドメインが一覧に載っている（レジストリのレスポンスや表示形式が
-    //    変わっても壊れにくいよう、フルネームの部分文字列で判定する）
+    // 8. 取得したドメインが一覧に載っている
     await expect(page.getByText(`${domainName}.com`)).toBeVisible();
   });
 });

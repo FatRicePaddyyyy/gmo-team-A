@@ -149,3 +149,73 @@ body {
     @apply font-sans;
   }
 }
+
+/* -------------------------------------------------------------------------- *
+ * ドメイン取得完了 (/cart/done) の演出。
+ * - 紙吹雪 (.brand-confetti-piece): 上から落ちながら回転して透明になる
+ * - チェックの pop-in (.brand-check-pop): 拡大しながら現れる
+ * - 取得ドメインの強調 (.brand-domain-highlight): 遅れてふわっと出す
+ * 全体で prefers-reduced-motion に配慮し、motion:reduce 時はアニメを止める。
+ * ------------------------------------------------------------------------- */
+@keyframes brand-confetti-fall {
+  0% {
+    transform: translateY(0) rotate(0deg);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(110vh) rotate(720deg);
+    opacity: 0;
+  }
+}
+
+@keyframes brand-check-pop {
+  0% {
+    transform: scale(0.4);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(1.1);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes brand-domain-rise {
+  0% {
+    transform: translateY(8px);
+    opacity: 0;
+  }
+  100% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.brand-confetti-piece {
+  animation-name: brand-confetti-fall;
+  animation-timing-function: cubic-bezier(0.2, 0.6, 0.4, 1);
+  animation-iteration-count: 1;
+  animation-fill-mode: forwards;
+}
+
+.brand-check-pop {
+  animation: brand-check-pop 0.5s cubic-bezier(0.2, 0.9, 0.4, 1.2) both;
+}
+
+.brand-domain-highlight {
+  animation: brand-domain-rise 0.5s ease-out 0.3s both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* 動きは止めるがフェードだけ残す。完全に消すと状態変化が伝わりにくい */
+  .brand-check-pop,
+  .brand-domain-highlight {
+    animation: none;
+  }
+  .brand-confetti-piece {
+    display: none;
+  }
+}
