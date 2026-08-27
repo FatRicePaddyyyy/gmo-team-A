@@ -20,6 +20,9 @@ import { PAYMENT_METHODS, type PaymentMethod } from "@/shared/lib/payment-method
 import { NoOrderNotice } from "../_components/no-order-notice";
 
 const PAYMENT_STEPS = buildFlowSteps("payment");
+// ログインを求めている画面では、進み具合は「お支払い」ではなく「ログイン」。
+// ステッパーは開いているページではなく、いま求めている操作に合わせる。
+const LOGIN_STEPS = buildFlowSteps("login");
 
 /**
  * ログイン後のお支払い方法選択画面。
@@ -56,7 +59,7 @@ export default function CartPaymentPage() {
     return (
       <div className="min-h-screen bg-gray-50">
         <SiteHeader />
-        <CheckoutStepper steps={PAYMENT_STEPS} />
+        <CheckoutStepper steps={LOGIN_STEPS} />
         <main className="mx-auto max-w-3xl px-4 py-10">
           <div className="rounded-lg border border-border bg-white px-4 py-12 text-center shadow-sm">
             <Info className="mx-auto mb-3 size-8 text-gray-400" aria-hidden="true" />
