@@ -5,9 +5,13 @@ import { createOpenAPIHono } from "../../lib/openapi-hono";
 import { TransferService } from "./service";
 
 // B16: gaining ユーザー自身の transfer 一覧。cancel 対象を見つけるための最小 API。
+//
+// inbound (自 backend の domain 行に紐づく) と outbound (別レジストラの domain を
+// 取りに行く申請) を統一 shape で返す。inbound は domainId 有り、outbound は null。
 const TransferSchema = z.object({
   id: z.string(),
-  domainId: z.string(),
+  kind: z.enum(["inbound", "outbound"]),
+  domainId: z.string().nullable(),
   // ID だけでは何の申請か分からないので名前も返す
   domainName: z.string(),
   registry: z.string(),
@@ -49,6 +53,7 @@ export const listTransfersRouteHandler = app.openapi(route, async (ctx) => {
     success: true as const,
     data: result.data.map(t => ({
       id: t.id,
+      kind: t.kind,
       domainId: t.domainId,
       domainName: t.domainName,
       registry: t.registry,

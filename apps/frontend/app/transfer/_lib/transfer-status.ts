@@ -23,3 +23,17 @@ export function isCancellable(status: string): boolean {
 export function isPending(status: string): boolean {
   return status === "pendingTransfer";
 }
+
+/** 承認 (=移管完了) 系ステータス。マイドメインに新しくドメインが載っているはず */
+export function isApproved(status: string): boolean {
+  return status === "clientApproved" || status === "serverApproved";
+}
+
+/** 却下・取消・期限切れの終着ステータス */
+export function isFinishedNegative(status: string): boolean {
+  return (
+    status === "clientRejected" ||
+    status === "clientCancelled" ||
+    status === "expired"
+  );
+}
