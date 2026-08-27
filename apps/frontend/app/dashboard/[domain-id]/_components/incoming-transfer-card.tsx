@@ -19,8 +19,12 @@ interface IncomingTransferCardProps {
   transfer: InboundTransfer;
   running: RunningTransferAction | null;
   feedback: DomainFeedback | null;
-  onApprove: (transfer: InboundTransfer) => Promise<void> | void;
-  onReject: (transfer: InboundTransfer) => Promise<void> | void;
+  /**
+   * 承認処理。呼び出し側 (親 page) は成否を bool で返してよいので `unknown` を許容する。
+   * この props では返り値を使わない (単に「押されたら呼ぶ」だけ)。
+   */
+  onApprove: (transfer: InboundTransfer) => Promise<unknown> | void;
+  onReject: (transfer: InboundTransfer) => Promise<unknown> | void;
 }
 
 /**
