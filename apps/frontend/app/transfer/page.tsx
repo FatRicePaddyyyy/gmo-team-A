@@ -45,26 +45,25 @@ export default function TransferPage() {
           </p>
 
           {/* 「移管元」「移管先」という言葉は初めての人には向きが分からないので、
-              どちらの立場なのかを日本語で並べて示す */}
-          <dl className="mt-4 grid gap-3 sm:grid-cols-2">
-            <div className="rounded-lg border border-gray-200 bg-white p-3">
-              <dt className="text-sm font-semibold text-gray-900">
+              どちらの立場なのかを日本語で言い換える。
+              カードや枠で囲むと押せるものに見えてしまうため、地の文として置く。 */}
+          <dl className="mt-4 space-y-2 border-l-2 border-gray-300 pl-4 text-sm text-gray-600">
+            <div>
+              <dt className="inline font-semibold text-gray-900">
                 もらう（移管先になる）
               </dt>
-              <dd className="mt-1 text-xs text-gray-600">
-                他社にあるドメインを、こちらへ引き取ります。
-                <span className="font-medium">相手から認証コードをもらって</span>
-                申請します。
+              <dd className="inline">
+                … 他社にあるドメインを、こちらへ引き取ることです。
+                相手から認証コードをもらって申請します。
               </dd>
             </div>
-            <div className="rounded-lg border border-gray-200 bg-white p-3">
-              <dt className="text-sm font-semibold text-gray-900">
+            <div>
+              <dt className="inline font-semibold text-gray-900">
                 渡す（移管元になる）
               </dt>
-              <dd className="mt-1 text-xs text-gray-600">
-                いま持っているドメインを、他社へ引き渡します。
-                <span className="font-medium">こちらで認証コードを発行して</span>
-                相手に伝えます。
+              <dd className="inline">
+                … いま持っているドメインを、他社へ引き渡すことです。
+                こちらで認証コードを発行して相手に伝えます。
               </dd>
             </div>
           </dl>
@@ -95,6 +94,7 @@ export default function TransferPage() {
               <TransferRequestForm
                 submitting={state.submitting}
                 onSubmitRequest={state.request}
+                ownedNames={myDomains.domains.map((domain) => domain.name)}
               />
 
               <TransferList state={state} />

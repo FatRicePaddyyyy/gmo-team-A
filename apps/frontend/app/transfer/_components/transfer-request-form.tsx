@@ -30,6 +30,14 @@ type TransferRequestFormData = z.infer<typeof transferRequestSchema>;
 
 interface TransferRequestFormProps {
   submitting: boolean;
+  /**
+   * すでにここで管理しているドメイン名。
+   *
+   * 「どれを移管できるのか」は持っているものを見ないと判断できないので並べて出す。
+   * あわせて、持っているドメインを打ってしまったときは送信前に止める
+   * （レジストリに投げても必ず失敗する上、理由が分かりにくいため）。
+   */
+  ownedNames: readonly string[];
   /** 成功したら true を返す。true のときだけ入力を消す */
   onSubmitRequest: (input: {
     name: string;
@@ -40,21 +48,31 @@ interface TransferRequestFormProps {
 export function TransferRequestForm({
   submitting,
   onSubmitRequest,
+  ownedNames,
 }: TransferRequestFormProps) {
   const {
     register,
     handleSubmit,
     reset,
+    setError,
     formState: { errors },
   } = useForm<TransferRequestFormData>({
     resolver: zodResolver(transferRequestSchema),
   });
 
   const nameErrorId = "transfer-name-error";
+  const ownedHintId = "transfer-owned-hint";
   const authInfoHintId = "transfer-auth-info-hint";
   const authInfoErrorId = "transfer-auth-info-error";
 
   const onSubmit = async (data: TransferRequestFormData) => {
+    if (ownedNames.includes(data.name)) {
+      setError("name", {
+        message:
+          "このドメインはすでにここで管理しています。他社へ渡したい場合は、下の「自分のドメインを他社へ渡す」から進んでください。",
+      });
+      return;
+    }
     const ok = await onSubmitRequest(data);
     if (ok) reset({ name: "", authInfo: "" });
   };
@@ -80,10 +98,22 @@ export function TransferRequestForm({
               autoComplete="off"
               disabled={submitting}
               aria-invalid={errors.name ? true : undefined}
-              aria-describedby={errors.name ? nameErrorId : undefined}
+              aria-describedby={
+                errors.name
+                  ? nameErrorId
+                  : ownedNames.length > 0
+                    ? ownedHintId
+                    : undefined
+              }
               className="h-11"
               {...register("name")}
             />
+            {ownedNames.length > 0 && (
+              <p id={ownedHintId} className="text-xs text-gray-500">
+                ここで管理中のドメイン（申請できません）:{" "}
+                <span className="break-all">{ownedNames.join(" / ")}</span>
+              </p>
+            )}
             {errors.name && (
               <p id={nameErrorId} role="alert" className="text-xs text-red-700">
                 {errors.name.message}
