@@ -209,15 +209,59 @@ export class TransferService {
 
   // B16: ユーザー自身が gaining として申請した移管の一覧。
   // cancel 対象を見つけるための最小 API。
+  //
+  // inbound (自 backend の domain を移管) と outbound (別レジストラの domain を取りに行く)
+  // の 2 系統を合流させて返す。frontend は「申請中の移管」欄で両方を一体に扱う。
   static async listMine({
     userId,
     db,
   }: {
     userId: string;
     db: DBClient;
-  }): Promise<Result<TransferWithDomainName[]>> {
-    return TransferRepository.findByGainingUserId({ userId, db });
+  }): Promise<Result<MyTransferListItem[]>> {
+    const [inboundResult, outboundResult] = await Promise.all([
+      TransferRepository.findByGainingUserId({ userId, db }),
+      OutboundTransferRequestRepository.findByGainingUserId({ userId, db }),
+    ]);
+    if (!inboundResult.success) {return inboundResult;}
+    if (!outboundResult.success) {return outboundResult;}
+
+    const inbound: MyTransferListItem[] = inboundResult.data.map((t) => ({
+      id: t.id,
+      kind: "inbound",
+      domainId: t.domainId,
+      domainName: t.domainName,
+      registry: t.registry,
+      status: t.status,
+      createdAt: t.createdAt,
+    }));
+    const outbound: MyTransferListItem[] = outboundResult.data.map((r) => ({
+      id: r.id,
+      kind: "outbound",
+      domainId: null,
+      domainName: r.domainName,
+      registry: r.registry,
+      status: r.status,
+      createdAt: r.createdAt,
+    }));
+
+    // 新しい順に並べる
+    const merged = [...inbound, ...outbound].sort(
+      (a, b) => b.createdAt.getTime() - a.createdAt.getTime(),
+    );
+    return { success: true, data: merged, error: null };
   }
+}
+
+// listMine が返す統一 shape。inbound は domainId 有り、outbound は domainId 無し。
+export interface MyTransferListItem {
+  id: string;
+  kind: "inbound" | "outbound";
+  domainId: string | null;
+  domainName: string;
+  registry: string;
+  status: string;
+  createdAt: Date;
 }
 
 // NB-2 / Drop #3: 補償 cancel + reconciliation。

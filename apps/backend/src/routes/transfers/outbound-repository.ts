@@ -48,6 +48,27 @@ export class OutboundTransferRequestRepository {
     }
   }
 
+  // 申請者 (gaining) 自身の outbound 一覧。/transfer 画面の「申請中の移管」欄で
+  // inbound と混ぜて出すため、TransferRepository.findByGainingUserId と対にして持つ。
+  static async findByGainingUserId({
+    userId,
+    db,
+  }: {
+    userId: string;
+    db: DBClient;
+  }): Promise<Result<OutboundTransferRequest[]>> {
+    try {
+      const rows = await db
+        .select()
+        .from(outboundTransferRequests)
+        .where(eq(outboundTransferRequests.gainingUserId, userId));
+      return { success: true, data: rows, error: null };
+    } catch (error) {
+      console.error("OutboundTransferRequestRepository.findByGainingUserId error:", error);
+      return { success: false, data: null, error: classifyDbError(error) };
+    }
+  }
+
   // domainName + registry で pending 行を検索。cron が承認通知を受けたときに使う。
   static async findPending({
     domainName,

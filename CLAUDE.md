@@ -574,6 +574,21 @@ shadcn/ui（Base UI ベース、`style: "base-nova"`）を使う。プリミテ�
 
 ---
 
+## ローカルで移管フローを試すとき
+
+移管の状態遷移は backend の cron (`transfer-cron-poll`) がレジストリ側をポーリングして進める。**ローカル (`wrangler dev --test-scheduled`) では cron が自動発火しない**。以下を手で叩く必要がある。
+
+```bash
+# teama-2 が approve/reject した後や、20 分の自動承認後の反映を確認したいとき
+curl http://localhost:8787/__scheduled
+```
+
+- 「申請したのに `/transfer` の一覧の状態が変わらない」「マイドメインにドメインが載らない」ときは、まず `__scheduled` を1回叩く
+- frontend の自動ポーリング (issue #82) を実装するときも、ローカルでは開発者が backend の `__scheduled` を叩き続けないと本物の cron 挙動を再現できない
+- teama-2 側の操作 (approve/reject など) は `apps/backend/scripts/transfer/` の各シェルが手順化している
+
+---
+
 ## issue を立てるとき
 
 GitHub の `gh` CLI で作る。作る前に、既存の似た issue を `gh issue list --search "..."` で必ず確認する（重複を作らない）。
