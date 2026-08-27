@@ -29,6 +29,27 @@ interface UsePollOptions {
  *
  * 画面を離れた（アンマウントされた）あとは `onTick` を呼ばない。飛行中の通信が
  * 返ってきても、すでに無いコンポーネントの状態を触らないようにするため。
+ *
+ * ## 手で確かめるとき
+ *
+ * Playwright では背面タブでも `document.hidden` が false のままになり、
+ * タブを切り替えるだけでは停止を再現できない（実測 2026-08-27）。
+ * ブラウザの DevTools コンソールで次を実行すると、実際の背面状態を作れる。
+ *
+ * ```js
+ * let hidden = false;
+ * Object.defineProperty(document, "hidden", { configurable: true, get: () => hidden });
+ * Object.defineProperty(document, "visibilityState", {
+ *   configurable: true,
+ *   get: () => (hidden ? "hidden" : "visible"),
+ * });
+ * const setHidden = (v) => {
+ *   hidden = v;
+ *   document.dispatchEvent(new Event("visibilitychange"));
+ * };
+ * setHidden(true);   // 背面へ → 通信が止まる
+ * setHidden(false);  // 復帰   → 即座に 1 回、以降 20 秒ごと
+ * ```
  */
 export function usePoll({
   enabled,
