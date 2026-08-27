@@ -65,7 +65,11 @@ export const renewDomainRouteHandler = app.openapi(route, async (ctx) => {
     if (result.error === "not_found" || result.error === "domain_not_found") {
       return ctx.json({ success: false as const, data: null, error: toUserMessage(result.error) }, 404);
     }
-    if (result.error === "domain_pending_transfer" || result.error === "invalid_period") {
+    if (
+      result.error === "domain_pending_transfer" ||
+      result.error === "invalid_period" ||
+      result.error === "operation_prohibited"
+    ) {
       return ctx.json({ success: false as const, data: null, error: toUserMessage(result.error) }, 409);
     }
     return ctx.json({ success: false as const, data: null, error: toUserMessage(result.error) }, 500);

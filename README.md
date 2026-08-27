@@ -211,3 +211,22 @@ npx wrangler tail --env production --name frontend-production
 ```
 
 aa
+
+
+【事前周知】.org / .info の管轄レジストリ変更（メンテナンス予定）
+
+ハッカソンの仕様変更として、TLD「.org」「.info」を kitaqsign → kitaqnic へ移管します。
+
+■ 日時
+・<08/27 16:00>〜（数分程度）。作業中は kitaqsign・kitaqnic の両方が一時停止します（EPP / RDAP / コンパネ）。
+
+■ 変更点（.org / .info のドメイン）
+・扱うレジストリが kitaqnic になります。接続先を切り替えてください。
+    - EPP: epp.kitaqnic.com ／ コンパネ: console.kitaqnic.com ／ RDAP: rdap.kitaqnic.com
+・既存の .org / .info ドメイン（コンタクト・ホスト含む）はデータごと kitaqnic に引き継がれます（保有者は変わりません）。
+・kitaqsign では .org / .info は非対応になります（domain:check は 2306、hello の supportedTlds からも外れます）。
+・.com / .net（kitaqsign）や他の kitaqnic TLD には影響ありません。
+
+■ お願い
+・作業時間中は .org / .info の操作を控えてください。完了後にあらためて連絡します。
+・ご不明点はメンターまで。

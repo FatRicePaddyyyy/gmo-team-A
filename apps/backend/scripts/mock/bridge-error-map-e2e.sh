@@ -4,14 +4,14 @@
 # mock-registry.mjs (localhost:9999) を使う前提。実レジストリでは動かない。
 #
 # 事前準備:
-#   1) node ./scripts/mock-registry.mjs         # 別ターミナル
+#   1) node ./scripts/mock/mock-registry.mjs    # 別ターミナル
 #   2) apps/backend/.env に以下を追記:
 #        KITAQSIGN_BASE_URL=http://localhost:9999
 #        KITAQNIC_BASE_URL=http://localhost:9999
 #   3) pnpm dev で backend を再起動
 #
 # 使い方:
-#   ./scripts/lifecycle/bridge-error-map-e2e.sh --env .env
+#   ./scripts/mock/bridge-error-map-e2e.sh --env .env
 #
 # シナリオ (L-1 〜 L-8; L-5 と L-8 は create 経由の代替に振替):
 #   (L1) HTTP 404 + code 2303 (create)          → 400 (contact_not_found)

@@ -352,6 +352,19 @@ describe("結合: PUT /api/v1/secure/domains/{id}", () => {
 
   test("[異常系] add で指定したネームサーバーが未登録 → 400 + referenced_object_not_found", async () => {
     vi.spyOn(DomainRepository, "findById").mockResolvedValue({ success: true, data: mockDomainRow, error: null });
+    // 差分計算のため service 内で info を叩く。現状 NS が空なので送られた 2 本すべてが add 対象になる。
+    vi.spyOn(RegistryBridge, "info").mockResolvedValue({
+      success: true,
+      data: {
+        domain: "example.com", status: ["ok"], registrant: "C-0001",
+        contacts: {}, nameservers: [],
+        crDate: "2026-08-25T00:00:00.000Z", exDate: "2027-08-25T00:00:00.000Z",
+        rgpStatus: [],
+      },
+      error: null,
+    });
+    // 差分計算で add 対象になった NS は事前に host:create される。ここでは成功前提で通す。
+    vi.spyOn(RegistryBridge, "createHost").mockResolvedValue({ success: true, error: null });
     vi.spyOn(RegistryBridge, "update").mockResolvedValue({ success: false, data: null, error: "referenced_object_not_found" });
 
     const res = await updateDomainRouteHandler.request(

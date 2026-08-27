@@ -45,7 +45,19 @@ const mockTransferRow = {
   createdAt: new Date("2026-08-25T00:00:00.000Z"),
 };
 
-beforeEach(() => vi.restoreAllMocks());
+beforeEach(() => {
+  vi.restoreAllMocks();
+  // 全ケースで hello (supportedTlds) は成功前提。resolveRegistry / DomainService.check が
+  // ここに依存する。個別テストで override したければ再度 spyOn し直す。
+  vi.spyOn(RegistryBridge, "hello").mockImplementation(async ({ registry }) => ({
+    success: true,
+    data: {
+      registryCode: registry === "kitaqsign" ? "KITAQSIGN" : "KITAQNIC",
+      tlds: registry === "kitaqsign" ? ["com", "net", "org", "info"] : ["xyz", "shop", "store", "app", "dev", "io"],
+    },
+    error: null,
+  }));
+});
 
 // ─── transfer request ─────────────────────────────────────────────────────────
 

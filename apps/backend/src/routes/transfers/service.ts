@@ -2,7 +2,7 @@ import { TransferStatusRepository } from "../../domains/transfer/repository";
 import { RegistryBridge } from "../../lib/bridge";
 import type { Registry } from "../../lib/bridge/types";
 import type { DBClient } from "../../lib/db";
-import { detectRegistry, isValidFqdn } from "../../lib/registry-policy";
+import { isValidFqdn } from "../../lib/registry-policy";
 import type { outboundTransferRequests, transfers } from "../../lib/schema/general-schema";
 import type { Result } from "../../types/result";
 import { TransferDomainRepository } from "./domain-repository";
@@ -43,10 +43,12 @@ export class TransferService {
       return { success: false, data: null, error: "invalid_domain_name" };
     }
 
-    // B17: 引数の registry と TLD から推定した registry が一致するかを検証する。
-    // 不一致は Zod でも検知できないので service 層で弾く。
-    const detected = detectRegistry(normalizedName);
-    if (detected && detected !== registry) {
+    // B17: 引数の registry と TLD から判定した registry が一致するかを検証する。
+    // レジストリの hello (supportedTlds) を突き合わせるので、静的テーブルのドリフトに引きずられない。
+    // 結果は KV に 10 分キャッシュされているのでホットパスでも許容範囲。
+    const resolved = await RegistryBridge.resolveRegistry({ name: normalizedName, env });
+    if (!resolved.success) {return resolved;}
+    if (resolved.data !== registry) {
       return { success: false, data: null, error: "invalid_domain_registry" };
     }
 
