@@ -5,6 +5,7 @@ import { useMemo, useState } from "react";
 import { RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { InfoHint } from "@/components/info-hint";
 import { GlossaryTerm } from "@/components/glossary-term";
 import { GLOSSARY } from "@/shared/lib/glossary";
 import type { useMyDomains } from "../_hooks/use-my-domains.hook";
@@ -87,15 +88,21 @@ export function DomainList({ state }: DomainListProps) {
             への引き渡し・廃止ができます。
           </p>
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          disabled={loading}
-          onClick={() => void refresh()}
-        >
-          <RefreshCw aria-hidden="true" />
-          {loading ? "読み込み中..." : "最新にする"}
-        </Button>
+        <div className="flex items-center gap-1">
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={loading}
+            onClick={() => void refresh()}
+          >
+            <RefreshCw aria-hidden="true" />
+            {loading ? "読み込み中..." : "最新にする"}
+          </Button>
+          <InfoHint
+            label="「最新にする」で何が更新されるか"
+            description="有効期限や状態、他のレジストラからの引き渡し申請の有無を、レジストリに問い合わせて取り直します。放置していると自動で承認されてしまう申請にも、押した時点で気づけます。"
+          />
+        </div>
       </div>
 
       {loadError && (

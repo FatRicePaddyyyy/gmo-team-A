@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { useInboundTransfers } from "../_hooks/use-inbound-transfers.hook";
 import { BackLink } from "@/components/back-link";
@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { ConnectionErrorNotice } from "@/components/connection-error-notice";
 import { FeedbackBanner } from "@/components/feedback-banner";
 import { GlossaryTerm } from "@/components/glossary-term";
+import { InfoHint } from "@/components/info-hint";
 import { GLOSSARY } from "@/shared/lib/glossary";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
@@ -32,12 +33,12 @@ import { IncomingTransferCard } from "./_components/incoming-transfer-card";
 import { LifecycleCard } from "./_components/lifecycle-card";
 import { LocksCard } from "./_components/locks-card";
 import { RenewCard } from "./_components/renew-card";
-import { TransferApprovedCelebration } from "./_components/transfer-approved-celebration";
 import { TransferOutCard } from "./_components/transfer-out-card";
 import { useDomainDetail } from "./_hooks/use-domain-detail.hook";
 import type { InboundTransfer } from "../_hooks/use-inbound-transfers.hook";
 
 export default function DomainDetailPage() {
+  const router = useRouter();
   const params = useParams<{ "domain-id": string }>();
   const domainId = params["domain-id"];
   const { isPending, isSignedIn, isConnectionError } = useAuthStatus();
@@ -50,16 +51,21 @@ export default function DomainDetailPage() {
   const { domain, loading, loadError, loadUnauthorized, running, feedback } =
     state;
   const [activeTab, setActiveTab] = useState<string>("overview");
-
-  // 承認直後の「完了しました！」画面を出しっぱなしにするための状態。
-  // 承認が完了すると refresh が動いて incoming が消えるため、消えた後もカードを
-  // 残しておく必要がある。ドメイン名をここに残しておいて、その間だけ完了画面を出す。
-  const [approvedDomainName, setApprovedDomainName] = useState<string | null>(null);
+  // 承認直後は refresh でドメインが消えて「見つかりませんでした」が瞬間的に出るのを
+  // 避けたい。承認したら即マイドメイン一覧に飛ばし、飛んだ先でトーストを出す。
+  // このフラグが立っている間は「見つかりませんでした」を出さない。
+  const [handingOff, setHandingOff] = useState(false);
 
   const handleApproveIncoming = async (transfer: InboundTransfer) => {
+    setHandingOff(true);
     const ok = await inbound.approve(transfer);
-    // 成功したときだけ完了画面を出す。エラーは既存の FeedbackBanner が担う
-    if (ok) setApprovedDomainName(transfer.domainName);
+    if (ok) {
+      // 承認完了 = このドメインは自分のものではなくなった。マイドメイン一覧へ戻し、
+      // 遷移先で「引き渡しました」トーストを出す (query の transferred でドメイン名を渡す)
+      router.push(`/dashboard?transferred=${encodeURIComponent(transfer.domainName)}`);
+      return;
+    }
+    setHandingOff(false);
   };
 
   // レジストリに問い合わせられなかったとき（メンテナンス・疎通不良）。
@@ -157,15 +163,21 @@ export default function DomainDetailPage() {
               </div>
               {/* レジストリへの反映が遅れることがあるので、取り直す手段を置く。
                   変更が反映されなかったときのエラー文もこのボタンを案内している。 */}
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={loading || busy}
-                onClick={() => void state.refresh()}
-              >
-                <RefreshCw aria-hidden="true" />
-                {loading ? "読み込み中..." : "最新にする"}
-              </Button>
+              <div className="flex items-center gap-1">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={loading || busy}
+                  onClick={() => void state.refresh()}
+                >
+                  <RefreshCw aria-hidden="true" />
+                  {loading ? "読み込み中..." : "最新にする"}
+                </Button>
+                <InfoHint
+                  label="「最新にする」で何が更新されるか"
+                  description="このドメインの有効期限・ステータス・ネームサーバー・引き渡し申請の有無を、レジストリに問い合わせて取り直します。設定を変えたのに反映が遅い、他のレジストラからの引き渡し申請が来ているかもしれない、というときに使います。"
+                />
+              </div>
             </div>
 
             {loadError && (
@@ -183,7 +195,7 @@ export default function DomainDetailPage() {
               </p>
             )}
 
-            {!loading && !domain && !loadError && (
+            {!loading && !domain && !loadError && !handingOff && (
               <div className="rounded-xl border border-dashed border-gray-300 bg-white p-8 text-center">
                 <p className="text-sm text-gray-700">
                   このドメインは見つかりませんでした。
@@ -192,6 +204,12 @@ export default function DomainDetailPage() {
                   すでに手放したか、他のアカウントで管理している可能性があります。
                 </p>
               </div>
+            )}
+
+            {handingOff && (
+              <p className="py-8 text-center text-sm text-gray-600">
+                引き渡し処理中です...
+              </p>
             )}
 
             {domain && (
@@ -294,21 +312,14 @@ export default function DomainDetailPage() {
 
                   {/* registryDown 時のバナーは Tabs 直下でまとめて表示している */}
 
-                  {approvedDomainName ? (
-                    <TransferApprovedCelebration
-                      domainName={approvedDomainName}
-                      onDismiss={() => setApprovedDomainName(null)}
+                  {incoming && (
+                    <IncomingTransferCard
+                      transfer={incoming}
+                      running={inbound.running}
+                      feedback={inbound.feedback}
+                      onApprove={handleApproveIncoming}
+                      onReject={inbound.reject}
                     />
-                  ) : (
-                    incoming && (
-                      <IncomingTransferCard
-                        transfer={incoming}
-                        running={inbound.running}
-                        feedback={inbound.feedback}
-                        onApprove={handleApproveIncoming}
-                        onReject={inbound.reject}
-                      />
-                    )
                   )}
 
                   {!settingsEditable && !incoming && !registryDown && (
