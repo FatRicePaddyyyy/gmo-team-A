@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import {
   $deleteDomain,
   $getDomain,
+  $pollNowTransfer,
   $renewDomain,
   $restoreDomain,
   $updateDomain,
@@ -67,6 +68,18 @@ export function useDomainDetail(domainId: string, enabled: boolean) {
     setLoading(true);
     setLoadError(null);
     setLoadUnauthorized(false);
+
+    // 移管の cron は 1 分周期なので、詳細画面で「最新にする」を押した瞬間に取り直しても
+    // レジストリ側の pending / approved 反映が届いていないことが多い。取り直す前に
+    // poll-now を叩いて、cron 相当の処理を 1 回走らせてから GET する。
+    // backend 側で 10 秒に 1 回に絞られているので、連打してもレジストリには 1 回しか届かない。
+    // poll 側が失敗しても取り直しは進める (詳細取得の方が価値が高い)。
+    try {
+      await callApi($pollNowTransfer());
+    } catch {
+      // no-op: poll-now は best effort
+    }
+
     const result = await callApi<DomainDetail>(
       $getDomain({ param: { "domain-id": domainId } }),
     );

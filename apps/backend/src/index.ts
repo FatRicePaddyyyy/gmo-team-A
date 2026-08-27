@@ -22,6 +22,7 @@ import { listInboundPendingTransfersRouteHandler } from "./routes/domains/pendin
 import { createDomainRouteHandler } from "./routes/domains/post";
 import { cancelTransferRouteHandler } from "./routes/transfers/[transfer-id]/cancel/post";
 import { listTransfersRouteHandler } from "./routes/transfers/get";
+import { pollNowTransferRouteHandler } from "./routes/transfers/poll-now/post";
 import { requestTransferRouteHandler } from "./routes/transfers/post";
 import { handleTransferCronPoll } from "./scheduled/transfer-cron-poll";
 
@@ -70,6 +71,9 @@ export const routes = app
   .route("/", rejectTransferRouteHandler)
   .route("/", requestTransferRouteHandler)
   .route("/", listTransfersRouteHandler)
+  // poll-now は静的パスなので transfers 系動的パス ({transfer-id}) より先に登録する
+  // (Hono のルーターによっては先勝ちで、動的パスが "poll-now" を吸ってしまうため)。
+  .route("/", pollNowTransferRouteHandler)
   .route("/", cancelTransferRouteHandler);
 
 routes.get("/debug-sentry", () => {

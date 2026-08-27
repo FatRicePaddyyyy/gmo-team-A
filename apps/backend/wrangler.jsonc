@@ -38,6 +38,15 @@
     // Cloudflare Queues は一切使わず、Cron トリガーだけで移管の poll と reconcile を完結させる。
     "crons": ["* * * * *"]
   },
+  // Workers Logs を無効化しつつ invocation_logs だけ残す。
+  // invocation_logs はリクエスト単位の "誰がいつ何を叩いたか" のヘッダ相当で
+  // 課金対象外。詳細ログ (console.log の中身) は使わないので保存しない。
+  "observability": {
+    "logs": {
+      "enabled": false,
+      "invocation_logs": true
+    }
+  },
   "env": {
     "production": {
       "name": "backend-production",
