@@ -52,7 +52,9 @@ export default function DomainDetailPage() {
     : false;
   // 更新は廃止済みでもできない一方、pendingUpdate などの手続き中とは条件が違うので
   // 設定変更（canUpdateSettings）とは別に判定する。
-  const renewable = domain ? canRenew(domain.status) && !registryDown : false;
+  // カードを消すのではなく、出したまま操作だけ止める。
+  // メンテのたびに画面の形が変わると「機能が無くなった」と誤解されるため。
+  const renewable = domain ? canRenew(domain.status) : false;
   const busy = running !== null;
 
 
@@ -172,7 +174,7 @@ export default function DomainDetailPage() {
                   <RenewCard
                     domainName={domain.name}
                     expiresAt={domain.expiresAt}
-                    disabled={busy}
+                    disabled={busy || registryDown}
                     running={running === "renew"}
                     feedback={feedback?.source === "renew" ? feedback : null}
                     onRenew={state.renew}
@@ -181,6 +183,7 @@ export default function DomainDetailPage() {
 
                 <NameServerForm
                   current={domain.nameservers ?? []}
+                  unavailable={registryDown}
                   disabled={!settingsEditable || busy}
                   running={running === "nameServers"}
                   feedback={
@@ -200,8 +203,8 @@ export default function DomainDetailPage() {
 
                 <LifecycleCard
                   domainName={domain.name}
-                  canDelete={canDelete(domain.status) && !registryDown}
-                  canRestore={canRestore(domain.status) && !registryDown}
+                  canDelete={canDelete(domain.status)}
+                  canRestore={canRestore(domain.status)}
                   disabled={busy || registryDown}
                   runningDelete={running === "delete"}
                   runningRestore={running === "restore"}
