@@ -52,7 +52,7 @@ export interface paths {
         post?: never;
         /**
          * domain:delete — ドメイン廃止
-         * @description ドメインを廃止する (pendingDelete ステータスへ移行)
+         * @description ドメインを廃止し、RGP (RFC 3915) の復旧猶予期間 (redemptionPeriod) に移行する (pendingDelete も併せて付与)。この間は domain:restore で稼働 (ok) に復旧できる。廃止から 45 日 (grace-period-days) を過ぎると自動で復旧不可 (pendingDelete のみ) に遷移し、さらに 5 日 (pending-delete-days) 経過でドメインを抹消 (DB から削除、名前は再登録可能に) する。(redemptionPeriod 期限の目安は extension.pendingDeleteUntil)。
          */
         delete: operations["delete_1"];
         options?: never;
@@ -319,7 +319,7 @@ export interface paths {
         put?: never;
         /**
          * domain:restore — ドメイン復旧 (RGP)
-         * @description 廃止 (domain:delete) で pendingDelete になったドメインを稼働 (ok) に復旧する。現 (sponsoring) レジストラのみ。pendingDelete でない場合は 2304 を返す。
+         * @description 廃止 (domain:delete) で redemptionPeriod (RGP 復旧猶予期間) に入ったドメインを稼働 (ok) に復旧する。現 (sponsoring) レジストラのみ。redemptionPeriod でない (redemption 経過後の pendingDelete のみ等) 場合は 2304 を返す。
          */
         post: operations["restore"];
         delete?: never;
@@ -1014,13 +1014,37 @@ export interface components {
             };
             trID: components["schemas"]["TrId"];
         };
+        /** @description Poll メッセージ 1 件。ack (POST /messages/{id}/ack) で消し込む。 */
         PollMessageDto: {
-            /** Format: int64 */
+            /**
+             * Format: int64
+             * @description メッセージ ID。ack に使用する。
+             * @example 42
+             */
             id: number;
+            /**
+             * @description メッセージ種別。移管に関する通知は domain:transfer。
+             * @example domain:transfer
+             */
             msgType: string;
+            /**
+             * @description メッセージ本体。domain:transfer の場合、以下のキーを含む:
+             *     - `op`: 移管イベント種別。`request`=移管申請の受信 (losing=現レジストラ宛)、`approve`=移管承認 (gaining=譲受先宛)、`reject`=移管却下 (gaining 宛)、`cancel`=移管取消 (losing 宛)。
+             *     - `domain`: 対象ドメイン名。
+             *     - `counterpartyRegistrar`: 相手側レジストラ ID (自分が losing なら gaining、gaining なら losing)。
+             * @example {
+             *       "op": "request",
+             *       "domain": "example.com",
+             *       "counterpartyRegistrar": "teamb"
+             *     }
+             */
             payload: {
                 [key: string]: Record<string, never>;
             };
+            /**
+             * @description メッセージ生成日時 (queue date)。
+             * @example 2026-08-26T09:00:00
+             */
             qdate: string;
         };
         PollResponse: {

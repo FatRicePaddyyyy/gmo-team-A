@@ -3,11 +3,12 @@
 import Link from "next/link";
 import { useCallback } from "react";
 import { ArrowLeftRight, ChevronRight } from "lucide-react";
-import { useSession } from "@/auth-client";
 import { Button } from "@/components/ui/button";
+import { ConnectionErrorNotice } from "@/components/connection-error-notice";
 import { GlossaryTerm } from "@/components/glossary-term";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
+import { useAuthStatus } from "@/shared/hooks/use-auth-status.hook";
 import { GLOSSARY } from "@/shared/lib/glossary";
 import { DomainList } from "./_components/domain-list";
 import { InboundTransferList } from "./_components/inbound-transfer-list";
@@ -15,8 +16,7 @@ import { useInboundTransfers } from "./_hooks/use-inbound-transfers.hook";
 import { useMyDomains } from "./_hooks/use-my-domains.hook";
 
 export default function DashboardPage() {
-  const { data: session, isPending } = useSession();
-  const isSignedIn = Boolean(session?.user);
+  const { session, isPending, isSignedIn, isConnectionError } = useAuthStatus();
 
   const domainsState = useMyDomains(isSignedIn);
   const { refresh: refreshDomains } = domainsState;
@@ -42,7 +42,9 @@ export default function DashboardPage() {
       <SiteHeader />
 
       <main className="w-full flex-1 mx-auto max-w-4xl px-4 py-8">
-        {isSignedIn ? (
+        {isConnectionError ? (
+          <ConnectionErrorNotice />
+        ) : isSignedIn ? (
           <div className="space-y-8">
             <div>
               <h1 className="font-heading text-2xl font-bold text-gray-900">

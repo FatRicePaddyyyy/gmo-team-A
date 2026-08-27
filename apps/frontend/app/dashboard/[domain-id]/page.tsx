@@ -3,16 +3,17 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useMemo, useState } from "react";
-import { useSession } from "@/auth-client";
 import { useInboundTransfers } from "../_hooks/use-inbound-transfers.hook";
 import { BackLink } from "@/components/back-link";
 import { RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ConnectionErrorNotice } from "@/components/connection-error-notice";
 import { FeedbackBanner } from "@/components/feedback-banner";
 import { GlossaryTerm } from "@/components/glossary-term";
 import { GLOSSARY } from "@/shared/lib/glossary";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
+import { useAuthStatus } from "@/shared/hooks/use-auth-status.hook";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   canDelete,
@@ -23,6 +24,7 @@ import {
 } from "../_lib/domain-status";
 import { DomainOverview } from "./_parts/domain-overview";
 import { TransferOutSteps, type TransferOutStepKey } from "./_parts/transfer-out-steps";
+import { AutoRenewCard } from "./_components/auto-renew-card";
 import { NameServerForm } from "./_components/name-server-form";
 import { IncomingTransferCard } from "./_components/incoming-transfer-card";
 import { LifecycleCard } from "./_components/lifecycle-card";
@@ -34,8 +36,7 @@ import { useDomainDetail } from "./_hooks/use-domain-detail.hook";
 export default function DomainDetailPage() {
   const params = useParams<{ "domain-id": string }>();
   const domainId = params["domain-id"];
-  const { data: session, isPending } = useSession();
-  const isSignedIn = Boolean(session?.user);
+  const { isPending, isSignedIn, isConnectionError } = useAuthStatus();
 
   const state = useDomainDetail(domainId, isSignedIn);
   // このドメインに対して他のレジストラへの引き渡し申請が来ていないか。
@@ -95,7 +96,9 @@ export default function DomainDetailPage() {
       <main className="w-full flex-1 mx-auto max-w-3xl space-y-6 px-4 py-8">
         <BackLink href="/dashboard" label="マイドメインに戻る" />
 
-        {!isSignedIn ? (
+        {isConnectionError ? (
+          <ConnectionErrorNotice />
+        ) : !isSignedIn ? (
           <div className="mx-auto max-w-md space-y-4 rounded-xl bg-white p-8 text-center shadow-sm">
             <h1 className="font-heading text-xl font-bold text-gray-900">
               ログインが必要です
@@ -213,6 +216,18 @@ export default function DomainDetailPage() {
                         "このドメインはいま延長できない状態です。"}
                     </p>
                   )}
+
+                  {/*
+                    自動更新はDBの設定だけなので、レジストリ疎通不良（registryDown）でも
+                    延長不可（!renewable）でも切り替えられる。busyだけで止める。
+                  */}
+                  <AutoRenewCard
+                    autoRenew={domain.autoRenew}
+                    disabled={busy}
+                    running={running === "autoRenew"}
+                    feedback={feedback?.source === "autoRenew" ? feedback : null}
+                    onChange={state.updateAutoRenew}
+                  />
                 </TabsContent>
 
                 <TabsContent value="ns" className="space-y-4">
