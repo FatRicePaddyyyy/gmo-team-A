@@ -208,7 +208,10 @@ export function DomainOverview({ domain }: DomainOverviewProps) {
                 ) : null
               }
             />
-            {contacts.length > 0 && (
+            {/* レジストリが落ちているときは連絡先も返らないが、行ごと消すと
+                他の項目だけ「いま取得できません」と並ぶことになり不揃いになる。
+                取れていないことは同じなので、行は残して同じ書き方に揃える。 */}
+            {(contacts.length > 0 || registryDown) && (
               <Row
                 label="連絡先"
                 unavailable={registryDown}
