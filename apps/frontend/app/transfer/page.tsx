@@ -47,6 +47,7 @@ export default function TransferPage() {
               <FeedbackBanner
                 tone={state.feedback.tone}
                 message={state.feedback.message}
+                unauthorized={state.feedback.unauthorized}
               />
             )}
 

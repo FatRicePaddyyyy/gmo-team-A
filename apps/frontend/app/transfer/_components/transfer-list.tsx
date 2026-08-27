@@ -21,7 +21,7 @@ interface TransferListProps {
 
 /** 自分が出した移管申請の一覧。承認待ちのものは取り消せる */
 export function TransferList({ state }: TransferListProps) {
-  const { transfers, loading, loadError, cancellingId, refresh } = state;
+  const { transfers, loading, loadError, loadUnauthorized, cancellingId, refresh } = state;
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
 
   return (
@@ -41,7 +41,13 @@ export function TransferList({ state }: TransferListProps) {
         </Button>
       </div>
 
-      {loadError && <FeedbackBanner tone="error" message={loadError} />}
+      {loadError && (
+        <FeedbackBanner
+          tone="error"
+          message={loadError}
+          unauthorized={loadUnauthorized}
+        />
+      )}
 
       {loading && transfers.length === 0 && (
         <p className="text-sm text-gray-600">申請を読み込んでいます...</p>
@@ -58,10 +64,8 @@ export function TransferList({ state }: TransferListProps) {
           <CardContent className="space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="min-w-0">
-                {/* バックエンドの一覧はドメイン名を返さない（移管が終わるまで自分のものではないため）。
-                    どの申請かを見分けられるよう、対象のIDと申請日を出す。 */}
-                <p className="truncate font-mono text-sm text-gray-900">
-                  対象ドメインID: {transfer.domainId}
+                <p className="truncate font-heading text-base font-semibold text-gray-900">
+                  {transfer.domainName}
                 </p>
                 <p className="mt-0.5 text-xs text-gray-500">
                   申請日 {formatDate(transfer.createdAt)} / レジストリ{" "}
@@ -83,7 +87,7 @@ export function TransferList({ state }: TransferListProps) {
             {isCancellable(transfer.status) &&
               (confirmingId === transfer.id ? (
                 <ConfirmAction
-                  question="この移管申請を取り消しますか？"
+                  question={`${transfer.domainName} の移管申請を取り消しますか？`}
                   detail="取り消すと手続きは最初からやり直しになります。認証コードも取り直しが必要な場合があります。"
                   confirmLabel="取り消す"
                   running={cancellingId === transfer.id}

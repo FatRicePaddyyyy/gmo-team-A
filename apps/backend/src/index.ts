@@ -8,9 +8,6 @@ import { corsMiddleware } from "./middlewares/cors";
 import { apiKeyAuthMiddleware } from "./middlewares/secret-key";
 import { sentryReportMiddleware } from "./middlewares/sentry-report";
 import { createSeedUserRouteHandler } from "./routes/add-seed-user/post";
-import { deleteCategoryRouteHandler } from "./routes/category/delete";
-import { getAllCategoriesAndProductsRouteHandler } from "./routes/category/get";
-import { createCategoryRouteHandler } from "./routes/category/post";
 import { deleteDomainRouteHandler } from "./routes/domains/[domain-id]/delete";
 import { getDomainRouteHandler } from "./routes/domains/[domain-id]/get";
 import { updateDomainRouteHandler } from "./routes/domains/[domain-id]/put";
@@ -22,7 +19,6 @@ import { checkDomainRouteHandler } from "./routes/domains/check/post";
 import { listDomainsRouteHandler } from "./routes/domains/get";
 import { listInboundPendingTransfersRouteHandler } from "./routes/domains/pending-inbound-transfers/get";
 import { createDomainRouteHandler } from "./routes/domains/post";
-import { helloRouteHandler } from "./routes/hello/post";
 import { cancelTransferRouteHandler } from "./routes/transfers/[transfer-id]/cancel/post";
 import { listTransfersRouteHandler } from "./routes/transfers/get";
 import { requestTransferRouteHandler } from "./routes/transfers/post";
@@ -56,10 +52,6 @@ app.use("/api/v1/secure/*", authMiddleware);
 
 export const routes = app
   .route("/", createSeedUserRouteHandler)
-  .route("/", helloRouteHandler)
-  .route("/", createCategoryRouteHandler)
-  .route("/", deleteCategoryRouteHandler)
-  .route("/", getAllCategoriesAndProductsRouteHandler)
   .route("/", checkDomainRouteHandler)
   .route("/", createDomainRouteHandler)
   .route("/", listDomainsRouteHandler)

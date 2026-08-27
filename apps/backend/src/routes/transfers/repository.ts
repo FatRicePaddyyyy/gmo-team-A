@@ -3,11 +3,14 @@ import { TransferStatusRepository } from "../../domains/transfer/repository";
 import type { TransferStatus } from "../../domains/transfer/repository";
 import type { DBClient } from "../../lib/db";
 import { classifyDbError } from "../../lib/db-error";
-import { transfers } from "../../lib/schema/general-schema";
+import { domains, transfers } from "../../lib/schema/general-schema";
 import type { Result } from "../../types/result";
 
 type Transfer = typeof transfers.$inferSelect;
 type NewTransfer = typeof transfers.$inferInsert;
+
+/** 一覧表示用。ドメイン ID だけでは何の申請か分からないので名前を添える */
+export type TransferWithDomainName = Transfer & { domainName: string };
 
 export class TransferRepository {
   static async create({
@@ -62,16 +65,27 @@ export class TransferRepository {
   }
 
   // B16: gaining ユーザーが自分で申請した移管一覧。
+  // ドメイン名を join で添える。移管が終わるまで domains.ownerUserId は
+  // 申請者ではないが、申請者は「どのドメインを申請したか」を知っているので
+  // 名前を見せてよい（ID だけでは一覧が読めない）。
   static async findByGainingUserId({
     userId,
     db,
   }: {
     userId: string;
     db: DBClient;
-  }): Promise<Result<Transfer[]>> {
+  }): Promise<Result<TransferWithDomainName[]>> {
     try {
-      const rows = await db.select().from(transfers).where(eq(transfers.gainingUserId, userId));
-      return { success: true, data: rows, error: null };
+      const rows = await db
+        .select({ transfer: transfers, domainName: domains.name })
+        .from(transfers)
+        .innerJoin(domains, eq(transfers.domainId, domains.id))
+        .where(eq(transfers.gainingUserId, userId));
+      return {
+        success: true,
+        data: rows.map((row) => ({ ...row.transfer, domainName: row.domainName })),
+        error: null,
+      };
     } catch (error) {
       console.error("TransferRepository.findByGainingUserId error:", error);
       return { success: false, data: null, error: classifyDbError(error) };

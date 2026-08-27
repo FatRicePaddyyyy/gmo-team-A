@@ -47,31 +47,37 @@ HTTP メソッドファイルがコントローラ（リクエスト／レスポ
 
 ```
 src/routes/
-├── hello/
-│   ├── post.ts
-│   └── post.spec.ts
-└── category/
-    ├── get.ts                # GET /api/v1/secure/category
-    ├── post.ts               # POST /api/v1/secret/category
-    ├── delete.ts
+├── add-seed-user/
+│   └── post.ts               # POST /api/v1/secret/create-seed-user
+└── transfers/
+    ├── get.ts                # GET  /api/v1/secure/transfers
+    ├── post.ts               # POST /api/v1/secure/transfers
+    ├── service.ts
     ├── repository.ts
-    ├── get.spec.ts
-    ├── post.spec.ts
-    └── delete.spec.ts
+    ├── transfers.spec.ts
+    └── transfers.integration.spec.ts
 ```
 
 ネストしたリソースの例:
 
 ```
-src/routes/category/
-├── get.ts
-├── post.ts
+src/routes/domains/
+├── get.ts                    # GET  /api/v1/secure/domains
+├── post.ts                   # POST /api/v1/secure/domains
+├── service.ts
 ├── repository.ts
-└── [category-id]/
+├── mapper.ts
+├── check/
+│   └── post.ts               # POST /api/v1/public/domains/check
+└── [domain-id]/
+    ├── get.ts
+    ├── put.ts
     ├── delete.ts
-    ├── service.ts
-    ├── repository.ts         # この階層専用。親の repository は import しない
-    └── delete.spec.ts
+    ├── renew/
+    │   └── post.ts           # POST /api/v1/secure/domains/:domain-id/renew
+    └── transfer/
+        ├── approve/post.ts
+        └── reject/post.ts
 ```
 
 | ファイル | 役割 |
@@ -81,6 +87,8 @@ src/routes/category/
 | `mapper.ts` | DB 行 → API レスポンス形の変換（必要なときだけ） |
 | `repository.ts` | Drizzle の insert / select / update / delete / count だけ |
 | `*.spec.ts` | ハンドラへの `request()` による流しテスト。Repository / Service はモック |
+
+以降のコード例に出てくる `Category` 系は書き方を示すための架空の題材で、実在するスライスではない。実物は `domains/` と `transfers/` を見ること。
 
 呼び出しは **Handler → Service → Repository**。ハンドラから repository を直接呼らない。同じスライスの `service` / `repository` だけを `./` から import する。親ディレクトリのそれを使うなら、その階層に専用ファイルを置く。複数スライスで共有するものは `domains/` へ出す。
 
