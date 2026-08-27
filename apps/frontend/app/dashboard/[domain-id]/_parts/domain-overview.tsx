@@ -48,6 +48,20 @@ function Row({
   );
 }
 
+/**
+ * レジストリの役割名を日本語にする。
+ * ADMIN / BILLING / TECH のままでは、何の連絡先なのか初心者に伝わらない。
+ */
+const CONTACT_ROLE_LABELS: Record<string, string> = {
+  ADMIN: "管理担当",
+  BILLING: "請求担当",
+  TECH: "技術担当",
+};
+
+function contactRoleLabel(role: string): string {
+  return CONTACT_ROLE_LABELS[role.toUpperCase()] ?? role;
+}
+
 interface DomainOverviewProps {
   domain: DomainDetail;
 }
@@ -64,6 +78,11 @@ export function DomainOverview({ domain }: DomainOverviewProps) {
   });
 
   const contacts = Object.entries(domain.contacts ?? {});
+  // 3 ロールとも同じ連絡先か。自分で取得したドメインは必ずこうなる
+  // （登録時に ADMIN / TECH / BILLING すべて同じ contactId を割り当てているため）。
+  const sameContact =
+    contacts.length > 0 &&
+    contacts.every(([, id]) => id === contacts[0]?.[1]);
 
   return (
     <div className="space-y-4">
@@ -116,17 +135,18 @@ export function DomainOverview({ domain }: DomainOverviewProps) {
               value={domain.createdAt ? formatDate(domain.createdAt) : null}
             />
             <Row label="レジストリ" value={domain.registry || null} />
+            {/* 値は自社 DB 由来なので、レジストリが落ちていても出せる。
+                unavailable を渡さないのはそのため。 */}
             <Row
               label="登録者"
-              unavailable={registryDown}
               value={
-                domain.registrant ? (
+                domain.ownerName ? (
                   <span className="inline-flex items-center gap-1.5">
                     <User
                       className="size-4 shrink-0 text-gray-400"
                       aria-hidden="true"
                     />
-                    <span className="break-all">{domain.registrant}</span>
+                    <span className="break-all">{domain.ownerName}</span>
                   </span>
                 ) : null
               }
@@ -186,16 +206,28 @@ export function DomainOverview({ domain }: DomainOverviewProps) {
             {contacts.length > 0 && (
               <Row
                 label="連絡先"
-              unavailable={registryDown}
+                unavailable={registryDown}
                 value={
-                  <ul className="space-y-0.5">
-                    {contacts.map(([role, id]) => (
-                      <li key={role} className="text-sm">
-                        <span className="text-gray-500">{role}: </span>
-                        <span className="font-mono break-all">{id || "—"}</span>
-                      </li>
-                    ))}
-                  </ul>
+                  sameContact ? (
+                    // 自分で取得したドメインは 3 ロールとも同じ人になる。
+                    // 同じ名前を 3 行並べても情報が増えないので 1 行にまとめる。
+                    <span className="break-all">
+                      {domain.ownerName || "—"}
+                    </span>
+                  ) : (
+                    // 移管で入ってきたドメインは他社が作った連絡先を指すため、
+                    // 3 者が別人でありうる。そのときだけ役割ごとに出す。
+                    <ul className="space-y-0.5">
+                      {contacts.map(([role, id]) => (
+                        <li key={role} className="text-sm">
+                          <span className="text-gray-500">
+                            {contactRoleLabel(role)}:{" "}
+                          </span>
+                          <span className="break-all">{id || "—"}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )
                 }
               />
             )}

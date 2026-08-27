@@ -679,6 +679,7 @@ describe("結合: メンテナンス中でも詳細は DB の分だけ返す", (
   // ドメイン名・有効期限・状態は自社 DB にあるので、そこは返す。
   test("[正常系] registry_maintenance のとき 200 + registryAvailable: false", async () => {
     vi.spyOn(DomainRepository, "findById").mockResolvedValue({ success: true, data: mockDomainRow, error: null });
+    vi.spyOn(DomainUserRepository, "findById").mockResolvedValue({ success: true, data: mockContactUser, error: null });
     vi.spyOn(RegistryBridge, "info").mockResolvedValue({ success: false, data: null, error: "registry_maintenance" });
 
     const res = await getDomainRouteHandler.request(
@@ -688,8 +689,10 @@ describe("結合: メンテナンス中でも詳細は DB の分だけ返す", (
     );
 
     expect(res.status).toBe(200);
-    const json = await res.json() as { data: { registryAvailable: boolean; registryUnavailableReason: string; name: string; nameservers: string[] } };
+    const json = await res.json() as { data: { registryAvailable: boolean; registryUnavailableReason: string; name: string; nameservers: string[]; ownerName: string } };
     expect(json.data.registryAvailable).toBe(false);
+    // 登録者は自社 DB 由来なので、レジストリが落ちていても出せる
+    expect(json.data.ownerName).toBe(mockContactUser.name);
     // 理由まで返す。メンテナンスと通信不良で利用者への案内が変わるため
     expect(json.data.registryUnavailableReason).toContain("メンテナンス");
     // DB にある情報は出る
@@ -715,5 +718,37 @@ describe("結合: メンテナンス中でも詳細は DB の分だけ返す", (
 
     const res = await getDomainRouteHandler.request("/api/v1/secure/domains/dom-001", {}, mockEnv);
     expect(res.status).not.toBe(200);
+  });
+});
+
+describe("結合: 詳細に登録者の氏名を載せる", () => {
+  // レジストリの registrant は `C-01054F4E` のような内部 ID で利用者に読めない。
+  // コンタクトは登録時に自社のユーザー情報から作っているので、氏名は DB 側から出す。
+  test("[正常系] ownerName に DB のユーザー名が入る", async () => {
+    vi.spyOn(DomainRepository, "findById").mockResolvedValue({ success: true, data: mockDomainRow, error: null });
+    vi.spyOn(DomainUserRepository, "findById").mockResolvedValue({ success: true, data: mockContactUser, error: null });
+    vi.spyOn(DomainRepository, "updateExpiresAtAndStatus").mockResolvedValue({ success: true, data: undefined, error: null });
+    mockRegistryInfo(["ok"]);
+
+    const res = await getDomainRouteHandler.request("/api/v1/secure/domains/dom-001", {}, mockEnv);
+
+    expect(res.status).toBe(200);
+    const json = await res.json() as { data: { ownerName: string } };
+    expect(json.data.ownerName).toBe(mockContactUser.name);
+  });
+
+  test("[異常系] ユーザーを引けなくても詳細は返す（氏名だけ空）", async () => {
+    vi.spyOn(DomainRepository, "findById").mockResolvedValue({ success: true, data: mockDomainRow, error: null });
+    vi.spyOn(DomainUserRepository, "findById").mockResolvedValue({ success: false, data: null, error: "db_error" });
+    vi.spyOn(DomainRepository, "updateExpiresAtAndStatus").mockResolvedValue({ success: true, data: undefined, error: null });
+    mockRegistryInfo(["ok"]);
+
+    const res = await getDomainRouteHandler.request("/api/v1/secure/domains/dom-001", {}, mockEnv);
+
+    // 氏名が引けないことは詳細を出せない理由にならない
+    expect(res.status).toBe(200);
+    const json = await res.json() as { data: { ownerName: string; name: string } };
+    expect(json.data.ownerName).toBe("");
+    expect(json.data.name).toBe(mockDomainRow.name);
   });
 });
