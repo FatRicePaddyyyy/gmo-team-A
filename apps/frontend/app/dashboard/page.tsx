@@ -1,10 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useCallback } from "react";
 import { ArrowLeftRight } from "lucide-react";
-import { useSession, signOut } from "@/auth-client";
+import { useSession } from "@/auth-client";
 import { Button } from "@/components/ui/button";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
@@ -15,7 +14,6 @@ import { useMyDomains } from "./_hooks/use-my-domains.hook";
 
 export default function DashboardPage() {
   const { data: session, isPending } = useSession();
-  const router = useRouter();
   const isSignedIn = Boolean(session?.user);
 
   const domainsState = useMyDomains(isSignedIn);
@@ -27,15 +25,6 @@ export default function DashboardPage() {
     [refreshDomains],
   );
   const transfersState = useInboundTransfers(isSignedIn, onDomainsChanged);
-
-  const handleLogout = async () => {
-    try {
-      await signOut();
-      router.push("/login");
-    } catch (caught) {
-      console.error("ログアウトエラー:", caught);
-    }
-  };
 
   if (isPending) {
     return (
@@ -71,9 +60,6 @@ export default function DashboardPage() {
                 >
                   <ArrowLeftRight aria-hidden="true" />
                   他社ドメインを移管する
-                </Button>
-                <Button variant="ghost" size="sm" onClick={handleLogout}>
-                  ログアウト
                 </Button>
               </div>
             </div>
