@@ -54,10 +54,14 @@ beforeEach(() => {
 
 describe("POST /api/v1/public/domains/check", () => {
   test("[正常系] 複数ドメインの空き確認結果をまとめて返す", async () => {
-    vi.spyOn(DomainService, "checkBulk").mockResolvedValue([
-      { name: "example.com", avail: true, failed: false },
-      { name: "taken.com", avail: false, failed: false },
-    ]);
+    vi.spyOn(DomainService, "checkBulk").mockResolvedValue({
+      success: true,
+      data: [
+        { name: "example.com", avail: true, failed: false },
+        { name: "taken.com", avail: false, failed: false },
+      ],
+      error: null,
+    });
 
     const res = await checkDomainRouteHandler.request(
       "/api/v1/public/domains/check",
@@ -83,9 +87,11 @@ describe("POST /api/v1/public/domains/check", () => {
   });
 
   test("[正常系] 確認できなかった項目は failed: true で返す", async () => {
-    vi.spyOn(DomainService, "checkBulk").mockResolvedValue([
-      { name: "example.com", avail: false, failed: true },
-    ]);
+    vi.spyOn(DomainService, "checkBulk").mockResolvedValue({
+      success: true,
+      data: [{ name: "example.com", avail: false, failed: true }],
+      error: null,
+    });
 
     const res = await checkDomainRouteHandler.request(
       "/api/v1/public/domains/check",
@@ -155,21 +161,43 @@ describe("POST /api/v1/public/domains/check", () => {
 // ─── checkBulk (service) ─────────────────────────────────────────────────────
 
 describe("DomainService.checkBulk", () => {
-  // Zod を通らない経路から呼ばれても「障害」に見せないための二段構え。
-  // failed: true にすると画面が「通信に失敗しました」と出してしまう。
-  test("[異常系] 形式が不正な名前は failed ではなく avail:false で返す", async () => {
+  // Zod を通らない経路から呼ばれたときの二段構え。
+  // 項目ごとの failed で返すと画面が「通信に失敗しました」(障害) と読み、
+  // avail:false で返すと「すでに使われています」と読む。どちらも嘘になるので、
+  // 名前の形式不正は処理全体の失敗として返す。
+  test("[異常系] 形式が不正な名前は処理全体の失敗として返す", async () => {
     // 上の check ハンドラーのテストが checkBulk 自体を差し替えているので、
     // ここでは実装を戻してから呼ぶ (clearAllMocks は呼び出し履歴しか消さない)。
     vi.spyOn(DomainService, "checkBulk").mockRestore();
     const check = vi.spyOn(RegistryBridge, "check");
 
-    const results = await DomainService.checkBulk({
-      names: ["日本語.com"],
+    const result = await DomainService.checkBulk({
+      names: ["example.com", "日本語.com"],
       env: mockEnv,
     });
 
-    expect(results).toEqual([{ name: "日本語.com", avail: false, failed: false }]);
+    expect(result).toEqual({ success: false, data: null, error: "invalid_domain_name" });
     expect(check).not.toHaveBeenCalled();
+  });
+
+  test("[正常系] すべて形式が正しければ結果を返す", async () => {
+    vi.spyOn(DomainService, "checkBulk").mockRestore();
+    vi.spyOn(RegistryBridge, "check").mockResolvedValue({
+      success: true,
+      data: { results: [{ name: "example.com", avail: true }] },
+      error: null,
+    });
+
+    const result = await DomainService.checkBulk({
+      names: ["example.com"],
+      env: mockEnv,
+    });
+
+    expect(result).toEqual({
+      success: true,
+      data: [{ name: "example.com", avail: true, failed: false }],
+      error: null,
+    });
   });
 });
 

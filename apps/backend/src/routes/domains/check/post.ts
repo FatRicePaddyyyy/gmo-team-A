@@ -1,5 +1,6 @@
 import { createRoute, z } from "@hono/zod-openapi";
 import { domainNameSchema } from "../../../lib/domain-name-schema";
+import { toUserMessage } from "../../../lib/error-messages";
 import { createOpenAPIHono } from "../../../lib/openapi-hono";
 import { DomainService } from "../service";
 
@@ -48,6 +49,10 @@ const app = createOpenAPIHono();
 
 export const checkDomainRouteHandler = app.openapi(route, async (ctx) => {
   const { names } = ctx.req.valid("json");
-  const results = await DomainService.checkBulk({ names, env: ctx.env });
-  return ctx.json({ success: true as const, data: { results }, error: null }, 200);
+  const result = await DomainService.checkBulk({ names, env: ctx.env });
+  if (!result.success) {
+    // 名前の形式が不正なケース。Zod と同じ 400 + 同じ文言に揃える。
+    return ctx.json({ success: false as const, data: null, error: toUserMessage(result.error) }, 400);
+  }
+  return ctx.json({ success: true as const, data: { results: result.data }, error: null }, 200);
 });

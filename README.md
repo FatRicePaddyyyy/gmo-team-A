@@ -103,7 +103,7 @@ kitaqsign が IDN を拒否する（Swagger の `422` = TLD ポリシー違反 /
 | 使う側 | 参照の仕方 |
 |---|---|
 | バックエンドのルート | `lib/domain-name-schema.ts` の `domainNameSchema()` を Zod に挿す |
-| バックエンドの service | `isValidFqdn()` を呼ぶ（Zod を通らない経路への二段構え） |
+| バックエンドの service | `isValidFqdn()` を呼び、形式不正は `Result` の失敗として返す（Zod を通らない経路への二段構え） |
 | フロントエンド | `shared/lib/domain-name.ts`（`backend/registry-policy` の再エクスポート） |
 
 **フロント側に regex を書き写さないこと。** 画面ごとにバリデーションの強度がずれ、

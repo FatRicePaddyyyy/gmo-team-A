@@ -65,15 +65,23 @@ export class DomainService {
    * TLD_CATALOG 全件を確認すると通信回数が膨らんでいた。ここでは hello を1回ずつだけ呼び、
    * 名前を registry ごとにグルーピングしてから、registry ごとに1回の check にまとめる。
    */
-  // 項目ごとに avail/failed を持つため、この処理自体が全体として失敗することはない
-  // （Result<T> でラップしない。呼び出し側は常に results をそのまま使える）。
+  // レジストリ由来の失敗は項目ごとの avail/failed で表す。一方、名前の形式が不正なケースは
+  // 項目に載せると「すでに使われています」と誤って見えてしまうため、処理全体の失敗として返す
+  // （Issue #76。avail/failed の2フラグには「そもそも不正な名前」を表す状態が無い）。
   static async checkBulk({
     names,
     env,
   }: {
     names: string[];
     env: CloudflareBindings;
-  }): Promise<DomainCheckItem[]> {
+  }): Promise<Result<DomainCheckItem[]>> {
+    // Issue #76: 形式は Zod でも検証しているが、service 層でも先に見る（transfers と同じ二段構え）。
+    // handler を経由しない呼び出しが将来入っても、レジストリへ送らずここで止められる。
+    const invalid = names.find(name => !isValidFqdn(name.trim().toLowerCase()));
+    if (invalid !== undefined) {
+      return { success: false, data: null, error: "invalid_domain_name" };
+    }
+
     const [ks, kn] = await Promise.all([
       RegistryBridge.hello({ registry: "kitaqsign", env }),
       RegistryBridge.hello({ registry: "kitaqnic", env }),
@@ -92,13 +100,6 @@ export class DomainService {
     const results: DomainCheckItem[] = [];
 
     for (const name of names) {
-      // Issue #76: 形式が不正な名前 (日本語ドメインなど) は failed ではなく
-      // 「確定的に取得できない」として返す。failed: true にすると画面上
-      // 「レジストリと通信に失敗しました」と出て、障害と誤解されるため。
-      if (!isValidFqdn(name.trim().toLowerCase())) {
-        results.push({ name, avail: false, failed: false });
-        continue;
-      }
       const tld = tldOf(name);
       if (!tld) {
         results.push({ name, avail: false, failed: true });
@@ -131,7 +132,7 @@ export class DomainService {
       }
     }
 
-    return results;
+    return { success: true, data: results, error: null };
   }
 
   static async create({
