@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/test";
 import { createSeedUser, hasSeedEnv } from "../helpers/seed-user";
 import { loginAndExpectDashboard } from "../helpers/login";
-import { fireCron, setupOutboundPending, t2TransferOp } from "../helpers/transfer";
+import { clickRefresh, setupOutboundPending, t2TransferOp } from "../helpers/transfer";
 
 /**
  * @registry-kitaqsign-normal — 移管 outbound reject (kitaqsign / .com)
@@ -23,7 +23,8 @@ test.describe(
       const { fullDomain } = await setupOutboundPending(page, "kitaqsign", "tr-out-r");
 
       await t2TransferOp("kitaqsign", fullDomain, "reject");
-      await fireCron();
+      // /transfer 上の「最新にする」で poll-now を叩いて反映を待つ
+      await clickRefresh(page);
 
       // teama マイドメインに載っていない
       await page.goto("/dashboard");

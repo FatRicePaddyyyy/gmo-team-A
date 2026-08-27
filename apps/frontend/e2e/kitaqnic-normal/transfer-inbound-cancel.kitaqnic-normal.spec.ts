@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/test";
 import { createSeedUser, hasSeedEnv } from "../helpers/seed-user";
 import { loginAndExpectDashboard } from "../helpers/login";
-import { fireCron, setupInboundPending, t2TransferOp } from "../helpers/transfer";
+import { clickRefresh, setupInboundPending, t2TransferOp } from "../helpers/transfer";
 
 /**
  * @registry-kitaqnic-normal — 移管 inbound cancel (kitaqnic / .xyz)
@@ -27,7 +27,8 @@ test.describe(
       ).toBeVisible({ timeout: 20_000 });
 
       await t2TransferOp("kitaqnic", fullDomain, "cancel");
-      await fireCron();
+      // 詳細ページの「最新にする」で poll-now を叩いて反映を待つ
+      await clickRefresh(page);
 
       await page.goto("/dashboard");
       await expect(

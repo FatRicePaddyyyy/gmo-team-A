@@ -1,4 +1,5 @@
 import { request } from "@playwright/test";
+import type { Page } from "@playwright/test";
 
 /**
  * 移管フロー e2e で teama-2 (相手事業者) の操作をレジストリ直叩きで行うヘルパ。
@@ -225,7 +226,31 @@ export async function t2PollAndDrain(registry: Registry, maxRounds = 5): Promise
 
 // ─── teama backend cron 発火 ───────────────────────────────
 
-/** backend の /__scheduled を叩いて cron 相当の処理を回す */
+/**
+ * frontend の「最新にする」ボタンをクリックして、backend の cron 相当の poll を走らせる。
+ * ボタンは /dashboard / /dashboard/[domain-id] / /transfer にあり、いずれも押すと
+ * refresh 内部で `$pollNowTransfer()` が叩かれる (backend の poll-now エンドポイントは
+ * cron 相当を毎回走らせる)。テストからは e2e 実運用に一番近い手段としてこちらを使う。
+ *
+ * 事前条件: 既に上記いずれかのページを開いている前提。
+ */
+export async function clickRefresh(page: Page): Promise<void> {
+  // ボタン名は「最新にする」(loading 中は「読み込み中...」に変わる)
+  const button = page.getByRole("button", { name: "最新にする" });
+  await button.click();
+  // ボタンが「読み込み中...」→「最新にする」に戻るまで待つのがもっとも堅実
+  // (詳細ページでは loading=false になったら戻る)。ただし短時間で終わる画面も多いので
+  // タイムアウトは緩めに。
+  await page
+    .getByRole("button", { name: "読み込み中..." })
+    .waitFor({ state: "hidden", timeout: 10_000 })
+    .catch(() => {
+      // すでに読み込み中の表示が無いケース (超高速で終わった、またはそもそも出なかった)
+      // は無視する。次のアサーションが本命の検証になる。
+    });
+}
+
+/** backend の /__scheduled を叩いて cron 相当の処理を回す (以前の手段。使わないほうがよい) */
 export async function fireCron(): Promise<void> {
   const api = await request.newContext();
   try {
@@ -259,7 +284,6 @@ export function randomHex(bytes: number): string {
 
 // ─── frontend 上での操作をまとめたヘルパ ─────────────────
 
-import type { Page } from "@playwright/test";
 import { expect } from "@playwright/test";
 
 /**
@@ -309,18 +333,16 @@ export async function setupInboundPending(
   ).toBeVisible({ timeout: 10_000 });
 
   await t2TransferRequest(registry, fullDomain, authInfo);
-  // cron 1 回では、レジストリの transfer message が poll → DB 反映 → inbound 一覧
-  // 更新までの 1 cycle に収まらないことがある (レジストリ側の通知が数拍遅れる)。
-  // 2 回発火 + 短い間隔を挟むことで実際の反映を待つ。
-  await fireCron();
-  await page.waitForTimeout(1_000);
-  await fireCron();
 
-  // 再度詳細ページを開いて、「他のレジストラへ渡す」タブに incoming transfer カードが出るのを待つ
-  await page.goto("/dashboard");
-  await page
-    .getByRole("link", { name: new RegExp(fullDomain.replace(".", "\\.")) })
-    .click();
+  // 詳細ページの「最新にする」ボタンを押して backend の poll-now を叩く。
+  // 詳細ページには authInfo 設定直後の時点ですでにいる。
+  // レジストリの transfer message が poll → DB 反映 → inbound 一覧
+  // 更新までの 1 cycle に収まらないことがあるので、間を空けて 2 回押す。
+  await clickRefresh(page);
+  await page.waitForTimeout(1_000);
+  await clickRefresh(page);
+
+  // 「他のレジストラへ渡す」タブに incoming transfer カードが出るのを待つ
   await page.getByRole("tab", { name: "他のレジストラへ渡す" }).click();
 
   return { fullDomain, authInfo };
