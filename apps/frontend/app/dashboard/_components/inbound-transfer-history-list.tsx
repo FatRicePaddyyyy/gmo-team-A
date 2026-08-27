@@ -56,9 +56,8 @@ export function InboundTransferHistoryList({
           <History className="size-5 text-gray-400" aria-hidden="true" />
           過去の
           <GlossaryTerm description={GLOSSARY.transfer.description}>
-            {GLOSSARY.transfer.term}
+            {GLOSSARY.transfer.term}申請
           </GlossaryTerm>
-          申請
         </h2>
         <p className="mt-1 text-sm text-gray-600">
           あなたのドメインに対して過去に届き、引き渡さずに終わった申請です。
