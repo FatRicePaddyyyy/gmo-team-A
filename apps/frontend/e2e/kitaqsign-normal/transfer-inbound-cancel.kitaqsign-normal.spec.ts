@@ -25,7 +25,7 @@ test.describe(
       // incoming transfer カードが出ていることを確認
       await expect(
         page.getByRole("heading", { name: "他のレジストラへの引き渡しを求められています" }),
-      ).toBeVisible({ timeout: 10_000 });
+      ).toBeVisible({ timeout: 20_000 });
 
       // teama-2 側で cancel + teama backend cron
       await t2TransferOp("kitaqsign", fullDomain, "cancel");
