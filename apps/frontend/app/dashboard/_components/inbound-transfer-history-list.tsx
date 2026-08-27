@@ -55,6 +55,8 @@ export function InboundTransferHistoryList({
         <h2 className="flex items-center gap-2 font-heading text-xl font-bold text-gray-900">
           <History className="size-5 text-gray-400" aria-hidden="true" />
           過去の
+          {/* 「移管申請」を割ると語の途中に記号が挟まって読みにくい。
+              説明は「移管」のものを使い、表示は複合語のままにする */}
           <GlossaryTerm description={GLOSSARY.transfer.description}>
             {GLOSSARY.transfer.term}申請
           </GlossaryTerm>
