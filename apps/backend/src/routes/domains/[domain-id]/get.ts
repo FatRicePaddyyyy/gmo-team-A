@@ -23,6 +23,7 @@ const DomainSchema = z.object({
   // レジストリに問い合わせられたか。false のとき statuses / registrant /
   // contacts / nameservers は「空」ではなく「取得できていない」。
   registryAvailable: z.boolean(),
+  registryUnavailableReason: z.string().nullable(),
   statuses: z.array(z.string()),
   registrant: z.string(),
   contacts: z.record(z.string(), z.string()),

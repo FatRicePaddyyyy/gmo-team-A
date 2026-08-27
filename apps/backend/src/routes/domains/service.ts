@@ -9,6 +9,7 @@ import type {DomainDetailResponse, DomainResponse} from "./mapper";
 import { DomainRepository } from "./repository";
 import { DomainTransferRepository } from "./transfer-repository";
 import { DomainUserRepository } from "./user-repository";
+import { toUserMessage } from "../../lib/error-messages";
 
 // 廃止したドメインが取りうる状態。
 //
@@ -290,7 +291,14 @@ export class DomainService {
       // そのまま失敗として返す。メンテナンス・疎通不良だけを対象にする。
       if (isRegistryUnreachable(infoResult.error)) {
         console.warn(`DomainService.info: registry unreachable (${infoResult.error}); returning DB-only detail for ${domain.name}`);
-        return { success: true, data: DomainMapper.toDetailResponseWithoutRegistry(domain), error: null };
+        return {
+          success: true,
+          data: DomainMapper.toDetailResponseWithoutRegistry(
+            domain,
+            toUserMessage(infoResult.error),
+          ),
+          error: null,
+        };
       }
       return infoResult;
     }

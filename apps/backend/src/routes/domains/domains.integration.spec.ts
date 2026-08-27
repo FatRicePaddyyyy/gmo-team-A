@@ -688,8 +688,10 @@ describe("結合: メンテナンス中でも詳細は DB の分だけ返す", (
     );
 
     expect(res.status).toBe(200);
-    const json = await res.json() as { data: { registryAvailable: boolean; name: string; nameservers: string[] } };
+    const json = await res.json() as { data: { registryAvailable: boolean; registryUnavailableReason: string; name: string; nameservers: string[] } };
     expect(json.data.registryAvailable).toBe(false);
+    // 理由まで返す。メンテナンスと通信不良で利用者への案内が変わるため
+    expect(json.data.registryUnavailableReason).toContain("メンテナンス");
     // DB にある情報は出る
     expect(json.data.name).toBe(mockDomainRow.name);
     // レジストリ由来は「取得できていない」として空
@@ -702,6 +704,9 @@ describe("結合: メンテナンス中でも詳細は DB の分だけ返す", (
 
     const res = await getDomainRouteHandler.request("/api/v1/secure/domains/dom-001", {}, mockEnv);
     expect(res.status).toBe(200);
+    // 通信不良をメンテナンスと言わない
+    const json = await res.json() as { data: { registryUnavailableReason: string } };
+    expect(json.data.registryUnavailableReason).not.toContain("メンテナンス");
   });
 
   test("[異常系] ドメイン不在など相手都合でないエラーは従来どおり失敗させる", async () => {

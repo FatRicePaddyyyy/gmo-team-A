@@ -25,6 +25,14 @@ export type DomainDetailResponse = DomainResponse & {
    * 値ではなく「いま取得できません」と出し、操作も止めること。
    */
   registryAvailable: boolean;
+  /**
+   * レジストリに問い合わせられなかった理由（日本語）。
+   * registryAvailable が true のときは null。
+   *
+   * メンテナンスなのか通信不良なのかで利用者への案内が変わるので、
+   * 「取れなかった」だけでなく理由まで返す。
+   */
+  registryUnavailableReason: string | null;
   // レジストリの status[] をそのまま保持する。
   // 「復旧できるか」はここに redemptionPeriod が入っているかで判断する。
   // 廃止直後は pendingDelete と redemptionPeriod の両方が付き、45日を過ぎると
@@ -61,6 +69,7 @@ export class DomainMapper {
     return {
       ...DomainMapper.toResponse(row),
       registryAvailable: true,
+      registryUnavailableReason: null,
       statuses: registryData.status ?? [],
       registrant: registryData.registrant ?? "",
       contacts: registryData.contacts ?? {},
@@ -81,10 +90,14 @@ export class DomainMapper {
    * 「無い」ではなく「取得できていない」なので、空配列と registryAvailable: false の
    * 組み合わせで区別する。画面側はこのフラグを見て、値ではなく状態を出す。
    */
-  static toDetailResponseWithoutRegistry(row: DomainRow): DomainDetailResponse {
+  static toDetailResponseWithoutRegistry(
+    row: DomainRow,
+    reason: string,
+  ): DomainDetailResponse {
     return {
       ...DomainMapper.toResponse(row),
       registryAvailable: false,
+      registryUnavailableReason: reason,
       statuses: [],
       registrant: "",
       contacts: {},

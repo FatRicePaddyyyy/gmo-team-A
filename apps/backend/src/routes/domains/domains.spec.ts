@@ -28,6 +28,7 @@ const mockDomain = {
 const mockDomainDetail = {
   ...mockDomain,
   registryAvailable: true,
+  registryUnavailableReason: null,
   statuses: ["ok"],
   registrant: "C-0001",
   contacts: {},

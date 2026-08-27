@@ -8,7 +8,6 @@ import { BackLink } from "@/components/back-link";
 import { RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { FeedbackBanner } from "@/components/feedback-banner";
-import { MAINTENANCE_TITLE } from "@/shared/lib/maintenance";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import {
@@ -156,10 +155,15 @@ export default function DomainDetailPage() {
 
                 {/* レジストリが落ちているときは理由が違うので、状態ヒントより先に出す */}
                 {registryDown && (
+                  /* 理由はバックエンドが返す。メンテナンスなら帯がそう出し、
+                     通信不良ならその文言のまま出る。こちらで決めつけない。 */
                   <FeedbackBanner
                     tone="error"
                     context="detail"
-                    message={MAINTENANCE_TITLE}
+                    message={
+                      domain.registryUnavailableReason ??
+                      "レジストリから最新の情報を取得できませんでした。"
+                    }
                   />
                 )}
 
