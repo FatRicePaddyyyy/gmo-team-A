@@ -1,4 +1,4 @@
-import type { Result } from "../../types/result";
+import type { Result, SimpleResult } from "../../types/result";
 import { getClient, getKitaqnicClient } from "./client";
 import type {
   DomainCheckResponse,
@@ -734,6 +734,47 @@ export class RegistryBridge {
     } catch (e) {
       console.error(`[ack:${registry}] exception messageId=${messageId}`, e);
       return { success: false, data: null, error: "network_error" };
+    }
+  }
+
+  /**
+   * host:create — ネームサーバーをホストオブジェクトとして登録する。
+   *
+   * EPP ではネームサーバーは独立したオブジェクトで、domain:update / domain:create の
+   * nameservers から参照する前に登録されている必要がある。未登録のまま参照すると
+   * レジストリは 2303 (Object does not exist) を返す。
+   *
+   * すでに存在する場合は 2302 (Object exists) が返るが、こちらの目的は
+   * 「参照できる状態にすること」なので成功として扱う。
+   */
+  static async hostCreate({
+    name,
+    registry,
+    env,
+  }: {
+    name: string;
+    registry: Registry;
+    env: CloudflareBindings;
+  }): Promise<SimpleResult> {
+    try {
+      const { data, error, response } = await getClient(registry, env).POST("/api/v1/epp/hosts", {
+        body: { name },
+      });
+      if (response.status === 403) {return { success: false, error: "forbidden" };}
+      // 既存ホストは 409 で返る実装もあるため、ステータスでも冪等に倒す
+      if (response.status === 409) {return { success: true, error: null };}
+      if (error) {
+        return { success: false, error: attachDetail("invalid_registry_response", extractResultMessage(error)) };
+      }
+      // 2302 Object exists = すでに登録済み。参照はできるので成功扱い
+      if (data.result.code === 2302) {return { success: true, error: null };}
+      if (data.result.code !== 1000 && data.result.code !== 1001) {
+        return { success: false, error: attachDetail("registry_error", data.result.message) };
+      }
+      return { success: true, error: null };
+    } catch (e) {
+      console.error(`[hostCreate:${registry}] exception name=${name}`, e);
+      return { success: false, error: "network_error" };
     }
   }
 }

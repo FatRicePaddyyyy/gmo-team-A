@@ -2,7 +2,7 @@ import { TransferStatusRepository } from "../../domains/transfer/repository";
 import { RegistryBridge } from "../../lib/bridge";
 import type { Registry } from "../../lib/bridge/types";
 import type { DBClient } from "../../lib/db";
-import type { Result } from "../../types/result";
+import type { Result, SimpleResult } from "../../types/result";
 import { DomainMapper   } from "./mapper";
 import type {DomainDetailResponse, DomainResponse} from "./mapper";
 import { DomainRepository } from "./repository";
@@ -47,6 +47,30 @@ function pickPrimaryStatus(statuses: string[], fallback: string): string {
   if (statuses.length === 0) {return fallback;}
   // 未知のステータス集合。fallback を返し、client 系フラグに引きずられないようにする。
   return fallback;
+}
+
+/**
+ * ネームサーバーを domain:create / domain:update から参照する前に、
+ * ホストオブジェクトとして登録しておく。
+ *
+ * EPP ではネームサーバーは独立したオブジェクトで、未登録のまま参照すると
+ * レジストリが 2303 (Object does not exist) を返す。すでに存在する場合は
+ * bridge 側が 2302 を成功に倒すので、毎回まとめて呼んでよい。
+ */
+async function ensureHosts(params: {
+  nameServers: string[];
+  registry: Registry;
+  env: CloudflareBindings;
+}): Promise<SimpleResult> {
+  for (const host of params.nameServers) {
+    const result = await RegistryBridge.hostCreate({
+      name: host,
+      registry: params.registry,
+      env: params.env,
+    });
+    if (!result.success) {return result;}
+  }
+  return { success: true, error: null };
 }
 
 export class DomainService {
@@ -115,7 +139,13 @@ export class DomainService {
 
     const authInfo = crypto.randomUUID();
 
-    // 3. ドメイン登録: registrant と contacts.ADMIN/TECH/BILLING に上で作った contactId を割り当てる。
+    // 3. ネームサーバーを指定するなら、先にホストとして登録しておく
+    if (nameServers?.length) {
+      const hostResult = await ensureHosts({ nameServers, registry, env });
+      if (!hostResult.success) {return { success: false, data: null, error: hostResult.error };}
+    }
+
+    // 4. ドメイン登録: registrant と contacts.ADMIN/TECH/BILLING に上で作った contactId を割り当てる。
     const createResult = await RegistryBridge.create({
       domain: name,
       period,
@@ -288,14 +318,40 @@ export class DomainService {
       return { success: true, data: DomainMapper.toDetailResponse(updatedRow, infoResult.data), error: null };
     }
 
-    const add = (nameServers || addStatuses)
+    // nameServers は「変更後の全リスト」として受け取る。EPP の domain:update は
+    // add / rem の差分しか受け付けないので、現在の登録内容と突き合わせて差分を作る。
+    // これをしないと外したはずのネームサーバーが残り続ける。
+    let addNameServers: string[] | undefined;
+    let remNameServers: string[] | undefined;
+    if (nameServers) {
+      const currentResult = await RegistryBridge.info({ name: domain.name, registry: domain.registry, env });
+      if (!currentResult.success) {return currentResult;}
+      const current = currentResult.data.nameservers ?? [];
+      const added = nameServers.filter((host) => !current.includes(host));
+      const removed = current.filter((host) => !nameServers.includes(host));
+      addNameServers = added.length > 0 ? added : undefined;
+      remNameServers = removed.length > 0 ? removed : undefined;
+    }
+
+    // 追加するホストは、参照する前にホストオブジェクトとして登録しておく
+    if (addNameServers) {
+      const hostResult = await ensureHosts({ nameServers: addNameServers, registry: domain.registry, env });
+      if (!hostResult.success) {return { success: false, data: null, error: hostResult.error };}
+    }
+
+    const add = (addNameServers || addStatuses)
       ? {
-          ...(nameServers ? { nameservers: nameServers } : {}),
+          ...(addNameServers ? { nameservers: addNameServers } : {}),
           ...(addStatuses ? { statuses: addStatuses } : {}),
         }
       : undefined;
 
-    const rem = remStatuses ? { statuses: remStatuses } : undefined;
+    const rem = (remNameServers || remStatuses)
+      ? {
+          ...(remNameServers ? { nameservers: remNameServers } : {}),
+          ...(remStatuses ? { statuses: remStatuses } : {}),
+        }
+      : undefined;
 
     const updateResult = await RegistryBridge.update({
       name: domain.name,

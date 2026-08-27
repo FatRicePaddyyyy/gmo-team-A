@@ -352,6 +352,8 @@ describe("結合: PUT /api/v1/secure/domains/{id}", () => {
 
   test("[異常系] add で指定したネームサーバーが未登録 → 400 + referenced_object_not_found", async () => {
     vi.spyOn(DomainRepository, "findById").mockResolvedValue({ success: true, data: mockDomainRow, error: null });
+    mockRegistryInfo(["ok"]);
+    vi.spyOn(RegistryBridge, "hostCreate").mockResolvedValue({ success: true, error: null });
     vi.spyOn(RegistryBridge, "update").mockResolvedValue({ success: false, data: null, error: "referenced_object_not_found" });
 
     const res = await updateDomainRouteHandler.request(
@@ -360,6 +362,41 @@ describe("結合: PUT /api/v1/secure/domains/{id}", () => {
       mockEnv,
     );
     expect(res.status).toBe(400);
+  });
+
+  test("[正常系] ネームサーバー変更は host:create を先に呼ぶ", async () => {
+    vi.spyOn(DomainRepository, "findById").mockResolvedValue({ success: true, data: mockDomainRow, error: null });
+    const hostCreate = vi.spyOn(RegistryBridge, "hostCreate").mockResolvedValue({ success: true, error: null });
+    const update = vi.spyOn(RegistryBridge, "update").mockResolvedValue({ success: true, data: {}, error: null });
+    mockRegistryInfo(["ok"]);
+    vi.spyOn(DomainRepository, "updateExpiresAtAndStatus").mockResolvedValue({ success: true, data: undefined, error: null });
+
+    const res = await updateDomainRouteHandler.request(
+      "/api/v1/secure/domains/dom-001",
+      { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ nameServers: ["ns1.example.com", "ns2.example.com"] }) },
+      mockEnv,
+    );
+
+    expect(res.status).toBe(200);
+    // 未登録のホストを domain:update から参照すると 2303 になるため、必ず先に作る
+    expect(hostCreate).toHaveBeenCalledTimes(2);
+    expect(hostCreate.mock.invocationCallOrder[0]).toBeLessThan(update.mock.invocationCallOrder[0]);
+  });
+
+  test("[異常系] host:create が失敗したら domain:update を呼ばない", async () => {
+    vi.spyOn(DomainRepository, "findById").mockResolvedValue({ success: true, data: mockDomainRow, error: null });
+    mockRegistryInfo(["ok"]);
+    vi.spyOn(RegistryBridge, "hostCreate").mockResolvedValue({ success: false, error: "network_error" });
+    const update = vi.spyOn(RegistryBridge, "update");
+
+    const res = await updateDomainRouteHandler.request(
+      "/api/v1/secure/domains/dom-001",
+      { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ nameServers: ["ns1.example.com"] }) },
+      mockEnv,
+    );
+
+    expect(res.status).toBe(500);
+    expect(update).not.toHaveBeenCalled();
   });
 
   test("[異常系] addStatuses と remStatuses が重複 → 400", async () => {
