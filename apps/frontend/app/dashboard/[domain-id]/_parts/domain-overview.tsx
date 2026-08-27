@@ -8,12 +8,22 @@ import {
 } from "../../_lib/domain-status";
 import type { DomainDetail } from "../_hooks/use-domain-detail.hook";
 
-/** ラベルと値を並べる行。値が空なら「—」を出して、欠落と空文字を区別しない */
+/**
+ * ラベルと値を並べる行。値が空なら「—」を出して、欠落と空文字を区別しない。
+ *
+ * 「値」は素の string / null / React 要素のいずれもありうる。素の string / null は
+ * `value || "—"` の truthy 判定で拾えるが、`<span>` に包んだ場合は truthy 扱いに
+ * なるので、呼び出し側で「中身が空なら null を渡す」ことを徹底する。
+ * ここでは最終フォールバックだけ担当する。
+ */
 function Row({ label, value }: { label: string; value: React.ReactNode }) {
+  // 空文字列も「値なし」扱いにする。backend のレスポンスが一時的に "" を返しても
+  // 空表示にならず、必ず「—」が出るようにする（issue #66）
+  const empty = value === null || value === undefined || value === "";
   return (
     <div className="flex flex-wrap gap-x-3 gap-y-0.5 border-b border-gray-100 py-2 last:border-b-0">
       <dt className="w-40 shrink-0 text-xs text-gray-500">{label}</dt>
-      <dd className="min-w-0 flex-1 text-sm text-gray-900">{value || "—"}</dd>
+      <dd className="min-w-0 flex-1 text-sm text-gray-900">{empty ? "—" : value}</dd>
     </div>
   );
 }
@@ -67,27 +77,34 @@ export function DomainOverview({ domain }: DomainOverviewProps) {
             <Row
               label="有効期限"
               value={
-                <span className="inline-flex items-center gap-1.5">
-                  <CalendarClock
-                    className="size-4 text-gray-400"
-                    aria-hidden="true"
-                  />
-                  {formatDate(domain.expiresAt)}
-                </span>
+                domain.expiresAt ? (
+                  <span className="inline-flex items-center gap-1.5">
+                    <CalendarClock
+                      className="size-4 text-gray-400"
+                      aria-hidden="true"
+                    />
+                    {formatDate(domain.expiresAt)}
+                  </span>
+                ) : null
               }
             />
-            <Row label="取得日" value={formatDate(domain.createdAt)} />
-            <Row label="レジストリ" value={domain.registry} />
+            <Row
+              label="取得日"
+              value={domain.createdAt ? formatDate(domain.createdAt) : null}
+            />
+            <Row label="レジストリ" value={domain.registry || null} />
             <Row
               label="登録者"
               value={
-                <span className="inline-flex items-center gap-1.5">
-                  <User
-                    className="size-4 shrink-0 text-gray-400"
-                    aria-hidden="true"
-                  />
-                  <span className="break-all">{domain.registrant}</span>
-                </span>
+                domain.registrant ? (
+                  <span className="inline-flex items-center gap-1.5">
+                    <User
+                      className="size-4 shrink-0 text-gray-400"
+                      aria-hidden="true"
+                    />
+                    <span className="break-all">{domain.registrant}</span>
+                  </span>
+                ) : null
               }
             />
             <Row
@@ -147,7 +164,7 @@ export function DomainOverview({ domain }: DomainOverviewProps) {
                     {contacts.map(([role, id]) => (
                       <li key={role} className="text-sm">
                         <span className="text-gray-500">{role}: </span>
-                        <span className="font-mono break-all">{id}</span>
+                        <span className="font-mono break-all">{id || "—"}</span>
                       </li>
                     ))}
                   </ul>
