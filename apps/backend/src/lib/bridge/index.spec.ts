@@ -18,6 +18,9 @@ const mockEnv = {
   KITAQNIC_BASIC_PASS: "p",
   KITAQNIC_REGISTRAR_ID: "REG-1",
   KITAQNIC_API_KEY: "k",
+  // 静的フォールバック用の TLD リスト (wrangler.jsonc の vars と同期)。
+  KITAQSIGN_FALLBACK_TLDS: "com,net,org,info",
+  KITAQNIC_FALLBACK_TLDS: "xyz,shop,store,app,dev,io,site,online,tech,space,click,link,top,world,life,cloud,email,fun",
 } as unknown as CloudflareBindings;
 
 /** レジストリの生レスポンスを1回分だけ返す fetch を仕込む */
@@ -241,8 +244,13 @@ describe("RegistryBridge.update: 403/404 の権限系吸収", () => {
     expect(res.error).toBe("forbidden");
   });
 
-  test("[異常系] 404 は domain_not_found にマップされる", async () => {
-    stubRegistry(404, errEnvelope(2303, "Object does not exist"));
+  test("[異常系] 404 + reason にドメイン名を含む → domain_not_found にマップされる", async () => {
+    // レジストリは HTTP 404 + result.reason にどのオブジェクトが不在かを載せてくる (未ドキュメント化)。
+    // reason がドメイン名を明示的に含むならドメイン本体の不在 = domain_not_found。
+    stubRegistry(404, {
+      result: { code: 2303, message: "Object does not exist", reason: "nope.com not found" },
+      trID: { clTRID: null, svTRID: "TEST-0001" },
+    });
 
     const res = await RegistryBridge.update({
       name: "nope.com",
@@ -252,6 +260,42 @@ describe("RegistryBridge.update: 403/404 の権限系吸収", () => {
     });
 
     expect(res.error).toBe("domain_not_found");
+  });
+
+  test("[異常系] 404 + reason に host 名 (ドメイン外) → referenced_object_not_found にマップされる", async () => {
+    // 実測 (kitaqsign 2026-08-27): add/rem で指定した host が未登録のとき
+    // HTTP 404 + result.reason="ns3.example.com not found" で返る。
+    // 「404 なら常にドメイン不在」と決めつけると host 不在を誤写像するので、reason を見る。
+    stubRegistry(404, {
+      result: { code: 2303, message: "Object does not exist", reason: "ns3.example.com not found" },
+      trID: { clTRID: null, svTRID: "TEST-0001" },
+    });
+
+    const res = await RegistryBridge.update({
+      name: "example.com",
+      add: { nameservers: ["ns3.example.com"] },
+      registry: "kitaqsign",
+      env: mockEnv,
+    });
+
+    expect(res.error).toBe("referenced_object_not_found");
+  });
+
+  test("[異常系] 404 + reason 無し → 参照先不在の可能性が高いので referenced_object_not_found", async () => {
+    // reason フィールドを載せずに 404+2303 が返るケース。ドメイン本体か参照先かは判別できないが、
+    // HTTP 404+result.code 2303 は host 不在の典型パターン (実測) なので referenced_object_not_found に倒す。
+    // 本当にドメイン不在ならその前の findById (backend DB) で弾けているので、この時点で 404 は
+    // 参照先の可能性が高い。
+    stubRegistry(404, errEnvelope(2303, "Object does not exist"));
+
+    const res = await RegistryBridge.update({
+      name: "example.com",
+      chg: { registrant: "C-0001" },
+      registry: "kitaqsign",
+      env: mockEnv,
+    });
+
+    expect(res.error).toBe("referenced_object_not_found");
   });
 
   // Kitaqnic の update 成功レスポンスは EppResponseUnit (resData が空 = Record<string, never>) を返す。
@@ -313,8 +357,11 @@ describe("RegistryBridge.update: 403/404 の権限系吸収", () => {
 // ─── resolveRegistry ─────────────────────────────────────────────────────────
 
 describe("RegistryBridge.resolveRegistry: 片側 hello 失敗時の判定", () => {
-  test("[異常系] kitaqsign 疎通 OK・kitaqnic 疎通 NG で kitaqnic 管轄 TLD → network_error", async () => {
+  test("[フォールバック] kitaqsign 疎通 OK・kitaqnic 疎通 NG で kitaqnic 管轄 TLD → 静的テーブルで kitaqnic", async () => {
     // hello を直接 spy で差し替える (fetch stub 二重管理を避けるため)。
+    // kitaqnic 側がメンテナンス中で hello が長時間落ちるケース。
+    // withRetry で 5xx リトライしても復旧しないので、静的テーブル (FALLBACK_KITAQNIC_TLDS) で
+    // 「.xyz は kitaqnic」と判定する。
     vi.spyOn(RegistryBridge, "hello").mockImplementation(async ({ registry }) => {
       if (registry === "kitaqsign") {
         return { success: true, data: { registryCode: "KQSGN", tlds: ["com", "net"] }, error: null };
@@ -324,17 +371,28 @@ describe("RegistryBridge.resolveRegistry: 片側 hello 失敗時の判定", () =
 
     const res = await RegistryBridge.resolveRegistry({ name: "example.xyz", env: mockEnv });
 
-    // 修正前は unsupported_tld を返していた (kitaqnic が実は対応してるかもしれないのに誤情報)
-    expect(res.success).toBe(false);
-    expect(res.error).toBe("network_error");
+    expect(res.success).toBe(true);
+    if (res.success) {expect(res.data).toBe("kitaqnic");}
   });
 
-  test("[異常系] 両方 hello が失敗 → network_error", async () => {
+  test("[フォールバック] 両方 hello が失敗 + 静的テーブルに存在する TLD → 静的テーブルで kitaqsign", async () => {
     vi.spyOn(RegistryBridge, "hello").mockResolvedValue({ success: false, data: null, error: "network_error" });
 
     const res = await RegistryBridge.resolveRegistry({ name: "example.com", env: mockEnv });
 
-    expect(res.error).toBe("network_error");
+    expect(res.success).toBe(true);
+    if (res.success) {expect(res.data).toBe("kitaqsign");}
+  });
+
+  test("[異常系] 片側/両方 hello 失敗 + 静的テーブルにも無い TLD → unsupported_tld", async () => {
+    // hello が両方落ちていても、静的テーブルにも無いなら「実在しない TLD」の可能性が
+    // 圧倒的に高い (静的テーブルは全 gTLD をカバーする前提)。500 = network_error でユーザーに
+    // 再試行を促すより、4xx = unsupported_tld で「その TLD は扱えません」と伝えるほうが正しい。
+    vi.spyOn(RegistryBridge, "hello").mockResolvedValue({ success: false, data: null, error: "network_error" });
+
+    const res = await RegistryBridge.resolveRegistry({ name: "example.foobarbaz", env: mockEnv });
+
+    expect(res.error).toBe("unsupported_tld");
   });
 
   test("[正常系] 両方 hello 成功・kitaqsign 管轄 TLD → kitaqsign", async () => {

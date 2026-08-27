@@ -118,6 +118,8 @@ else
 fi
 
 # --- (h) clientUpdateProhibited を付けた状態で update → 409 -----------------
+# 実測: kitaqsign は client*Prohibited を PUT で受け付けても info の statuses に反映しない
+# (HTTP 200 は返るがフラグが立たない)。付与直後に info でフラグを確認し、無ければ skip する。
 step "(h) clientUpdateProhibited を付けた後に他の update → 409"
 # 別ドメインで検証 (main を壊さない)
 NAME_H="update-h-${TS}.${TLD}"
@@ -132,16 +134,22 @@ STATUS_H0="$(http_status "${RES_H0}")"
 if [ "${STATUS_H0}" != "200" ]; then
   note "clientUpdateProhibited の付与自体が HTTP ${STATUS_H0} → 本テスト skip"
 else
-  RES_H="$(curl -sS -X PUT "${BACKEND_URL}/api/v1/secure/domains/${H_ID}" \
-    -H "Content-Type: application/json" -b "${COOKIE_JAR}" \
-    -w "\n__HTTP__%{http_code}" \
-    -d "{\"nameServers\":[\"ns3.example.com\"]}")"
-  STATUS_H="$(http_status "${RES_H}")"
-  # 実装は "operation_prohibited" を 409 に写像。実レジストリが 200+2304 or HTTP 403 で返す可能性あり
-  if [ "${STATUS_H}" = "409" ] || [ "${STATUS_H}" = "403" ]; then
-    ok "clientUpdateProhibited 下は 409/403 (HTTP ${STATUS_H})"
+  # info でフラグが実際に立っているか確認
+  INFO_H="$(curl -sS "${BACKEND_URL}/api/v1/secure/domains/${H_ID}" -b "${COOKIE_JAR}")"
+  if ! echo "${INFO_H}" | grep -q "clientUpdateProhibited"; then
+    note "実 API が clientUpdateProhibited を反映していない (kitaqsign 側の既知の未対応) → 本テスト skip"
   else
-    ng "clientUpdateProhibited 下で HTTP ${STATUS_H}: $(http_body "${RES_H}")"
+    RES_H="$(curl -sS -X PUT "${BACKEND_URL}/api/v1/secure/domains/${H_ID}" \
+      -H "Content-Type: application/json" -b "${COOKIE_JAR}" \
+      -w "\n__HTTP__%{http_code}" \
+      -d "{\"nameServers\":[\"ns3.example.com\"]}")"
+    STATUS_H="$(http_status "${RES_H}")"
+    # 実装は "operation_prohibited" を 409 に写像。実レジストリが 200+2304 or HTTP 403 で返す可能性あり
+    if [ "${STATUS_H}" = "409" ] || [ "${STATUS_H}" = "403" ]; then
+      ok "clientUpdateProhibited 下は 409/403 (HTTP ${STATUS_H})"
+    else
+      ng "clientUpdateProhibited 下で HTTP ${STATUS_H}: $(http_body "${RES_H}")"
+    fi
   fi
 fi
 

@@ -1,8 +1,8 @@
 import { createRoute, z } from "@hono/zod-openapi";
+import { RegistryBridge } from "../../lib/bridge";
 import { createDBClient } from "../../lib/db";
 import { toUserMessage } from "../../lib/error-messages";
 import { createOpenAPIHono } from "../../lib/openapi-hono";
-import { detectRegistry } from "../../lib/registry-policy";
 import { DomainService } from "./service";
 
 // Issue #25: registry は省略可能。省略時は TLD から自動判定する。
@@ -60,9 +60,18 @@ const app = createOpenAPIHono();
 export const createDomainRouteHandler = app.openapi(route, async (ctx) => {
   const payload = ctx.req.valid("json");
   const userId = ctx.get("userId");
-  const registry = payload.registry ?? detectRegistry(payload.name);
+  // 引数 registry があれば尊重、無ければ hello (supportedTlds) から解決する。
+  // 静的テーブルではなく実レジストリの hello を根拠にすることで、対応 TLD 変更を追随できる。
+  let registry = payload.registry;
   if (!registry) {
-    return ctx.json({ success: false as const, data: null, error: "ドメイン名の形式が正しくありません。TLD（.com など）を含めて入力してください。" }, 400);
+    const resolved = await RegistryBridge.resolveRegistry({ name: payload.name, env: ctx.env });
+    if (!resolved.success) {
+      if (resolved.error === "unsupported_tld" || resolved.error === "invalid_domain_name") {
+        return ctx.json({ success: false as const, data: null, error: toUserMessage(resolved.error) }, 400);
+      }
+      return ctx.json({ success: false as const, data: null, error: toUserMessage(resolved.error) }, 500);
+    }
+    registry = resolved.data;
   }
   const db = createDBClient(ctx.env);
   const result = await DomainService.create({ ...payload, registry, userId, db, env: ctx.env });

@@ -288,14 +288,74 @@ export class DomainService {
       return { success: true, data: DomainMapper.toDetailResponse(updatedRow, infoResult.data), error: null };
     }
 
-    const add = (nameServers || addStatuses)
+    // nameServers の差分展開:
+    //   会員 API は「宣言的」に nameServers 全リストを受け取るが、レジストリ (EPP) の update は
+    //   add=追加 / rem=削除 の差分プロトコル (Swagger DomainChangeSet)。
+    //   宣言 → 差分の変換をここで行わないと、既存 NS を含めて再送した瞬間に "Object exists" で
+    //   失敗する (再現: nameservers-e2e-kitaqsign m2〜m5)。
+    //   仕様上の根拠: issue #10 / #9「PUT /domains/{id} で NS 変更のみなら nameServers だけでよい。
+    //   BRIDGE で add/rem/chg に変換」。
+    let nsToAdd: string[] | undefined;
+    let nsToRem: string[] | undefined;
+    if (nameServers !== undefined) {
+      const currentInfo = await RegistryBridge.info({ name: domain.name, registry: domain.registry, env });
+      if (!currentInfo.success) {return currentInfo;}
+      // 大文字小文字の揺れをレジストリの表記に合わせて (case-insensitive で) 比較する。
+      // DNS ホスト名は RFC 1035 上 case-insensitive、実 API は返却時の大文字小文字を保つため、
+      // 「大文字だけ違う NS を差分と誤検知して add/rem を打つ」のを防ぐ。
+      const current = new Set((currentInfo.data.nameservers ?? []).map((s) => s.toLowerCase()));
+      const target = nameServers.map((s) => s.toLowerCase());
+      const targetSet = new Set(target);
+      const addList = nameServers.filter((s) => !current.has(s.toLowerCase()));
+      const remList = (currentInfo.data.nameservers ?? []).filter((s) => !targetSet.has(s.toLowerCase()));
+      nsToAdd = addList.length > 0 ? addList : undefined;
+      nsToRem = remList.length > 0 ? remList : undefined;
+    }
+
+    const add = (nsToAdd || addStatuses)
       ? {
-          ...(nameServers ? { nameservers: nameServers } : {}),
+          ...(nsToAdd ? { nameservers: nsToAdd } : {}),
           ...(addStatuses ? { statuses: addStatuses } : {}),
         }
       : undefined;
 
-    const rem = remStatuses ? { statuses: remStatuses } : undefined;
+    const rem = (nsToRem || remStatuses)
+      ? {
+          ...(nsToRem ? { nameservers: nsToRem } : {}),
+          ...(remStatuses ? { statuses: remStatuses } : {}),
+        }
+      : undefined;
+
+    // すべての差分がゼロで chg/autoRenew も無い場合は、レジストリを叩かず no-op で成功を返す。
+    // nameServers 再送 (no-op) を「何もしない」で吸収するのが目的。
+    const hasRegistryPayload = Boolean(add ?? rem ?? chg);
+    if (!hasRegistryPayload) {
+      const infoOnly = await RegistryBridge.info({ name: domain.name, registry: domain.registry, env });
+      if (!infoOnly.success) {return infoOnly;}
+      // autoRenew だけ来ていれば DB 更新して返す
+      if (autoRenew !== undefined) {
+        const arResult = await DomainRepository.updateAutoRenew({ id: domainId, autoRenew, db });
+        if (!arResult.success) {return arResult;}
+      }
+      const updatedRow = {
+        ...domain,
+        ...(autoRenew !== undefined ? { autoRenew } : {}),
+      };
+      return { success: true, data: DomainMapper.toDetailResponse(updatedRow, infoOnly.data), error: null };
+    }
+
+    // add.nameservers に指定するホストは事前にレジストリに登録されている必要がある
+    // (未登録だと 404+2303 で弾かれる)。会員 API は宣言的に nameServers を受け取るので、
+    // add に含まれる新規ホストをここで先回り登録する。既存 (409) は idempotent 化して吸収。
+    if (nsToAdd && nsToAdd.length > 0) {
+      const hostCreateResults = await Promise.all(
+        nsToAdd.map((host) =>
+          RegistryBridge.createHost({ name: host, registry: domain.registry, env }),
+        ),
+      );
+      const firstFailure = hostCreateResults.find((r) => !r.success);
+      if (firstFailure) {return { success: false, data: null, error: firstFailure.error };}
+    }
 
     const updateResult = await RegistryBridge.update({
       name: domain.name,

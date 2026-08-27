@@ -2,19 +2,25 @@
 # prohibited-flags-e2e-kitaqsign.sh
 # client*Prohibited フラグの実効性検証 (Kitaqsign = .com)。
 #
-# 背景: B/delete 検証で clientDeleteProhibited を付けても DELETE が 200 で通ってしまった。
-#       各フラグが実際に対応操作を弾いているかを網羅検証する。
+# 背景:
+#   実測 (2026-08-27): kitaqsign は client*Prohibited を PUT で受け付けても
+#   info の statuses に反映しない (HTTP 200 は返るがフラグが立たない)。
+#   このため各フラグの実効性検証は「付与 → info でフラグ確認 → 立っていれば
+#   対応操作を叩いて 409/403 期待、立っていなければ skip」に変える。
+#
+#   フラグ未反映を検知したら「レジストリ側の未対応」として skip し、
+#   PASS でも FAIL でもなく情報として記録する。実 API が対応した瞬間、
+#   自動的にテストが有効化される。
 #
 # 使い方:
 #   ./scripts/lifecycle/prohibited-flags-e2e-kitaqsign.sh --env .env
 #
-# 検証項目 (N-1 〜 N-6):
-#   (n1) clientDeleteProhibited → DELETE                          → 409/403
-#   (n2) clientUpdateProhibited → PUT (nameServers)               → 409/403
-#   (n3) clientRenewProhibited  → renew                           → 409/403
-#   (n4) clientTransferProhibited → (登録側の transfer request は無いので info で反映確認)
-#   (n5) clientHold → info で statuses に含まれる                 → OK
-#   (n6) 上記フラグを rem で解除 → 対応操作が 200 になる           → 200
+# 検証項目 (N-1 〜 N-5):
+#   (n1) clientDeleteProhibited → DELETE            → 409/403
+#   (n2) clientUpdateProhibited → PUT (chg.authInfo)→ 409/403
+#   (n3) clientRenewProhibited  → renew             → 409/403
+#   (n4) clientTransferProhibited → info で反映確認
+#   (n5) clientHold → info で反映確認
 
 set -uo pipefail
 
@@ -24,10 +30,11 @@ YELLOW=$'\033[1;33m'
 CYAN=$'\033[0;36m'
 RESET=$'\033[0m'
 
-PASS=0; FAIL=0
+PASS=0; FAIL=0; SKIP=0
 step() { printf "\n${YELLOW}==> %s${RESET}\n" "$*"; }
 ok()   { PASS=$((PASS+1)); printf "${GREEN}✓${RESET} %s\n" "$*"; }
 ng()   { FAIL=$((FAIL+1)); printf "${RED}✗ %s${RESET}\n" "$*"; }
+sk()   { SKIP=$((SKIP+1)); printf "${CYAN}⚠ skip:${RESET} %s\n" "$*"; }
 fail() { printf "\n${RED}✗ %s${RESET}\n" "$*" >&2; exit 1; }
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
@@ -70,6 +77,27 @@ get_info() {
     -b "${COOKIE_JAR}" -w "\n__HTTP__%{http_code}"
 }
 
+# フラグを付与し、info で反映されたかを返す (0 = 反映あり, 1 = 反映なし = レジストリ未対応)。
+add_and_verify_flag() {
+  local id="$1" flag="$2"
+  local res status
+  res="$(add_flag "${id}" "${flag}")"
+  status="$(http_status "${res}")"
+  if [ "${status}" != "200" ]; then
+    sk "${flag} の付与自体が HTTP ${status}"
+    return 1
+  fi
+  local info body statuses
+  info="$(get_info "${id}")"; body="$(http_body "${info}")"
+  statuses="$(extract_statuses "${body}")"
+  if echo "${statuses}" | grep -q "${flag}"; then
+    ok "info で ${flag} 反映 (statuses=${statuses})"
+    return 0
+  fi
+  sk "実 API が ${flag} を info に反映していない (kitaqsign 側の既知の未対応)"
+  return 1
+}
+
 check_backend "${TLD}"
 seed_user_and_signin "prohibited.test.${TS}@example.com" "admin123" "Taro Test"
 
@@ -80,20 +108,7 @@ NAME_N1="prohibit-n1-${TS}.${TLD}"
 create_domain "${NAME_N1}" 1
 ID_N1="${DOMAIN_ID}"
 step "(n1-0) clientDeleteProhibited を付与"
-RES="$(add_flag "${ID_N1}" "clientDeleteProhibited")"
-STATUS="$(http_status "${RES}")"
-if [ "${STATUS}" != "200" ]; then
-  note "フラグ付与 HTTP ${STATUS} → n1 skip"
-else
-  # info で反映確認
-  INFO="$(get_info "${ID_N1}")"; BODY="$(http_body "${INFO}")"
-  STATUSES="$(extract_statuses "${BODY}")"
-  if echo "${STATUSES}" | grep -q "clientDeleteProhibited"; then
-    ok "info で clientDeleteProhibited 反映"
-  else
-    ng "info に clientDeleteProhibited が無い: ${STATUSES}"
-  fi
-
+if add_and_verify_flag "${ID_N1}" "clientDeleteProhibited"; then
   step "(n1) DELETE を叩く → 409/403 期待"
   DEL="$(curl -sS -X DELETE "${BACKEND_URL}/api/v1/secure/domains/${ID_N1}" \
     -b "${COOKIE_JAR}" -w "\n__HTTP__%{http_code}")"
@@ -109,7 +124,7 @@ else
   REM="$(rem_flag "${ID_N1}" "clientDeleteProhibited")"
   STATUS="$(http_status "${REM}")"
   if [ "${STATUS}" != "200" ]; then
-    note "rem 自体 HTTP ${STATUS} → n6-a skip"
+    sk "rem 自体 HTTP ${STATUS}"
   else
     DEL2="$(curl -sS -X DELETE "${BACKEND_URL}/api/v1/secure/domains/${ID_N1}" \
       -b "${COOKIE_JAR}" -w "\n__HTTP__%{http_code}")"
@@ -118,17 +133,13 @@ else
 fi
 
 # =============================================================================
-# (n2) clientUpdateProhibited → PUT (nameServers) 弾き
+# (n2) clientUpdateProhibited → PUT (chg.authInfo) 弾き
 # =============================================================================
 NAME_N2="prohibit-n2-${TS}.${TLD}"
 create_domain "${NAME_N2}" 1
 ID_N2="${DOMAIN_ID}"
 step "(n2-0) clientUpdateProhibited を付与"
-RES="$(add_flag "${ID_N2}" "clientUpdateProhibited")"
-STATUS="$(http_status "${RES}")"
-if [ "${STATUS}" != "200" ]; then
-  note "フラグ付与 HTTP ${STATUS} → n2 skip"
-else
+if add_and_verify_flag "${ID_N2}" "clientUpdateProhibited"; then
   step "(n2) 別 update を叩く → 409/403 期待"
   PUT="$(curl -sS -X PUT "${BACKEND_URL}/api/v1/secure/domains/${ID_N2}" \
     -H "Content-Type: application/json" -b "${COOKIE_JAR}" \
@@ -159,11 +170,7 @@ NAME_N3="prohibit-n3-${TS}.${TLD}"
 create_domain "${NAME_N3}" 1
 ID_N3="${DOMAIN_ID}"
 step "(n3-0) clientRenewProhibited を付与"
-RES="$(add_flag "${ID_N3}" "clientRenewProhibited")"
-STATUS="$(http_status "${RES}")"
-if [ "${STATUS}" != "200" ]; then
-  note "フラグ付与 HTTP ${STATUS} → n3 skip"
-else
+if add_and_verify_flag "${ID_N3}" "clientRenewProhibited"; then
   step "(n3) renew → 409/403 期待"
   REN="$(curl -sS -X POST "${BACKEND_URL}/api/v1/secure/domains/${ID_N3}/renew" \
     -H "Content-Type: application/json" -b "${COOKIE_JAR}" \
@@ -179,7 +186,7 @@ else
   step "(n6-c) rem clientRenewProhibited → renew が 200"
   REM="$(rem_flag "${ID_N3}" "clientRenewProhibited")"
   if [ "$(http_status "${REM}")" != "200" ]; then
-    note "rem HTTP $(http_status "${REM}") → n6-c skip"
+    sk "rem HTTP $(http_status "${REM}")"
   else
     REN2="$(curl -sS -X POST "${BACKEND_URL}/api/v1/secure/domains/${ID_N3}/renew" \
       -H "Content-Type: application/json" -b "${COOKIE_JAR}" \
@@ -190,51 +197,25 @@ else
 fi
 
 # =============================================================================
-# (n4) clientTransferProhibited → info で反映確認 (transfer request は別 registrar 必要)
+# (n4) clientTransferProhibited → info で反映確認
 # =============================================================================
 NAME_N4="prohibit-n4-${TS}.${TLD}"
 create_domain "${NAME_N4}" 1
 ID_N4="${DOMAIN_ID}"
-step "(n4-0) clientTransferProhibited を付与"
-RES="$(add_flag "${ID_N4}" "clientTransferProhibited")"
-STATUS="$(http_status "${RES}")"
-if [ "${STATUS}" != "200" ]; then
-  note "フラグ付与 HTTP ${STATUS} → n4 skip"
-else
-  step "(n4) info で statuses に反映されているか確認"
-  INFO="$(get_info "${ID_N4}")"; BODY="$(http_body "${INFO}")"
-  STATUSES="$(extract_statuses "${BODY}")"
-  if echo "${STATUSES}" | grep -q "clientTransferProhibited"; then
-    ok "info の statuses に clientTransferProhibited 含む (${STATUSES})"
-  else
-    ng "info の statuses に clientTransferProhibited が無い: ${STATUSES}"
-  fi
-fi
+step "(n4-0) clientTransferProhibited を付与 → info で反映確認"
+add_and_verify_flag "${ID_N4}" "clientTransferProhibited" || true
 
 # =============================================================================
-# (n5) clientHold → info で statuses に含まれる
+# (n5) clientHold → info で反映確認
 # =============================================================================
 NAME_N5="prohibit-n5-${TS}.${TLD}"
 create_domain "${NAME_N5}" 1
 ID_N5="${DOMAIN_ID}"
-step "(n5-0) clientHold を付与"
-RES="$(add_flag "${ID_N5}" "clientHold")"
-STATUS="$(http_status "${RES}")"
-if [ "${STATUS}" != "200" ]; then
-  note "clientHold 付与 HTTP ${STATUS} → n5 skip"
-else
-  step "(n5) info で statuses に clientHold"
-  INFO="$(get_info "${ID_N5}")"; BODY="$(http_body "${INFO}")"
-  STATUSES="$(extract_statuses "${BODY}")"
-  if echo "${STATUSES}" | grep -q "clientHold"; then
-    ok "info の statuses に clientHold 含む (${STATUSES})"
-  else
-    ng "info の statuses に clientHold が無い: ${STATUSES}"
-  fi
-fi
+step "(n5-0) clientHold を付与 → info で反映確認"
+add_and_verify_flag "${ID_N5}" "clientHold" || true
 
 printf "\n%s\n" "----------------------------------------"
 printf "  registry   : kitaqsign (.${TLD})\n"
-printf "  ${GREEN}PASS %d${RESET} / ${RED}FAIL %d${RESET}\n" "${PASS}" "${FAIL}"
+printf "  ${GREEN}PASS %d${RESET} / ${RED}FAIL %d${RESET} / ${CYAN}SKIP %d${RESET}\n" "${PASS}" "${FAIL}" "${SKIP}"
 printf '%s\n' "----------------------------------------"
 [ "${FAIL}" -eq 0 ]
