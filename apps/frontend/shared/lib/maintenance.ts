@@ -44,17 +44,6 @@ export const MAINTENANCE_NOTICE: Record<string, string> = {
     "移管の承認・却下ができません。メンテナンス終了後にお試しください。自動承認までの時間はメンテナンス中も進むため、期限が近い場合は注意してください。",
 };
 
-/**
- * 時間をおけば直る失敗かどうか。
- *
- * メンテナンスや通信断は待てば解消するが、「すでに登録されています」のような
- * 失敗は何度やっても同じ。区別せずに再試行を勧めると、利用者を無限に往復させる。
- */
-export function isRetryableFailure(message: string | null | undefined): boolean {
-  if (!message) return false;
-  return isMaintenanceError(message) || message.includes("通信に失敗");
-}
-
 /** 見出しは共通。何が起きているかを一言で。 */
 export const MAINTENANCE_TITLE = "ドメイン登録機関がメンテナンス中です";
 
