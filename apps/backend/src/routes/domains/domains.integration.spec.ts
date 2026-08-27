@@ -476,6 +476,24 @@ describe("結合: DELETE /api/v1/secure/domains/{id}", () => {
     expect(updateSpy).toHaveBeenCalledWith(expect.objectContaining({ status: "pendingDelete" }));
   });
 
+  // issue #134: レジストリの反映が間に合わずに info が ["ok"] を返しても、
+  // 直前に自分が delete を投げているので「反映待ち」と解釈して pendingDelete に倒す。
+  // そのまま採用すると画面上「使えます」に戻ってしまい、廃止が失敗したように見える。
+  test("[異常系] 廃止直後の info が ['ok'] を返しても pendingDelete に倒す（反映待ち扱い）", async () => {
+    const updateSpy = mockDeleteDeps();
+    mockRegistryInfo(["ok"]);
+
+    const res = await deleteDomainRouteHandler.request(
+      "/api/v1/secure/domains/dom-001",
+      { method: "DELETE" },
+      mockEnv,
+    );
+    expect(res.status).toBe(200);
+    const json = await res.json() as any;
+    expect(json.data.status).toBe("pendingDelete");
+    expect(updateSpy).toHaveBeenCalledWith(expect.objectContaining({ status: "pendingDelete" }));
+  });
+
   test("[異常系] info が失敗しても廃止は成功扱い（status は pendingDelete に倒す）", async () => {
     const updateSpy = mockDeleteDeps();
     vi.spyOn(RegistryBridge, "info").mockResolvedValue({

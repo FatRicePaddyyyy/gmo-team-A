@@ -677,8 +677,16 @@ export class DomainService {
         `DomainService.delete: 廃止後の info を取得できなかったため status を "pendingDelete" として保存します: ${infoResult.error}`,
       );
     }
-    const status = infoResult.success
-      ? pickPrimaryStatus(infoResult.data.status ?? [], "pendingDelete")
+    // 直前に自分で削除を投げているので、info が ["ok"] を返しても「レジストリの反映待ち」
+    // と解釈する (issue #134)。 そのまま採用すると DB を ok で上書きしてしまい、画面上
+    // 「使えます」に見えてしまう (実際にはレジストリで削除は成立している)。
+    // pickPrimaryStatus は redemptionPeriod / pendingDelete / server 系などを優先するので、
+    // それらが 1 つでも含まれていれば正しく拾える。 それらが無く ok だけの場合だけ
+    // pendingDelete に倒す。
+    const rawStatuses = infoResult.success ? infoResult.data.status ?? [] : [];
+    const isReflectingOnly = rawStatuses.length === 1 && rawStatuses[0] === "ok";
+    const status = infoResult.success && !isReflectingOnly
+      ? pickPrimaryStatus(rawStatuses, "pendingDelete")
       : "pendingDelete";
 
     const updateResult = await DomainRepository.updateStatus({ id: domainId, status, db });
