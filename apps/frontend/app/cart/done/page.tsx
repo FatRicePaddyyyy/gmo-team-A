@@ -7,6 +7,8 @@ import { CheckCircle2, Info, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
+import { GlossaryTerm } from "@/components/glossary-term";
+import { GLOSSARY } from "@/shared/lib/glossary";
 import {
   clearConfirmedOrder,
   loadConfirmedOrder,
@@ -167,7 +169,11 @@ export default function CartDonePage() {
           </div>
 
           <p className="text-xs text-gray-500">
-            設定変更・有効期限の延長・ネームサーバーの登録はマイドメインから行えます。
+            設定変更・有効期限の延長・
+            <GlossaryTerm description={GLOSSARY.nameServer.description}>
+              {GLOSSARY.nameServer.term}
+            </GlossaryTerm>
+            の登録はマイドメインから行えます。
           </p>
         </div>
       </main>

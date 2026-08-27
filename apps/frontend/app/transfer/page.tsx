@@ -42,7 +42,6 @@ export default function TransferPage() {
             他の
             <GlossaryTerm
               description={GLOSSARY.registrar.description}
-              className="underline decoration-dotted underline-offset-4"
             >
               {GLOSSARY.registrar.term}
             </GlossaryTerm>
@@ -63,7 +62,6 @@ export default function TransferPage() {
               自分のドメインを他の
               <GlossaryTerm
                 description={GLOSSARY.registrar.description}
-                className="underline decoration-dotted underline-offset-4"
               >
                 {GLOSSARY.registrar.term}
               </GlossaryTerm>

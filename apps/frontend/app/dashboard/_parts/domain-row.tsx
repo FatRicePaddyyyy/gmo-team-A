@@ -7,6 +7,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import type { MyDomain } from "../_hooks/use-my-domains.hook";
 import { formatDate } from "@/shared/lib/format-date";
 import { detailActionLabelOf, statusHintOf } from "../_lib/domain-status";
+import { GlossaryTerm } from "@/components/glossary-term";
+import { GLOSSARY } from "@/shared/lib/glossary";
 import { StatusBadge } from "./status-badge";
 
 interface DomainRowProps {
@@ -36,7 +38,10 @@ export function DomainRow({ domain }: DomainRowProps) {
               {domain.name}
             </Link>
             <p className="mt-0.5 text-xs text-gray-500">
-              レジストリ: {domain.registry} / 取得日:{" "}
+              <GlossaryTerm description={GLOSSARY.registry.description}>
+                {GLOSSARY.registry.term}
+              </GlossaryTerm>
+              : {domain.registry} / 取得日:{" "}
               {formatDate(domain.createdAt)}
             </p>
           </div>
