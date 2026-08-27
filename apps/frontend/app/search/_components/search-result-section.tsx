@@ -1,12 +1,10 @@
 "use client";
 
-import Link from "next/link";
-import { ArrowRight } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { useRouter } from "next/navigation";
 import { DomainSearchResult, type DomainResult } from "@/components/domain-search-result";
 import { FeedbackBanner } from "@/components/feedback-banner";
-import { useCart } from "@/shared/hooks/use-cart.hook";
 import { useProgress } from "@/shared/hooks/use-progress.hook";
+import { saveConfirmedOrder } from "@/shared/lib/order-store";
 import { DecisionAxes } from "./decision-axes";
 
 interface SearchResultSectionProps {
@@ -48,8 +46,8 @@ export function SearchResultSection({
   error,
   recommendedTld = null,
 }: SearchResultSectionProps) {
+  const router = useRouter();
   const hasSearched = query !== null;
-  const { add, has, count } = useCart();
   const { state, setPurpose, update } = useProgress();
 
   return (
@@ -81,39 +79,24 @@ export function SearchResultSection({
             purpose={state.purpose}
             recommendedTld={recommendedTld}
             onDeclarePurpose={setPurpose}
-            onAddCart={(domain) => {
-              add({ name: domain.name, tld: domain.tld });
-              // 覚えておくのは検索に戻るための名前だけ。進み具合はカートの中身が持つ
+            onProceed={(domain) => {
+              // 選んだ1件を購入フローに引き渡す。
+              // 「カート」概念は廃止し、選択即遷移。次画面（内容確認）は
+              // ここに保存した ConfirmedOrder を読む。
+              saveConfirmedOrder({
+                items: [{ name: domain.name, tld: domain.tld }],
+                purpose: state.purpose,
+                confirmedAt: new Date().toISOString(),
+              });
               update({ searchedName: domain.name });
+              router.push("/cart/complete");
             }}
-            isAdded={(domain) => has({ name: domain.name, tld: domain.tld })}
           />
         )}
       </section>
 
       {!loading && !error && hasSearched && (
         <DecisionAxes query={query} results={results} purpose={state.purpose} />
-      )}
-
-      {/* カートに入れたら、次の一手を必ず画面上に出す */}
-      {count > 0 && (
-        <div className="mx-auto max-w-4xl px-4 pb-8">
-          <div className="flex flex-col items-center justify-between gap-3 rounded-lg border border-border bg-white px-4 py-4 shadow-sm sm:flex-row">
-            <p className="text-sm text-gray-800">
-              カートに<span className="font-bold">{count}件</span>のドメインが入っています。
-              次の画面で内容を確認できます（まだ課金されません）。
-            </p>
-            <Button
-              className="h-11 w-full shrink-0 px-5 text-white sm:w-auto"
-              style={{ background: "var(--brand)" }}
-              nativeButton={false}
-              render={<Link href="/cart" />}
-            >
-              内容を確認する
-              <ArrowRight className="ml-1 size-4" aria-hidden="true" />
-            </Button>
-          </div>
-        </div>
       )}
     </>
   );

@@ -11,7 +11,6 @@ import { GlossaryTerm } from "@/components/glossary-term";
 import { LearningNote } from "@/components/learning-note";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
-import { useCart } from "@/shared/hooks/use-cart.hook";
 import { loadConfirmedOrder, type ConfirmedOrder } from "@/shared/lib/order-store";
 import { buildFlowSteps } from "@/shared/lib/progress-store";
 import { purposeLabel } from "@/shared/lib/purpose";
@@ -26,19 +25,15 @@ const COMPLETE_STEPS = buildFlowSteps("signup");
  */
 export default function CartCompletePage() {
   const router = useRouter();
-  const { clear } = useCart();
   const { data: session } = useSession();
   const isLoggedIn = Boolean(session?.user);
   const [order, setOrder] = useState<ConfirmedOrder | null>(null);
   const [checked, setChecked] = useState(false);
 
-  // ハイドレーション後に、確定した内容を読み出してからカートを空にする
   useEffect(() => {
-    const loaded = loadConfirmedOrder();
-    setOrder(loaded);
+    setOrder(loadConfirmedOrder());
     setChecked(true);
-    if (loaded) clear();
-  }, [clear]);
+  }, []);
 
   if (checked && !order) {
     return (
@@ -55,9 +50,9 @@ export default function CartCompletePage() {
             <Button
               className="h-11 px-5 text-white"
               style={{ background: "var(--brand)" }}
-              onClick={() => router.push("/cart")}
+              onClick={() => router.push("/")}
             >
-              確認画面へ進む
+              ドメインを検索する
             </Button>
           </div>
         </main>
@@ -158,7 +153,7 @@ export default function CartCompletePage() {
             variant="outline"
             className="h-11 px-5"
             nativeButton={false}
-            render={<Link href="/search" />}
+            render={<Link href="/" />}
           >
             別のドメインを探す
           </Button>
