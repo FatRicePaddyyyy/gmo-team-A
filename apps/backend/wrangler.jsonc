@@ -28,8 +28,8 @@
     "KITAQNIC_BASE_URL": "https://epp.kitaqnic.com",
     // hello (supportedTlds) が長時間落ちたときだけ使う静的フォールバック。
     // カンマ区切り。TLD の増減時は wrangler.jsonc の両環境を同期させる。
-    "KITAQSIGN_FALLBACK_TLDS": "com,net,org,info",
-    "KITAQNIC_FALLBACK_TLDS": "xyz,shop,store,app,dev,io,site,online,tech,space,click,link,top,world,life,cloud,email,fun"
+    "KITAQSIGN_FALLBACK_TLDS": "com,net",
+    "KITAQNIC_FALLBACK_TLDS": "xyz,shop,store,app,dev,io,site,online,tech,space,click,link,top,world,life,cloud,email,fun,org,info"
   },
   "triggers": {
     // 移管ポーリングは 1 分ごとの cron で駆動する (scheduled/transfer-cron-poll)。

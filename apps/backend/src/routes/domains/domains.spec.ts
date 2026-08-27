@@ -46,7 +46,7 @@ beforeEach(() => {
     success: true,
     data: {
       registryCode: registry === "kitaqsign" ? "KITAQSIGN" : "KITAQNIC",
-      tlds: registry === "kitaqsign" ? ["com", "net", "org", "info"] : ["xyz", "shop", "store", "app", "dev", "io"],
+      tlds: registry === "kitaqsign" ? ["com", "net"] : ["xyz", "shop", "store", "app", "dev", "io", "org", "info"],
     },
     error: null,
   }));
