@@ -7,6 +7,7 @@ import {
   $rejectTransfer,
   type ListPendingInboundTransfersResponse,
 } from "@/clients";
+import { usePoll } from "@/shared/hooks/use-poll.hook";
 import { callApi } from "@/shared/lib/api-result";
 
 
@@ -48,28 +49,50 @@ export function useInboundTransfers(
   const [running, setRunning] = useState<RunningTransferAction | null>(null);
   const [feedback, setFeedback] = useState<DomainFeedback | null>(null);
 
-  const refresh = useCallback(async () => {
-    setLoading(true);
-    setLoadError(null);
-    setLoadUnauthorized(false);
+  /**
+   * 一覧を取り直す。
+   *
+   * `silent` は背後の自動更新から呼ぶときに使う。利用者が何もしていないのに
+   * 「読み込み中」がちらついたり、一時的な通信失敗で赤い帯が出たりすると、
+   * 画面を眺めているだけの人を驚かせてしまう。
+   * 表示中の一覧はそのまま残り、次に成功したときへ静かに差し替わる。
+   */
+  const refresh = useCallback(async (options?: { silent?: boolean }) => {
+    const silent = options?.silent ?? false;
+    if (!silent) {
+      setLoading(true);
+      setLoadError(null);
+      setLoadUnauthorized(false);
+    }
     const result = await callApi<InboundTransfer[]>(
       $listPendingInboundTransfers(),
     );
     if (!result.success) {
       // 直前の一覧は消さない（成功メッセージと空状態が同時に出るのを避ける）
-      setLoadError(result.error);
-      setLoadUnauthorized(Boolean(result.unauthorized));
+      // 自動更新のときはエラーも出さない。次の回で回復することが多く、
+      // 利用者が起こした操作でもないので伝える意味が薄い。
+      if (!silent) {
+        setLoadError(result.error);
+        setLoadUnauthorized(Boolean(result.unauthorized));
+      }
     } else {
       setTransfers(result.data);
     }
     setLoaded(true);
-    setLoading(false);
+    if (!silent) setLoading(false);
   }, []);
 
   useEffect(() => {
     if (!enabled) return;
     void refresh();
   }, [enabled, refresh]);
+
+  // 引き渡しの申請は自分が動かなくても届く。しかも放置すると自動承認されるので、
+  // 画面を開いている間は取り直して、届いたことに気づけるようにする。
+  //
+  // ここは他方（申請中の一覧）と違い、0 件でも止めない。
+  // 「まだ 1 件も無い」状態から届くのを待つのが、この一覧の役目だから。
+  usePoll({ enabled, onTick: () => refresh({ silent: true }) });
 
   const runAction = useCallback(
     async (

@@ -8,6 +8,7 @@ import {
   type ListTransfersResponse,
   type RequestTransferResponse,
 } from "@/clients";
+import { usePoll } from "@/shared/hooks/use-poll.hook";
 import { callApi } from "@/shared/lib/api-result";
 
 type ListSuccess = Extract<ListTransfersResponse, { success: true }>;
@@ -40,26 +41,49 @@ export function useTransferRequests(enabled: boolean) {
   const [cancellingId, setCancellingId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<TransferFeedback | null>(null);
 
-  const refresh = useCallback(async () => {
-    setLoading(true);
-    setLoadError(null);
-    setLoadUnauthorized(false);
+  /**
+   * 一覧を取り直す。
+   *
+   * `silent` は背後の自動更新から呼ぶときに使う。利用者が何もしていないのに
+   * 「読み込み中」がちらついたり、一時的な通信失敗で赤い帯が出たりすると、
+   * 画面を眺めているだけの人を驚かせてしまう。
+   * 表示中の一覧はそのまま残り、次に成功したときへ静かに差し替わる。
+   */
+  const refresh = useCallback(async (options?: { silent?: boolean }) => {
+    const silent = options?.silent ?? false;
+    if (!silent) {
+      setLoading(true);
+      setLoadError(null);
+      setLoadUnauthorized(false);
+    }
     const result = await callApi<MyTransfer[]>($listTransfers());
     if (!result.success) {
       // 直前の一覧は消さない（成功メッセージと空状態が同時に出るのを避ける）
-      setLoadError(result.error);
-      setLoadUnauthorized(Boolean(result.unauthorized));
+      // 自動更新のときはエラーも出さない。次の回で回復することが多く、
+      // 利用者が起こした操作でもないので伝える意味が薄い。
+      if (!silent) {
+        setLoadError(result.error);
+        setLoadUnauthorized(Boolean(result.unauthorized));
+      }
     } else {
       setTransfers(result.data);
     }
     setLoaded(true);
-    setLoading(false);
+    if (!silent) setLoading(false);
   }, []);
 
   useEffect(() => {
     if (!enabled) return;
     void refresh();
   }, [enabled, refresh]);
+
+  // 申請した移管はレジストリ側で非同期に進む。承認されたか却下されたかを
+  // 手で「最新にする」を押さないと知れないのは不便なので、待っている間だけ取り直す。
+  // 進行中の申請が無ければ変化しようがないので、そのときは止める。
+  const hasPending = transfers.some(
+    (transfer) => transfer.status === "pendingTransfer",
+  );
+  usePoll({ enabled: enabled && hasPending, onTick: () => refresh({ silent: true }) });
 
   /** 成功したら true を返す。フォームの入力を消してよいかの判断に使う */
   const request = useCallback(
