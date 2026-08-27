@@ -97,6 +97,37 @@ export function RecommendationCard({
         )}
       </div>
 
+      {/* 一番のおすすめ以外の候補。無いシーンでは出さない */}
+      {result.alternatives.length > 0 && (
+        <>
+          <h2 className="mt-8 text-lg font-bold text-gray-900">他にはこんな候補もあります</h2>
+          <p className="mt-1 text-sm text-gray-600">
+            一番のおすすめではありませんが、同じ用途でよく選ばれる末尾です。
+          </p>
+          <ul className="mt-3 space-y-2">
+            {result.alternatives.map((alt) => (
+              <li
+                key={alt.tld}
+                className="rounded-xl border border-border bg-white px-4 py-3 shadow-sm"
+              >
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="font-bold text-gray-900">{alt.tld}</span>
+                  {alt.info && (
+                    <Badge className="bg-gray-100 text-xs text-gray-700">
+                      {formatYen(alt.info.firstYearPrice)}〜（税込）
+                    </Badge>
+                  )}
+                </div>
+                {alt.info?.summary && (
+                  <p className="mt-1 text-sm leading-relaxed text-gray-700">{alt.info.summary}</p>
+                )}
+                <p className="mt-1 text-sm leading-relaxed text-gray-600">{alt.reason}</p>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+
       {/* おすすめのオプション */}
       <h2 className="mt-8 text-lg font-bold text-gray-900">つけておくとよいオプション</h2>
       <p className="mt-1 text-sm text-gray-600">
