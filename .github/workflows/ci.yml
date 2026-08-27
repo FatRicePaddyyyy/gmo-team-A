@@ -229,9 +229,12 @@ jobs:
           } > .dev.vars
           pnpm dev &
           echo "Backend PID: $!"
-          # /api は OpenAPI spec を返す認証不要エンドポイント
+          # wrangler dev は IPv4 (127.0.0.1) にしかバインドせず、Node 24 の
+          # undici は localhost を IPv6 (::1) 優先で名前解決するため、
+          # Playwright の apiRequestContext が ECONNREFUSED で落ちる。
+          # ヘルスチェック・テスト側 URL とも 127.0.0.1 に統一する。
           for i in $(seq 1 30); do
-            STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8787/api || echo "000")
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:8787/api || echo "000")
             if [ "$STATUS" = "200" ]; then
               echo "Backend is ready after ${i}x2s"
               break
@@ -242,7 +245,7 @@ jobs:
       - name: Run Playwright tests (${{ matrix.project }})
         working-directory: apps/frontend
         env:
-          NEXT_PUBLIC_BACKEND_URL: http://localhost:8787
+          NEXT_PUBLIC_BACKEND_URL: http://127.0.0.1:8787
           # /api/v1/secret/create-seed-user を叩いてテストユーザーを作るために必要
           SECRET_KEY: ${{ secrets.SECRET_KEY }}
           # 移管 e2e (transfer-*.spec.ts) 用の teama-2 側 credentials。
