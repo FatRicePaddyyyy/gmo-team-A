@@ -1,11 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { Eye, EyeOff, KeyRound, Lock, LockOpen } from "lucide-react";
+import { Eye, EyeOff, KeyRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { ConfirmAction } from "@/components/confirm-action";
 import { FeedbackBanner } from "@/components/feedback-banner";
 import type { DetailFeedback } from "../_hooks/use-domain-detail.hook";
 
@@ -14,37 +13,31 @@ const AUTH_INFO_MAX = 64;
 const AUTH_INFO_MIN = 8;
 
 interface TransferOutCardProps {
-  locked: boolean;
   disabled: boolean;
   runningAuthInfo: boolean;
-  runningLock: boolean;
   /** それぞれの操作の結果。押したブロックの中に出す */
   authInfoFeedback: DetailFeedback | null;
-  lockFeedback: DetailFeedback | null;
   onUpdateAuthInfo: (authInfo: string) => Promise<boolean>;
-  onSetLock: (locked: boolean) => Promise<boolean>;
 }
 
 /**
  * 他社へドメインを渡すための設定。
  *
- * 移管ロックと AuthCode は表裏の関係にある（ロック中は移管できないので
- * AuthCode を発行しても意味がない）ので、1 枚のカードにまとめて順序も揃えている。
+ * 以前は移管ロック（clientTransferProhibited）のトグルも置いていたが、
+ * kitaqsign / kitaqnic のどちらも設定を成功と返すだけで保持しないため
+ * （設定していないステータスの解除まで成功する）、押しても永久にオフのままだった。
+ * 動かないものを見せないほうがよいので外している。Swagger には記載があるので、
+ * レジストリ側が対応したら戻す。
  */
 export function TransferOutCard({
-  locked,
   disabled,
   runningAuthInfo,
-  runningLock,
   authInfoFeedback,
-  lockFeedback,
   onUpdateAuthInfo,
-  onSetLock,
 }: TransferOutCardProps) {
   const [authInfo, setAuthInfo] = useState("");
   const [showAuthInfo, setShowAuthInfo] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [confirmingUnlock, setConfirmingUnlock] = useState(false);
 
   // 入力欄とヒント・エラーを aria で紐づける（ログイン画面と同じ書き方）
   const authInfoHintId = "auth-info-hint";
@@ -73,71 +66,8 @@ export function TransferOutCard({
             このドメインを他社へ渡す
           </h2>
           <p className="mt-1 text-sm text-gray-600">
-            このドメインを他の事業者に引っ越すための設定です。移管には「ロックの解除」と「認証コードの受け渡し」の2つが必要です。
+            このドメインを他の事業者に引っ越すための設定です。渡すには、ここで発行した認証コードを移管先の事業者に伝えます。
           </p>
-        </div>
-
-        {/* --- 移管ロック --- */}
-        <div className="space-y-2 rounded-lg border border-gray-200 p-3">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
-              {locked ? (
-                <Lock className="size-4 text-gray-700" aria-hidden="true" />
-              ) : (
-                <LockOpen className="size-4 text-amber-700" aria-hidden="true" />
-              )}
-              <span className="text-sm font-medium text-gray-900">
-                移管ロック: {locked ? "オン" : "オフ"}
-              </span>
-            </div>
-            {locked ? (
-              <Button
-                size="sm"
-                variant="outline"
-                disabled={disabled}
-                onClick={() => setConfirmingUnlock(true)}
-              >
-                {runningLock ? "解除中..." : "ロックを解除"}
-              </Button>
-            ) : (
-              <Button
-                size="sm"
-                variant="brand"
-                disabled={disabled}
-                onClick={() => void onSetLock(true)}
-              >
-                {runningLock ? "設定中..." : "ロックをかける"}
-              </Button>
-            )}
-          </div>
-
-          <p className="text-xs text-gray-600">
-            {locked
-              ? "他社への移管が止められています。身に覚えのない移管を防ぐため、普段はオンのままにしておくのが安全です。"
-              : "他社への移管ができる状態です。移管の予定がなければ、ロックをかけておくことをおすすめします。"}
-          </p>
-
-          {lockFeedback && (
-            <FeedbackBanner
-              tone={lockFeedback.tone}
-              message={lockFeedback.message}
-              unauthorized={lockFeedback.unauthorized}
-            />
-          )}
-
-          {confirmingUnlock && (
-            <ConfirmAction
-              question="移管ロックを解除しますか？"
-              detail="解除している間は、認証コードを知っている人がこのドメインを他社へ移せます。移管が終わったら、もう一度ロックをかけてください。"
-              confirmLabel="解除する"
-              running={runningLock}
-              onConfirm={async () => {
-                await onSetLock(false);
-                setConfirmingUnlock(false);
-              }}
-              onCancel={() => setConfirmingUnlock(false)}
-            />
-          )}
         </div>
 
         {/* --- AuthCode --- */}

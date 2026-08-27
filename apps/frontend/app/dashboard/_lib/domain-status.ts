@@ -94,13 +94,6 @@ export function canUpdateSettings(status: string): boolean {
   return !isDeleted(status) && !status.startsWith("pending");
 }
 
-/** レジストラロック（移管防止）に使う EPP ステータス */
-export const TRANSFER_LOCK_STATUS = "clientTransferProhibited";
-
-/** 詳細 API の statuses からロック中かを判定する */
-export function isTransferLocked(statuses: readonly string[]): boolean {
-  return statuses.includes(TRANSFER_LOCK_STATUS);
-}
 
 /**
  * 廃止したドメインが復旧できなくなるまでの残り日数。

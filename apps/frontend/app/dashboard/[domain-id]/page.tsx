@@ -15,7 +15,6 @@ import {
   canRenew,
   canRestore,
   canUpdateSettings,
-  isTransferLocked,
   statusHintOf,
 } from "../_lib/domain-status";
 import { DomainOverview } from "./_parts/domain-overview";
@@ -172,18 +171,12 @@ export default function DomainDetailPage() {
                 />
 
                 <TransferOutCard
-                  locked={isTransferLocked(domain.statuses ?? [])}
                   disabled={!settingsEditable || busy}
                   runningAuthInfo={running === "authInfo"}
-                  runningLock={running === "transferLock"}
                   authInfoFeedback={
                     feedback?.source === "authInfo" ? feedback : null
                   }
-                  lockFeedback={
-                    feedback?.source === "transferLock" ? feedback : null
-                  }
                   onUpdateAuthInfo={state.updateAuthInfo}
-                  onSetLock={state.setTransferLock}
                 />
 
                 <LifecycleCard
