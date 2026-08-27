@@ -59,14 +59,21 @@ usage() {
 USAGE
 }
 
+# 値を取るオプションで値が無いまま shift 2 すると、bash は shift に失敗して
+# 引数を消さない。すると同じ $1 を延々と読み直し、何も表示せずに回り続ける。
+# 値の有無をここで確かめてから進める。
+need_value() {
+  [ -n "${2:-}" ] || fail "$1 には値が必要です（--help で使い方を表示）"
+}
+
 while [ $# -gt 0 ]; do
   case "$1" in
     --prod)     TARGET="prod"; shift ;;
-    --url)      BASE_URL="${2:-}"; shift 2 ;;
-    --env)      ENV_FILE="${2:-}"; shift 2 ;;
-    --email)    EMAIL="${2:-}"; shift 2 ;;
-    --name)     NAME="${2:-}"; shift 2 ;;
-    --password) PASSWORD="${2:-}"; shift 2 ;;
+    --url)      need_value "$1" "${2:-}"; BASE_URL="$2"; shift 2 ;;
+    --env)      need_value "$1" "${2:-}"; ENV_FILE="$2"; shift 2 ;;
+    --email)    need_value "$1" "${2:-}"; EMAIL="$2"; shift 2 ;;
+    --name)     need_value "$1" "${2:-}"; NAME="$2"; shift 2 ;;
+    --password) need_value "$1" "${2:-}"; PASSWORD="$2"; shift 2 ;;
     -h|--help)  usage; exit 0 ;;
     *)          fail "不明なオプション: $1（--help で使い方を表示）" ;;
   esac
@@ -118,11 +125,22 @@ printf "\n${YELLOW}==> アカウントを作成${RESET}\n"
 info "接続先: ${BASE_URL}"
 info "メール: ${EMAIL}"
 
+# 値をそのまま "..." に埋めると、" や \ を含む名前・パスワードで JSON が壊れる。
+# 最低限のエスケープをしてから組み立てる。
+json_escape() {
+  local v="$1"
+  v="${v//\\/\\\\}"
+  v="${v//\"/\\\"}"
+  printf '%s' "${v}"
+}
+
+PAYLOAD="{\"email\":\"$(json_escape "${EMAIL}")\",\"name\":\"$(json_escape "${NAME}")\",\"password\":\"$(json_escape "${PASSWORD}")\"}"
+
 RESPONSE="$(curl -sS -X POST "${BASE_URL}/api/v1/secret/create-seed-user" \
   -H "Authorization: Bearer ${SECRET_KEY}" \
   -H "Content-Type: application/json" \
   -w "\n__HTTP__%{http_code}" \
-  -d "{\"email\":\"${EMAIL}\",\"name\":\"${NAME}\",\"password\":\"${PASSWORD}\"}")" \
+  -d "${PAYLOAD}")" \
   || fail "接続できませんでした（${BASE_URL} が起動しているか確認してください）"
 
 STATUS="$(printf '%s' "${RESPONSE}" | sed -n 's/.*__HTTP__\([0-9]*\)$/\1/p')"
