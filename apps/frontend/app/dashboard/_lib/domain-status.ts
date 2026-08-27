@@ -79,19 +79,82 @@ export function isDeleted(status: string): boolean {
   return status === "redemptionPeriod" || status === "pendingDelete";
 }
 
-/** 更新（期間延長）できるか。移管手続き中と廃止済みは不可 */
-export function canRenew(status: string): boolean {
-  return !isDeleted(status) && status !== "pendingTransfer";
+/**
+ * client*Prohibited ロックが立っているか判定するヘルパ。
+ *
+ * domain.status (DB カラム) は pickPrimaryStatus が「復旧できる猶予状態を優先」した
+ * 業務ステータス 1 個で、client 系フラグは反映されない (backend service.ts のコメント参照)。
+ * 「実際にロックが立っているか」はレジストリの生 statuses 配列にしか出てこないので、
+ * ボタンの押下可否判定には statuses[] を必ず添えて渡す。
+ */
+function hasLock(statuses: readonly string[] | undefined, lock: string): boolean {
+  return (statuses ?? []).includes(lock);
 }
 
-/** 廃止できるか。移管手続き中と廃止済みは不可 */
-export function canDelete(status: string): boolean {
-  return !isDeleted(status) && status !== "pendingTransfer";
+/** 更新（期間延長）できるか。移管手続き中・廃止済み・clientRenewProhibited は不可 */
+export function canRenew(status: string, statuses?: readonly string[]): boolean {
+  if (isDeleted(status) || status === "pendingTransfer") return false;
+  return !hasLock(statuses, "clientRenewProhibited");
 }
 
-/** 設定（ネームサーバー・AuthCode・ロック）を変更できるか。手続き中と廃止済みは不可 */
-export function canUpdateSettings(status: string): boolean {
+/** 廃止できるか。移管手続き中・廃止済み・clientDeleteProhibited は不可 */
+export function canDelete(status: string, statuses?: readonly string[]): boolean {
+  if (isDeleted(status) || status === "pendingTransfer") return false;
+  return !hasLock(statuses, "clientDeleteProhibited");
+}
+
+/**
+ * 設定（ネームサーバー・AuthCode）を変更できるか。手続き中・廃止済み・clientUpdateProhibited は不可。
+ *
+ * 注意: clientUpdateProhibited を外す操作 (LocksCard 上のトグル OFF) 自体もこの
+ * 判定を通ってしまうと自分で解除できなくなる。LocksCard は canUpdateLocks (別関数) で
+ * 判定するので、こちらは「一般の設定変更」の可否だけを見る。
+ */
+export function canUpdateSettings(status: string, statuses?: readonly string[]): boolean {
+  if (isDeleted(status) || status.startsWith("pending")) return false;
+  return !hasLock(statuses, "clientUpdateProhibited");
+}
+
+/**
+ * ロック (client*Prohibited) の管理カードで操作できるか。
+ *
+ * 一般の設定変更 (canUpdateSettings) が禁止されていても、
+ * ロックの ON/OFF は「自分で自分を解除する」ためにできなければならない。
+ * 手続き中・廃止済みだけを不可条件とする。
+ */
+export function canUpdateLocks(status: string): boolean {
   return !isDeleted(status) && !status.startsWith("pending");
+}
+
+/**
+ * ある操作が「保護タブでロックされているために出来ない」なら、
+ * ユーザーに「なぜ操作できないか + 解除方法」を返す。ロックが原因でなければ null。
+ *
+ * clientDeleteProhibited などは domain.status (DB カラム) には出ないので、
+ * これを説明しないと「タブを開いても何も出ない」「ボタンだけ消えている」ように見え、
+ * 誰も理由が分からなくなる。
+ *
+ * 文言に「保護タブ」と書くのは、この文言を出している画面自体がタブ UI で、
+ * 隣に「保護」タブがあるため。他の場所から呼ぶときは書き換える。
+ */
+const LOCK_REASONS: Record<string, string> = {
+  clientDeleteProhibited:
+    "「保護」タブで廃止を禁止する設定にしているため、このドメインを廃止できません。廃止するには先に「保護」タブで解除してください。",
+  clientRenewProhibited:
+    "「保護」タブで更新を禁止する設定にしているため、有効期限を延ばせません。延長するには先に「保護」タブで解除してください。",
+  clientUpdateProhibited:
+    "「保護」タブで設定変更を禁止する設定にしているため、この操作はできません。変更するには先に「保護」タブで解除してください。",
+  clientTransferProhibited:
+    "「保護」タブで他のレジストラへの移管を禁止する設定にしているため、AuthCode の再発行はできません。移管するには先に「保護」タブで解除してください。",
+  clientHold:
+    "「保護」タブでサイト掲載を止める設定にしているため、この操作はできません。",
+};
+
+export function lockReason(
+  lock: keyof typeof LOCK_REASONS,
+  statuses: readonly string[] | undefined,
+): string | null {
+  return hasLock(statuses, lock) ? LOCK_REASONS[lock] : null;
 }
 
 /** 一覧の絞り込み用の3分類（issue #83）。ロック中・利用停止中は「使えるもの」に含める */
@@ -108,7 +171,6 @@ export const DOMAIN_STATUS_CATEGORY_LABELS: Record<DomainStatusCategory, string>
   pending: "手続き中",
   deleted: "廃止済み",
 };
-
 
 /**
  * 廃止したドメインが復旧できなくなるまでの残り日数。

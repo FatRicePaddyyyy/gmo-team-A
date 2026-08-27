@@ -95,6 +95,11 @@ export const requestTransferRouteHandler = app.openapi(route, async (ctx) => {
     if (result.error === "domain_not_transferable") {
       return ctx.json({ success: false as const, data: null, error: toUserMessage(result.error) }, 409);
     }
+    // Issue #107: clientTransferProhibited が付いているケース。
+    // 「一時障害」ではなくフラグを外すまで永久に移管できないので 409 + 説明的なメッセージ。
+    if (result.error === "operation_prohibited") {
+      return ctx.json({ success: false as const, data: null, error: toUserMessage("transfer_prohibited") }, 409);
+    }
     if (result.error === "invalid_domain_name" || result.error === "invalid_domain_registry") {
       return ctx.json({ success: false as const, data: null, error: toUserMessage(result.error) }, 400);
     }

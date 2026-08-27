@@ -22,7 +22,7 @@ test.describe(
       const { fullDomain } = await setupInboundPending(page, "kitaqsign", "tr-in-r");
 
       const rejectButton = page.getByRole("button", { name: "却下して手元に残す" });
-      await expect(rejectButton).toBeVisible({ timeout: 10_000 });
+      await expect(rejectButton).toBeVisible({ timeout: 20_000 });
       await rejectButton.click();
 
       // 却下成功後、ダッシュボードにドメインが残っている

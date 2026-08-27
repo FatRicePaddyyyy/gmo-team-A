@@ -17,7 +17,7 @@ test.describe(
       await page.goto("/?q=aa");
 
       // 検索結果セクションが描画されるまで待つ
-      await expect(page.getByRole("region", { name: "検索結果" })).toBeVisible();
+      await expect(page.getByRole("region", { name: "検索結果", exact: true })).toBeVisible();
 
       // 新しい導線が出ている（複数件あるので first を検証）
       await expect(
@@ -39,7 +39,7 @@ test.describe(
         .toString()
         .padStart(6, "0")}`;
       await page.goto(`/?q=${name}`);
-      await expect(page.getByRole("region", { name: "検索結果" })).toBeVisible();
+      await expect(page.getByRole("region", { name: "検索結果", exact: true })).toBeVisible();
 
       // <name>.com の「このドメインで進む」を押す。
       // アクセシブルネームには sr-only の「（<name>.com）」が付いている。

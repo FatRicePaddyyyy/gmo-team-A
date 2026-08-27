@@ -243,7 +243,10 @@ export async function fireCron(): Promise<void> {
 /** 十中八九空いているランダムなドメイン名 (プレフィックスをテストシナリオごとに変える) */
 export function uniqueDomainName(prefix: string, registry: Registry): string {
   const stamp = Date.now();
-  const rand = randomHex(3);
+  // randomHex は 3 bytes = 4096 通りだと、同時期に複数 CI run が回ると
+  // 衝突して「このドメインはすでに登録されています」で購入が失敗する
+  // ケースが出た。8 bytes = 約 1.8 * 10^19 通りに強化する。
+  const rand = randomHex(8);
   return `${prefix}-${stamp}-${rand}.${tldOf(registry)}`;
 }
 
@@ -273,12 +276,15 @@ export async function setupInboundPending(
   labelPrefix: string,
 ): Promise<{ fullDomain: string; authInfo: string }> {
   const tld = tldOf(registry);
-  const domainName = `${labelPrefix}-${Date.now()}-${randomHex(3)}`;
+  // randomHex は 3 bytes = 4096 通りだと、CI matrix や rerun のタイミングで
+  // 衝突して「このドメインはすでに登録されています」で購入が失敗する
+  // ケースが出たので 8 bytes に強化。uniqueDomainName と同じ理由。
+  const domainName = `${labelPrefix}-${Date.now()}-${randomHex(8)}`;
   const fullDomain = `${domainName}.${tld}`;
 
   // 検索は「name + .tld」を丸ごと入れる (`/?q=name.tld` の形)
   await page.goto(`/?q=${fullDomain}`);
-  await expect(page.getByRole("region", { name: "検索結果" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "検索結果", exact: true })).toBeVisible();
   await page
     .getByRole("button", {
       name: new RegExp(`このドメインで進む.*${domainName}\\.${tld}`),
@@ -303,6 +309,11 @@ export async function setupInboundPending(
   ).toBeVisible({ timeout: 10_000 });
 
   await t2TransferRequest(registry, fullDomain, authInfo);
+  // cron 1 回では、レジストリの transfer message が poll → DB 反映 → inbound 一覧
+  // 更新までの 1 cycle に収まらないことがある (レジストリ側の通知が数拍遅れる)。
+  // 2 回発火 + 短い間隔を挟むことで実際の反映を待つ。
+  await fireCron();
+  await page.waitForTimeout(1_000);
   await fireCron();
 
   // 再度詳細ページを開いて、「他のレジストラへ渡す」タブに incoming transfer カードが出るのを待つ

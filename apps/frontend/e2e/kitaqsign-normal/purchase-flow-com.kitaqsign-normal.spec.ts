@@ -42,7 +42,7 @@ test.describe(
       // 2. 検索。他のテストと重複しにくいユニークな名前で1件だけヒットさせる
       const domainName = `e2e-${uniqueSuffix()}`;
       await page.goto(`/?q=${domainName}`);
-      await expect(page.getByRole("region", { name: "検索結果" })).toBeVisible();
+      await expect(page.getByRole("region", { name: "検索結果", exact: true })).toBeVisible();
 
       // 3. .com を選ぶ (kitaqsign 管轄)
       const proceedButton = page.getByRole("button", {

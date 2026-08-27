@@ -19,7 +19,9 @@ import {
   canDelete,
   canRenew,
   canRestore,
+  canUpdateLocks,
   canUpdateSettings,
+  lockReason,
   statusHintOf,
 } from "../_lib/domain-status";
 import { DomainOverview } from "./_parts/domain-overview";
@@ -28,6 +30,7 @@ import { AutoRenewCard } from "./_components/auto-renew-card";
 import { NameServerForm } from "./_components/name-server-form";
 import { IncomingTransferCard } from "./_components/incoming-transfer-card";
 import { LifecycleCard } from "./_components/lifecycle-card";
+import { LocksCard } from "./_components/locks-card";
 import { RenewCard } from "./_components/renew-card";
 import { TransferOutCard } from "./_components/transfer-out-card";
 import { useDomainDetail } from "./_hooks/use-domain-detail.hook";
@@ -51,16 +54,21 @@ export default function DomainDetailPage() {
   // 古い前提のまま操作を送ると、実際の状態と食い違ったまま実行されてしまう。
   const registryDown = domain ? !domain.registryAvailable : false;
 
-  // 手続き中・廃止済みのドメインはレジストリ側が変更を受け付けない。
+  // 手続き中・廃止済み・clientUpdateProhibited のドメインはレジストリ側が変更を受け付けない。
   // ボタンを出しても 409 で弾かれるだけなので、その理由を先に見せる。
   const settingsEditable = domain
-    ? canUpdateSettings(domain.status) && !registryDown
+    ? canUpdateSettings(domain.status, domain.statuses) && !registryDown
     : false;
-  // 更新は廃止済みでもできない一方、pendingUpdate などの手続き中とは条件が違うので
-  // 設定変更（canUpdateSettings）とは別に判定する。
+  // 更新は廃止済み・clientRenewProhibited でもできない一方、pendingUpdate などの手続き中とは
+  // 条件が違うので設定変更（canUpdateSettings）とは別に判定する。
   // カードを消すのではなく、出したまま操作だけ止める。
   // メンテのたびに画面の形が変わると「機能が無くなった」と誤解されるため。
-  const renewable = domain ? canRenew(domain.status) : false;
+  const renewable = domain ? canRenew(domain.status, domain.statuses) : false;
+  // ロックの管理カード自体は「自分でロックを解除する」ためのカードなので、
+  // clientUpdateProhibited で自身を封じることは無い。手続き中・廃止済みだけを弾く。
+  const locksEditable = domain
+    ? canUpdateLocks(domain.status) && !registryDown
+    : false;
   const busy = running !== null;
 
   // 他のレジストラへ渡すステップの現在位置。
@@ -180,11 +188,12 @@ export default function DomainDetailPage() {
                 className="gap-4"
               >
                 {/*
-                  タブは 5 つ:
+                  タブは 6 つ:
                     - overview: 現在の状態 (dl 一覧)
                     - renew:    有効期限を延ばす
                     - ns:       ネームサーバー
                     - transfer: 他のレジストラへ渡す (ステップインジケーター付き)
+                    - locks:    保護 (client*Prohibited の 5 種トグル、Issue #107)
                     - lifecycle: 廃止・復旧
                 */}
                 <TabsList className="h-auto w-full flex-wrap gap-1 sm:flex-nowrap">
@@ -192,8 +201,23 @@ export default function DomainDetailPage() {
                   <TabsTrigger value="renew">有効期限を延ばす</TabsTrigger>
                   <TabsTrigger value="ns">ネームサーバー</TabsTrigger>
                   <TabsTrigger value="transfer">他のレジストラへ渡す</TabsTrigger>
+                  <TabsTrigger value="locks">保護</TabsTrigger>
                   <TabsTrigger value="lifecycle">廃止・復旧</TabsTrigger>
                 </TabsList>
+
+                {/* レジストリが落ちているときはどのタブを開いても同じ制約 (最新値が取れない・変更が届かない)
+                    がかかるので、Tabs 全体の直下 1 箇所にまとめて出す。以前は tab ごとに個別配置していたが、
+                    抜けや文言差が出るので統一する。 */}
+                {registryDown && (
+                  <FeedbackBanner
+                    tone="error"
+                    context="detail"
+                    message={
+                      domain.registryUnavailableReason ??
+                      "レジストリから最新の情報を取得できませんでした。"
+                    }
+                  />
+                )}
 
                 <TabsContent value="overview" className="space-y-4">
                   <DomainOverview domain={domain} />
@@ -211,7 +235,10 @@ export default function DomainDetailPage() {
                     />
                   ) : (
                     <p className="rounded-lg border border-gray-200 bg-white p-4 text-sm text-gray-600">
-                      {statusHintOf(domain.status) ??
+                      {/* clientRenewProhibited は status に出ないので、ロック起因なら
+                          先に「保護タブで解除して」の導線を出す。 */}
+                      {lockReason("clientRenewProhibited", domain.statuses) ??
+                        statusHintOf(domain.status) ??
                         "このドメインはいま延長できない状態です。"}
                     </p>
                   )}
@@ -232,7 +259,8 @@ export default function DomainDetailPage() {
                 <TabsContent value="ns" className="space-y-4">
                   {!settingsEditable && !registryDown && (
                     <p className="rounded-lg border border-gray-200 bg-white p-3 text-sm text-gray-600">
-                      {statusHintOf(domain.status) ??
+                      {lockReason("clientUpdateProhibited", domain.statuses) ??
+                        statusHintOf(domain.status) ??
                         "このドメインはいま手続き中のため、設定を変更できません。"}
                     </p>
                   )}
@@ -251,17 +279,7 @@ export default function DomainDetailPage() {
                 <TabsContent value="transfer" className="space-y-4">
                   <TransferOutSteps current={transferOutStep} />
 
-                  {/* レジストリが落ちているときは理由が違うので、状態ヒントより先に出す */}
-                  {registryDown && (
-                    <FeedbackBanner
-                      tone="error"
-                      context="detail"
-                      message={
-                        domain.registryUnavailableReason ??
-                        "レジストリから最新の情報を取得できませんでした。"
-                      }
-                    />
-                  )}
+                  {/* registryDown 時のバナーは Tabs 直下でまとめて表示している */}
 
                   {incoming && (
                     <IncomingTransferCard
@@ -275,7 +293,8 @@ export default function DomainDetailPage() {
 
                   {!settingsEditable && !incoming && !registryDown && (
                     <p className="rounded-lg border border-gray-200 bg-white p-3 text-sm text-gray-600">
-                      {statusHintOf(domain.status) ??
+                      {lockReason("clientUpdateProhibited", domain.statuses) ??
+                        statusHintOf(domain.status) ??
                         "このドメインはいま手続き中のため、設定を変更できません。"}
                     </p>
                   )}
@@ -290,10 +309,42 @@ export default function DomainDetailPage() {
                   />
                 </TabsContent>
 
+                <TabsContent value="locks" className="space-y-4">
+                  {/* Issue #107 (2): client*Prohibited フラグの管理 UI。
+                       レジストリが info を返せない状態 (メンテ等) では現状値が読めないので
+                       操作は止める。廃止済み・移管中も現在は変更できないので同じ扱い。
+                       clientUpdateProhibited が立っていても、このカードだけは自己解除できるように
+                       他の設定変更カード (canUpdateSettings) とは別の canUpdateLocks で判定する。
+                       registryDown 時のバナーは Tabs 直下でまとめて表示している。 */}
+                  {!locksEditable && !registryDown && (
+                    <p className="rounded-lg border border-gray-200 bg-white p-3 text-sm text-gray-600">
+                      {statusHintOf(domain.status) ??
+                        "このドメインはいま手続き中のため、保護設定を変更できません。"}
+                    </p>
+                  )}
+                  <LocksCard
+                    currentStatuses={domain.statuses ?? []}
+                    disabled={!locksEditable || busy}
+                    running={running === "locks"}
+                    feedback={feedback?.source === "locks" ? feedback : null}
+                    onSave={state.updateLocks}
+                  />
+                </TabsContent>
+
                 <TabsContent value="lifecycle" className="space-y-4">
+                  {/* clientDeleteProhibited は domain.status に出ないので、
+                       LifecycleCard がカードを消しても statusHintOf からは理由を出せない。
+                       保護タブでロックしていることを明示して、解除導線を示す。 */}
+                  {!canDelete(domain.status, domain.statuses) &&
+                    !canRestore(domain.status) &&
+                    lockReason("clientDeleteProhibited", domain.statuses) && (
+                      <p className="rounded-lg border border-gray-200 bg-white p-3 text-sm text-gray-600">
+                        {lockReason("clientDeleteProhibited", domain.statuses)}
+                      </p>
+                    )}
                   <LifecycleCard
                     domainName={domain.name}
-                    canDelete={canDelete(domain.status)}
+                    canDelete={canDelete(domain.status, domain.statuses)}
                     canRestore={canRestore(domain.status)}
                     disabled={busy || registryDown}
                     runningDelete={running === "delete"}

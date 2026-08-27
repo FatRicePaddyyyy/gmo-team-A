@@ -24,7 +24,7 @@ test.describe(
 
       await expect(
         page.getByRole("heading", { name: "他のレジストラへの引き渡しを求められています" }),
-      ).toBeVisible({ timeout: 10_000 });
+      ).toBeVisible({ timeout: 20_000 });
 
       await t2TransferOp("kitaqnic", fullDomain, "cancel");
       await fireCron();

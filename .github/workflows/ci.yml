@@ -161,6 +161,12 @@ jobs:
     strategy:
       # normal ジョブと outage ジョブは片方が失敗しても他方の実行結果が要る。
       fail-fast: false
+      # レジストリのサンドボックスは kitaqsign / kitaqnic ともに全 CI ジョブで
+      # 共有されている。matrix を並列で走らせると、複数の project が同じレジストリの
+      # transfer state (pending 行・cron poll) を奪い合って race し、
+      # 「approve したはずが対象が消えていた」「cancel が 2303 で失敗」など
+      # コード無関係の flake になる。並列度を 1 に絞って project を直列実行する。
+      max-parallel: 1
       matrix:
         project:
           - registry-none

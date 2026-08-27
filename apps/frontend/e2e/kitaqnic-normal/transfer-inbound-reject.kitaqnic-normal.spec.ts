@@ -22,7 +22,7 @@ test.describe(
       const { fullDomain } = await setupInboundPending(page, "kitaqnic", "tr-in-r-xyz");
 
       const rejectButton = page.getByRole("button", { name: "却下して手元に残す" });
-      await expect(rejectButton).toBeVisible({ timeout: 10_000 });
+      await expect(rejectButton).toBeVisible({ timeout: 20_000 });
       await rejectButton.click();
 
       await page.goto("/dashboard");

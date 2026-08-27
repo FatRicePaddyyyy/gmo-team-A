@@ -22,7 +22,7 @@ test.describe(
       const { fullDomain } = await setupInboundPending(page, "kitaqsign", "tr-in-a");
 
       const approveButton = page.getByRole("button", { name: "承認して引き渡す" });
-      await expect(approveButton).toBeVisible({ timeout: 10_000 });
+      await expect(approveButton).toBeVisible({ timeout: 20_000 });
       await approveButton.click();
 
       await page.goto("/dashboard");
