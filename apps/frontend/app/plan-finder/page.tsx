@@ -44,7 +44,7 @@ export default function PlanFinderPage() {
         params.set("q", name);
       }
       if (tld) params.set("rec", tld);
-      router.push(`/search?${params.toString()}`);
+      router.push(`/?${params.toString()}`);
     },
     [result?.tld, router, update],
   );

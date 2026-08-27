@@ -136,11 +136,11 @@ export function redemptionDaysLeft(params: {
 /**
  * 更新（延長）で選べる年数。
  *
- * レジストリの制約は 1〜10 年だが、UI では刻みを絞って出す。
+ * レジストリの制約（1〜10年）をそのまま1年刻みで出す。
  * 一覧（domain-row）と詳細（renew-card）の両方から使うので、ここに一本化する。
  * 片方だけ変えると、同じ操作なのに選べる年数が食い違う。
  */
-export const RENEW_YEARS = [1, 2, 3, 5, 10] as const;
+export const RENEW_YEARS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] as const;
 
 /**
  * 更新後の有効期限の上限。レジストリは「現在 + 10 年」を超える更新を

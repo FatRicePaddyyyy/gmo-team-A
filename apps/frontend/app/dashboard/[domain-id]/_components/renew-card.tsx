@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { FeedbackBanner } from "@/components/feedback-banner";
 import { formatDate } from "@/shared/lib/format-date";
+import { formatYen, matchKnownTld } from "@/shared/lib/tld-catalog";
+import { PAYMENT_METHODS, type PaymentMethod } from "@/shared/lib/payment-methods";
 import {
   MAX_YEARS_FROM_NOW,
   renewableYears,
@@ -13,6 +15,7 @@ import {
 import type { DetailFeedback } from "../_hooks/use-domain-detail.hook";
 
 interface RenewCardProps {
+  domainName: string;
   expiresAt: string;
   disabled: boolean;
   running: boolean;
@@ -27,6 +30,7 @@ interface RenewCardProps {
  * 見ているその場で延長できるようにする（一覧に戻らせない）。
  */
 export function RenewCard({
+  domainName,
   expiresAt,
   disabled,
   running,
@@ -34,9 +38,21 @@ export function RenewCard({
   onRenew,
 }: RenewCardProps) {
   const [years, setYears] = useState(1);
+  // お支払い方法の選択を挟んでから実際に延長する（選ぶ→お支払い方法→確定）
+  const [phase, setPhase] = useState<"select" | "payment">("select");
+  const [method, setMethod] = useState<PaymentMethod>("credit-card");
   // レジストリの上限（現在 + 10 年）を超える年数は最初から出さない
   const options = renewableYears(expiresAt);
   const capped = options.length === 0;
+  // 金額は tld-catalog（唯一の出典）から引く。二重定義を避ける
+  const tldInfo = matchKnownTld(domainName);
+  const renewalTotal = tldInfo ? tldInfo.renewalPrice * years : null;
+
+  const handleConfirm = async () => {
+    const success = await onRenew(years);
+    // 成功したら期間選択に戻す。失敗時はお支払い方法を選び直さず、そのまま再試行できるようにする
+    if (success) setPhase("select");
+  };
 
   return (
     <Card>
@@ -61,7 +77,7 @@ export function RenewCard({
             有効期限は今日から {MAX_YEARS_FROM_NOW} 年先までしか延ばせません。
             このドメインはすでに上限に達しているため、いまは延長できません。
           </p>
-        ) : (
+        ) : phase === "select" ? (
           <div className="flex flex-wrap items-center gap-2">
             <label htmlFor="renew-years" className="text-xs text-gray-600">
               延長する期間
@@ -82,10 +98,70 @@ export function RenewCard({
             <Button
               variant="brand"
               disabled={disabled}
-              onClick={() => void onRenew(years)}
+              onClick={() => setPhase("payment")}
             >
-              {running ? "延長中..." : "延長する"}
+              次へ
             </Button>
+            {renewalTotal !== null && (
+              <p className="w-full text-sm text-gray-700">
+                {years}年延長すると
+                <span className="font-bold" style={{ color: "var(--brand)" }}>
+                  {formatYen(renewalTotal)}
+                </span>
+                （税込）かかります
+              </p>
+            )}
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <p className="text-sm text-gray-700">
+              {years}年延長 ={" "}
+              <span className="font-bold" style={{ color: "var(--brand)" }}>
+                {renewalTotal !== null ? formatYen(renewalTotal) : "-"}
+              </span>
+              （税込）
+            </p>
+
+            <fieldset className="space-y-2 rounded-lg border border-border p-3">
+              <legend className="px-1 text-xs font-bold text-gray-900">お支払い方法</legend>
+              {PAYMENT_METHODS.map((option) => (
+                <label
+                  key={option.id}
+                  className="flex items-start gap-3 rounded-lg border border-border px-3 py-2 text-sm text-gray-900 has-[:checked]:border-[var(--brand)] has-[:checked]:bg-[var(--brand-light)]"
+                >
+                  <input
+                    type="radio"
+                    name="renew-payment-method"
+                    value={option.id}
+                    checked={method === option.id}
+                    disabled={disabled}
+                    onChange={() => setMethod(option.id)}
+                    className="mt-0.5 size-5 shrink-0 accent-[var(--brand)]"
+                  />
+                  <span>
+                    <span className="font-semibold">{option.label}</span>
+                    <span className="mt-1 block text-gray-600">{option.description}</span>
+                  </span>
+                </label>
+              ))}
+            </fieldset>
+
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant="outline"
+                disabled={disabled}
+                onClick={() => setPhase("select")}
+              >
+                戻る
+              </Button>
+              <Button
+                variant="brand"
+                disabled={disabled}
+                onClick={() => void handleConfirm()}
+              >
+                {running ? "処理中..." : "この内容で確定する"}
+              </Button>
+            </div>
           </div>
         )}
 

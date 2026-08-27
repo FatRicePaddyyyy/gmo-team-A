@@ -24,7 +24,7 @@ export default function NotFound() {
               className="h-11 px-5"
               variant="brand"
               nativeButton={false}
-              render={<Link href="/search" />}
+              render={<Link href="/" />}
             >
               ドメインを検索する
             </Button>

@@ -24,7 +24,7 @@ export function PlanFinderLink({ className = "" }: PlanFinderLinkProps) {
       >
         <Sparkles className="size-4 shrink-0" aria-hidden="true" />
         <span>
-          どの拡張子（末尾）を選べばいいか迷ったら、質問に答えておすすめを見る
+          どのTLD（末尾）を選べばいいか迷ったら、質問に答えておすすめを見る
         </span>
         <ArrowRight className="size-4 shrink-0" aria-hidden="true" />
       </Link>

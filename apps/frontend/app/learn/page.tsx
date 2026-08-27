@@ -34,7 +34,7 @@ export default function LearnPage() {
   const handleSelectTld = useCallback(
     (tld: string) => {
       const base = state.searchedName?.trim() || "example";
-      router.push(`/search?q=${encodeURIComponent(`${base}${tld}`)}`);
+      router.push(`/?q=${encodeURIComponent(`${base}${tld}`)}`);
     },
     [router, state.searchedName],
   );

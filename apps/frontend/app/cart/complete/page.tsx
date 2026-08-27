@@ -16,7 +16,7 @@ import { buildFlowSteps } from "@/shared/lib/progress-store";
 import { purposeLabel } from "@/shared/lib/purpose";
 import { findTld, MISCONCEPTION } from "@/shared/lib/tld-catalog";
 
-const COMPLETE_STEPS = buildFlowSteps("signup");
+const COMPLETE_STEPS = buildFlowSteps("login");
 
 /**
  * 確認までを終えた画面。
@@ -93,7 +93,7 @@ export default function CartCompletePage() {
                   <GlossaryTerm
                     description={
                       findTld(item.tld)?.summary ??
-                      "インターネット上の住所（ドメイン名）の末尾につく「拡張子」です。"
+                      "インターネット上の住所（ドメイン名）の末尾につく「TLD」です。"
                     }
                   >
                     <span style={{ color: "var(--brand)" }}>{item.tld}</span>
