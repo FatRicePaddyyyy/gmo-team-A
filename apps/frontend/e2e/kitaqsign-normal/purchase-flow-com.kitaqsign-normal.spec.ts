@@ -51,12 +51,12 @@ test.describe(
       await expect(proceedButton).toBeVisible();
       await proceedButton.click();
 
-      // 4. 内容確認 (/cart/complete)。ログイン済みなので「お支払い方法の選択に進む」
+      // 4. 内容確認 (/cart/complete)。ログイン済みなので「お支払い内容の確認に進む」
       await expect(page).toHaveURL(/\/cart\/complete/);
       await expect(
         page.getByRole("region", { name: /確認したドメイン/ }),
       ).toBeVisible();
-      await page.getByText("お支払い方法の選択に進む").click();
+      await page.getByText("お支払い内容の確認に進む").click();
 
       // 5. 支払い方法。デモなのでデフォルト (クレジットカード) のまま確定
       await expect(page).toHaveURL(/\/cart\/payment/);

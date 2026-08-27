@@ -53,7 +53,7 @@ test.describe(
       await expect(
         page.getByRole("region", { name: /確認したドメイン/ }),
       ).toBeVisible();
-      await page.getByText("お支払い方法の選択に進む").click();
+      await page.getByText("お支払い内容の確認に進む").click();
 
       // 5. 支払い方法
       await expect(page).toHaveURL(/\/cart\/payment/);

@@ -47,7 +47,7 @@ test.describe(
         })
         .click();
       await expect(page).toHaveURL(/\/cart\/complete/);
-      await page.getByText("お支払い方法の選択に進む").click();
+      await page.getByText("お支払い内容の確認に進む").click();
       await expect(page).toHaveURL(/\/cart\/payment/);
       await page.getByRole("button", { name: /この内容で確定する/ }).click();
       await expect(page).toHaveURL(/\/cart\/done/, { timeout: 15_000 });
