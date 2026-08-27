@@ -199,6 +199,15 @@ export interface RecommendedOption extends PlanOption {
  * 診断結果
  * ------------------------------------------------------------------ */
 
+export interface AlternativeTld {
+  /** 代わりの末尾（`.store` など） */
+  tld: string;
+  /** 末尾の詳細。価格・説明は必ずここ（カタログ）から出す */
+  info: TldInfo | undefined;
+  /** なぜこれも候補になるのか */
+  reason: string;
+}
+
 export interface Recommendation {
   /** おすすめする末尾（`.co.jp` など） */
   tld: string;
@@ -209,12 +218,29 @@ export interface Recommendation {
   /** 診断から決まった用途。以降の画面でも使い回す */
   purpose: Purpose;
   options: RecommendedOption[];
+  /** 一番のおすすめの他にも見せる、用途に合う候補（無ければ空配列） */
+  alternatives: AlternativeTld[];
 }
 
-/** 用途だけでは決まらない、診断ならではの上書き（イベント・お試し） */
+/** 用途だけでは決まらない、診断ならではの上書き（イベント・お試し／お店） */
 function tldForAnswers(answers: QuizAnswers, purpose: Purpose): string {
   if (answers.scene === "event") return ".xyz";
+  // お店・個人事業は「ネットショップ」であることが伝わる .store のほうが、
+  // 用途（sole）から機械的に出る .jp より初学者に刺さる
+  if (answers.scene === "shop") return ".store";
   return recommendedTldFor(purpose);
+}
+
+/** 一番のおすすめ以外にも見せておきたい候補（無いシーンでは空配列） */
+function alternativesFor(answers: QuizAnswers): AlternativeTld[] {
+  if (answers.scene === "event") {
+    return [".fun", ".space"].map((tld) => ({
+      tld,
+      info: findTld(tld),
+      reason: "同じく安価な新しいTLDで、カジュアルな響きがイベント告知にも合います。",
+    }));
+  }
+  return [];
 }
 
 function reasonFor(answers: QuizAnswers, tld: string): string {
@@ -227,7 +253,7 @@ function reasonFor(answers: QuizAnswers, tld: string): string {
         ? `登記済みの会社だけが取得できる末尾です。${info?.summary ?? ""}会社の実在が確認されたことの証明になるため、取引先からの信頼を得やすくなります。`
         : `まだ登記していない場合、${".co.jp"} は取得できません。${audience}。登記が済んだあとに改めて .co.jp を検討できます。`;
     case "shop":
-      return `${audience}。お店の場所が日本にあることが伝わりやすく、名刺やチラシに載せても読み間違えられにくい末尾です。`;
+      return `${audience}。「ストア」という単語が入っているので、訪れた人にひと目でネットショップだと伝わります。ただし2年目以降の更新料は .com より高めなので、長く使う前提で金額も確認してください。`;
     case "event":
       return `${audience}。短期間だけ使うなら費用を抑えられます。ただし新しい末尾のため、送ったメールが迷惑メール扱いされることがあります。長く使う予定に変わったら .com も検討してください。`;
     default:
@@ -269,5 +295,6 @@ export function recommend(answers: QuizAnswers): Recommendation | null {
     reason: reasonFor(answers, tld),
     purpose,
     options: optionsFor(answers),
+    alternatives: alternativesFor(answers),
   };
 }
