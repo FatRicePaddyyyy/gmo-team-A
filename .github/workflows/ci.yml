@@ -239,6 +239,16 @@ jobs:
           NEXT_PUBLIC_BACKEND_URL: http://localhost:8787
           # /api/v1/secret/create-seed-user を叩いてテストユーザーを作るために必要
           SECRET_KEY: ${{ secrets.SECRET_KEY }}
+          # 移管 e2e (transfer-*.spec.ts) 用の teama-2 側 credentials。
+          # helper が T2_ prefix で読むので、そのまま T2_ 付きで注入する。
+          T2_KITAQSIGN_BASIC_USER: ${{ secrets.T2_KITAQSIGN_BASIC_USER }}
+          T2_KITAQSIGN_BASIC_PASS: ${{ secrets.T2_KITAQSIGN_BASIC_PASS }}
+          T2_KITAQSIGN_REGISTRAR_ID: ${{ secrets.T2_KITAQSIGN_REGISTRAR_ID }}
+          T2_KITAQSIGN_API_KEY: ${{ secrets.T2_KITAQSIGN_API_KEY }}
+          T2_KITAQNIC_BASIC_USER: ${{ secrets.T2_KITAQNIC_BASIC_USER }}
+          T2_KITAQNIC_BASIC_PASS: ${{ secrets.T2_KITAQNIC_BASIC_PASS }}
+          T2_KITAQNIC_REGISTRAR_ID: ${{ secrets.T2_KITAQNIC_REGISTRAR_ID }}
+          T2_KITAQNIC_API_KEY: ${{ secrets.T2_KITAQNIC_API_KEY }}
         run: pnpm exec playwright test --project=${{ matrix.project }}
       - name: Upload Playwright report
         if: always()
