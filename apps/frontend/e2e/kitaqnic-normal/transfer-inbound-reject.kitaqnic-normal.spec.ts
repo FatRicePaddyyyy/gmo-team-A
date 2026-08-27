@@ -4,28 +4,27 @@ import { loginAndExpectDashboard } from "../helpers/login";
 import { setupInboundPending } from "../helpers/transfer";
 
 /**
- * @registry-kitaqsign-normal — 移管 inbound reject (kitaqsign / .com)
+ * @registry-kitaqnic-normal — 移管 inbound reject (kitaqnic / .xyz)
  *
- * apps/backend/scripts/transfer/transfer-inbound-reject-e2e-kitaqsign.sh の TS 版。
+ * apps/backend/scripts/transfer/transfer-inbound-reject-e2e-kitaqnic.sh の TS 版。
  * 却下するとドメインは手元に残る。
  */
 test.describe(
-  "移管 inbound reject (.com)",
-  { tag: "@registry-kitaqsign-normal" },
+  "移管 inbound reject (.xyz)",
+  { tag: "@registry-kitaqnic-normal" },
   () => {
     test.skip(!hasSeedEnv(), "SECRET_KEY / T2_* が無いためスキップ");
 
     test("却下するとドメインが手元に残る", async ({ page }) => {
-      const user = await createSeedUser({ label: "tr-in-reject" });
+      const user = await createSeedUser({ label: "tr-in-reject-xyz" });
       await loginAndExpectDashboard(page, user);
 
-      const { fullDomain } = await setupInboundPending(page, "kitaqsign", "tr-in-r");
+      const { fullDomain } = await setupInboundPending(page, "kitaqnic", "tr-in-r-xyz");
 
       const rejectButton = page.getByRole("button", { name: "却下して手元に残す" });
       await expect(rejectButton).toBeVisible({ timeout: 10_000 });
       await rejectButton.click();
 
-      // 却下成功後、ダッシュボードにドメインが残っている
       await page.goto("/dashboard");
       await expect(
         page.getByRole("link", { name: new RegExp(fullDomain.replace(".", "\\.")) }),

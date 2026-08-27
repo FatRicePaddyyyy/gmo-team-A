@@ -264,20 +264,24 @@ import { expect } from "@playwright/test";
  * → teama-2 registry で transfer/request を投げる → backend cron 発火」まで運ぶ。
  *
  * inbound 系 3 ケース (approve / reject / cancel) の前半で共通なのでまとめる。
+ * registry で `.com` / `.xyz` を切り替えられる。
  * 返り値 fullDomain と authInfo は呼び出し側で使う。
  */
 export async function setupInboundPending(
   page: Page,
+  registry: Registry,
   labelPrefix: string,
 ): Promise<{ fullDomain: string; authInfo: string }> {
+  const tld = tldOf(registry);
   const domainName = `${labelPrefix}-${Date.now()}-${randomHex(3)}`;
-  const fullDomain = `${domainName}.com`;
+  const fullDomain = `${domainName}.${tld}`;
 
-  await page.goto(`/?q=${domainName}`);
+  // 検索は「name + .tld」を丸ごと入れる (`/?q=name.tld` の形)
+  await page.goto(`/?q=${fullDomain}`);
   await expect(page.getByRole("region", { name: "検索結果" })).toBeVisible();
   await page
     .getByRole("button", {
-      name: new RegExp(`このドメインで進む.*${domainName}\\.com`),
+      name: new RegExp(`このドメインで進む.*${domainName}\\.${tld}`),
     })
     .click();
   await expect(page).toHaveURL(/\/cart\/complete/);
@@ -298,7 +302,7 @@ export async function setupInboundPending(
     page.getByText("認証コード（AuthCode）を再発行しました"),
   ).toBeVisible({ timeout: 10_000 });
 
-  await t2TransferRequest("kitaqsign", fullDomain, authInfo);
+  await t2TransferRequest(registry, fullDomain, authInfo);
   await fireCron();
 
   // 再度詳細ページを開いて、他社へ渡すタブに incoming transfer カードが出るのを待つ
