@@ -17,8 +17,12 @@ export default function NotFound() {
           </h1>
           <p className="mb-6 text-sm leading-relaxed text-gray-600">
             URL が変わったか、まだ準備中のページかもしれません。
-            ドメイン検索から始めてみてください。
+            次のどちらかから続けられます。
           </p>
+          {/* 以前は「ドメインを検索する」と「トップページへ戻る」を並べていたが、
+              検索トップ＝トップページなので、どちらを押しても同じ場所に着いた。
+              選択肢が 2 つあると「違いは何か」を考えさせてしまうので、
+              行き先が実際に違うものだけを残す。 */}
           <div className="flex flex-col justify-center gap-2 sm:flex-row">
             <Button
               className="h-11 px-5"
@@ -26,15 +30,15 @@ export default function NotFound() {
               nativeButton={false}
               render={<Link href="/" />}
             >
-              ドメインを検索する
+              ドメインを探す
             </Button>
             <Button
               variant="outline"
               className="h-11 px-5"
               nativeButton={false}
-              render={<Link href="/" />}
+              render={<Link href="/learn" />}
             >
-              トップページへ戻る
+              ドメインについて学ぶ
             </Button>
           </div>
         </div>
