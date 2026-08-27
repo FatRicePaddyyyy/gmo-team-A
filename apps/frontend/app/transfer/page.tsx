@@ -33,7 +33,7 @@ export default function TransferPage() {
 
         <div>
           <h1 className="font-heading text-2xl font-bold text-gray-900">
-            他社のドメインを移管する
+            他社のドメインをここへ移す
           </h1>
           <p className="mt-2 text-sm text-gray-600">
             いま他の事業者で管理しているドメインを、こちらへ引っ越します。

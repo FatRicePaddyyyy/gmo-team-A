@@ -13,7 +13,7 @@ interface DomainListProps {
 
 /** 取得済みドメインの一覧セクション。取得も操作も `useMyDomains` が持つ */
 export function DomainList({ state }: DomainListProps) {
-  const { domains, loading, loadError, loadUnauthorized, running, feedback, refresh } = state;
+  const { domains, loading, loadError, loadUnauthorized, refresh } = state;
 
   return (
     <section className="space-y-4">
@@ -23,7 +23,7 @@ export function DomainList({ state }: DomainListProps) {
             取得済みのドメイン
           </h2>
           <p className="mt-1 text-sm text-gray-600">
-            更新（期限の延長）・廃止・廃止したドメインの復旧ができます。
+            それぞれのドメインを開くと、期限の延長・ネームサーバーの変更・他社への引き渡し・廃止ができます。
           </p>
         </div>
         <Button
@@ -36,14 +36,6 @@ export function DomainList({ state }: DomainListProps) {
           {loading ? "読み込み中..." : "最新にする"}
         </Button>
       </div>
-
-      {feedback && (
-        <FeedbackBanner
-          tone={feedback.tone}
-          message={feedback.message}
-          unauthorized={feedback.unauthorized}
-        />
-      )}
 
       {loadError && (
         <FeedbackBanner
@@ -79,7 +71,7 @@ export function DomainList({ state }: DomainListProps) {
               nativeButton={false}
               render={<Link href="/transfer" />}
             >
-              他社のドメインを移管する
+              他社のドメインをここへ移す
             </Button>
           </div>
         </div>
@@ -88,14 +80,7 @@ export function DomainList({ state }: DomainListProps) {
       {domains.length > 0 && (
         <div className="space-y-3">
           {domains.map((domain) => (
-            <DomainRow
-              key={domain.id}
-              domain={domain}
-              running={running}
-              onRenew={state.renew}
-              onDelete={state.remove}
-              onRestore={state.restore}
-            />
+            <DomainRow key={domain.id} domain={domain} />
           ))}
         </div>
       )}

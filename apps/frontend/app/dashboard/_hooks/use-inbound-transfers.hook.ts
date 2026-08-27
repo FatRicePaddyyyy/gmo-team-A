@@ -8,13 +8,21 @@ import {
   type ListPendingInboundTransfersResponse,
 } from "@/clients";
 import { callApi } from "@/shared/lib/api-result";
-import type { DomainFeedback } from "./use-my-domains.hook";
+
 
 type InboundSuccess = Extract<
   ListPendingInboundTransfersResponse,
   { success: true }
 >;
 export type InboundTransfer = InboundSuccess["data"][number];
+
+/** 承認・却下の結果表示 */
+export interface DomainFeedback {
+  tone: "success" | "error";
+  message: string;
+  /** セッション切れ。帯にログイン導線を出すため */
+  unauthorized?: boolean;
+}
 
 export interface RunningTransferAction {
   domainId: string;

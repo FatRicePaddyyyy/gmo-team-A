@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useSession } from "@/auth-client";
+import { useInboundTransfers } from "../_hooks/use-inbound-transfers.hook";
 import { BackLink } from "@/components/back-link";
 import { RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -15,9 +16,11 @@ import {
   canRestore,
   canUpdateSettings,
   isTransferLocked,
+  statusHintOf,
 } from "../_lib/domain-status";
 import { DomainOverview } from "./_parts/domain-overview";
 import { NameServerForm } from "./_components/name-server-form";
+import { IncomingTransferCard } from "./_components/incoming-transfer-card";
 import { LifecycleCard } from "./_components/lifecycle-card";
 import { RenewCard } from "./_components/renew-card";
 import { TransferOutCard } from "./_components/transfer-out-card";
@@ -30,6 +33,10 @@ export default function DomainDetailPage() {
   const isSignedIn = Boolean(session?.user);
 
   const state = useDomainDetail(domainId, isSignedIn);
+  // このドメインに対して他社への引き渡し申請が来ていないか。
+  // 一覧と同じ API を使い、対象の 1 件だけを取り出す。
+  const inbound = useInboundTransfers(isSignedIn, state.refresh);
+  const incoming = inbound.transfers.find((t) => t.domainId === domainId) ?? null;
   const { domain, loading, loadError, loadUnauthorized, running, feedback } =
     state;
 
@@ -126,9 +133,20 @@ export default function DomainDetailPage() {
               <>
                 <DomainOverview domain={domain} />
 
-                {!settingsEditable && (
+                {incoming && (
+                  <IncomingTransferCard
+                    transfer={incoming}
+                    running={inbound.running}
+                    feedback={inbound.feedback}
+                    onApprove={inbound.approve}
+                    onReject={inbound.reject}
+                  />
+                )}
+
+                {!settingsEditable && !incoming && (
                   <p className="rounded-lg border border-gray-200 bg-white p-3 text-sm text-gray-600">
-                    このドメインはいま手続き中か廃止済みのため、設定を変更できません。
+                    {statusHintOf(domain.status) ??
+                      "このドメインはいま手続き中のため、設定を変更できません。"}
                   </p>
                 )}
 

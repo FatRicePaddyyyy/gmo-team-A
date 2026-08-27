@@ -70,7 +70,7 @@ export function TransferOutCard({
       <CardContent className="space-y-5">
         <div>
           <h2 className="font-heading text-lg font-bold text-gray-900">
-            他社へ移管する
+            このドメインを他社へ渡す
           </h2>
           <p className="mt-1 text-sm text-gray-600">
             このドメインを他の事業者に引っ越すための設定です。移管には「ロックの解除」と「認証コードの受け渡し」の2つが必要です。

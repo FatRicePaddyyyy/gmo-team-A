@@ -7,17 +7,53 @@
  */
 
 export const DOMAIN_STATUS_LABELS: Record<string, string> = {
-  ok: "有効",
+  ok: "使えます",
   pendingCreate: "登録手続き中",
-  pendingTransfer: "移管手続き中",
+  // 「移管」だけでは渡す側か受け取る側か分からない。自分のドメインに対して
+  // 起きている以上、必ず「他社へ渡す」側なのでそう書く。
+  pendingTransfer: "他社へ渡す手続き中",
   pendingUpdate: "変更手続き中",
-  redemptionPeriod: "廃止済み（復旧できます）",
-  pendingDelete: "削除待ち（復旧できません）",
+  redemptionPeriod: "廃止済み（まだ戻せます）",
+  pendingDelete: "削除待ち（もう戻せません）",
   serverHold: "利用停止中",
   clientHold: "利用停止中",
   serverUpdateProhibited: "変更ロック中",
   clientUpdateProhibited: "変更ロック中",
 };
+
+/**
+ * 状態バッジだけでは「で、どうすればいいのか」が分からないので、
+ * 一言の補足を添える。ドメインを初めて持つ人が読む前提で書く。
+ */
+export const DOMAIN_STATUS_HINTS: Record<string, string> = {
+  ok: "サイトやメールに使えます。",
+  pendingCreate: "登録が終わるまで少し待ってください。",
+  pendingTransfer:
+    "他社から引き渡しの申請が来ています。承認するか却下するか決めてください。放置すると自動で承認されます。",
+  pendingUpdate: "変更が反映されるまで少し待ってください。",
+  redemptionPeriod:
+    "廃止しましたが、猶予期間のうちなら元に戻せます。過ぎると他の人が取得できるようになります。",
+  pendingDelete: "猶予期間を過ぎたため、元に戻せません。",
+  serverHold: "レジストリの判断で止まっています。",
+  clientHold: "掲載を止めているので、サイトが見られません。",
+  serverUpdateProhibited: "変更が禁止されています。",
+  clientUpdateProhibited: "変更が禁止されています。",
+};
+
+export function statusHintOf(status: string): string | null {
+  return DOMAIN_STATUS_HINTS[status] ?? null;
+}
+
+/**
+ * 一覧のボタンに「この先で何ができるか」を出すための文言。
+ * 「設定・詳細」だけでは中身が想像できないので、状態ごとに変える。
+ */
+export function detailActionLabelOf(status: string): string {
+  if (status === "redemptionPeriod") return "復旧する・詳しく見る";
+  if (status === "pendingTransfer") return "承認・却下する";
+  if (status === "pendingDelete") return "詳しく見る";
+  return "更新・設定を変える";
+}
 
 export type DomainStatusTone = "ok" | "warning" | "danger" | "neutral";
 

@@ -59,7 +59,7 @@ export default function DashboardPage() {
                   render={<Link href="/transfer" />}
                 >
                   <ArrowLeftRight aria-hidden="true" />
-                  他社ドメインを移管する
+                  他社のドメインをここへ移す
                 </Button>
               </div>
             </div>
