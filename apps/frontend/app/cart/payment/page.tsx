@@ -10,8 +10,13 @@ import { FeedbackBanner } from "@/components/feedback-banner";
 import { GlossaryTerm } from "@/components/glossary-term";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
-import { completeCartPurchase } from "@/shared/lib/complete-cart-purchase";
-import { loadConfirmedOrder, type ConfirmedOrder } from "@/shared/lib/order-store";
+import { $createDomain } from "@/clients";
+import { callApi } from "@/shared/lib/api-result";
+import {
+  clearConfirmedOrder,
+  loadConfirmedOrder,
+  type ConfirmedOrder,
+} from "@/shared/lib/order-store";
 import { buildFlowSteps } from "@/shared/lib/progress-store";
 import { findTld } from "@/shared/lib/tld-catalog";
 
@@ -60,9 +65,9 @@ export default function CartPaymentPage() {
             <Button
               className="h-11 px-5 text-white"
               style={{ background: "var(--brand)" }}
-              onClick={() => router.push("/cart")}
+              onClick={() => router.push("/")}
             >
-              確認画面へ進む
+              ドメインを検索する
             </Button>
           </div>
         </main>
@@ -72,12 +77,24 @@ export default function CartPaymentPage() {
   }
 
   const handleConfirm = async () => {
+    if (!order) return;
     setSubmitting(true);
     setFailures([]);
-    const result = await completeCartPurchase();
+    // 確定した各ドメインを登録する。現状は常に1件だが、将来複数対応する余地は残す。
+    const results = await Promise.all(
+      order.items.map(async (item) => {
+        const fullName = `${item.name}${item.tld}`;
+        const result = await callApi(
+          $createDomain({ json: { name: fullName, period: { unit: "Y", value: 1 } } }),
+        );
+        return result.success ? null : `${fullName}: ${result.error}`;
+      }),
+    );
+    clearConfirmedOrder();
     setSubmitting(false);
-    if (result.length > 0) {
-      setFailures(result);
+    const failed = results.filter((failure): failure is string => failure !== null);
+    if (failed.length > 0) {
+      setFailures(failed);
       return;
     }
     router.push("/dashboard");
@@ -171,7 +188,7 @@ export default function CartPaymentPage() {
             variant="outline"
             className="h-11 px-5"
             nativeButton={false}
-            render={<Link href="/cart" />}
+            render={<Link href="/cart/complete" />}
           >
             確認画面に戻る
           </Button>

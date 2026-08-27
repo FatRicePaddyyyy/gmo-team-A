@@ -179,10 +179,32 @@ jobs:
         env:
           BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
           SECRET_KEY: ${{ secrets.SECRET_KEY }}
+          # E2E は実 kitaqsign / kitaqnic を叩く (POST /api/v1/public/domains/check の resolveRegistry が
+          # 両レジストリの hello を叩く)。CI で認証情報が無いと backend が 500 を返し、
+          # 検索結果が出ずに「このドメインで進む」ボタンが描画されなくなる。
+          # Repository Secrets に KITAQSIGN_* / KITAQNIC_* を登録しておくこと。
+          KITAQSIGN_BASIC_USER: ${{ secrets.KITAQSIGN_BASIC_USER }}
+          KITAQSIGN_BASIC_PASS: ${{ secrets.KITAQSIGN_BASIC_PASS }}
+          KITAQSIGN_REGISTRAR_ID: ${{ secrets.KITAQSIGN_REGISTRAR_ID }}
+          KITAQSIGN_API_KEY: ${{ secrets.KITAQSIGN_API_KEY }}
+          KITAQNIC_BASIC_USER: ${{ secrets.KITAQNIC_BASIC_USER }}
+          KITAQNIC_BASIC_PASS: ${{ secrets.KITAQNIC_BASIC_PASS }}
+          KITAQNIC_REGISTRAR_ID: ${{ secrets.KITAQNIC_REGISTRAR_ID }}
+          KITAQNIC_API_KEY: ${{ secrets.KITAQNIC_API_KEY }}
         run: |
           # wrangler dev に secrets を渡す (.dev.vars は wrangler が自動で読み込む)
-          printf 'BETTER_AUTH_SECRET=%s\nSECRET_KEY=%s\n' \
-            "$BETTER_AUTH_SECRET" "$SECRET_KEY" > .dev.vars
+          {
+            printf 'BETTER_AUTH_SECRET=%s\n' "$BETTER_AUTH_SECRET"
+            printf 'SECRET_KEY=%s\n' "$SECRET_KEY"
+            printf 'KITAQSIGN_BASIC_USER=%s\n' "$KITAQSIGN_BASIC_USER"
+            printf 'KITAQSIGN_BASIC_PASS=%s\n' "$KITAQSIGN_BASIC_PASS"
+            printf 'KITAQSIGN_REGISTRAR_ID=%s\n' "$KITAQSIGN_REGISTRAR_ID"
+            printf 'KITAQSIGN_API_KEY=%s\n' "$KITAQSIGN_API_KEY"
+            printf 'KITAQNIC_BASIC_USER=%s\n' "$KITAQNIC_BASIC_USER"
+            printf 'KITAQNIC_BASIC_PASS=%s\n' "$KITAQNIC_BASIC_PASS"
+            printf 'KITAQNIC_REGISTRAR_ID=%s\n' "$KITAQNIC_REGISTRAR_ID"
+            printf 'KITAQNIC_API_KEY=%s\n' "$KITAQNIC_API_KEY"
+          } > .dev.vars
           pnpm dev &
           echo "Backend PID: $!"
           # /api は OpenAPI spec を返す認証不要エンドポイント
@@ -199,6 +221,8 @@ jobs:
         working-directory: apps/frontend
         env:
           NEXT_PUBLIC_BACKEND_URL: http://localhost:8787
+          # /api/v1/secret/create-seed-user を叩いてテストユーザーを作るために必要
+          SECRET_KEY: ${{ secrets.SECRET_KEY }}
         run: pnpm exec playwright test
       - name: Upload Playwright report
         if: always()

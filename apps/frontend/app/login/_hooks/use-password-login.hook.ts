@@ -47,7 +47,7 @@ export const usePasswordLogin = () => {
         {
           onSuccess: () => {
             setIsLoading(false);
-            // カート確認済みの申し込みがあれば、お支払い方法選択に進む。
+            // 申し込み確定済みの内容があればお支払い方法選択へ。
             // 無ければ（マイドメインの確認だけでログインした場合）ダッシュボードへ。
             const order = loadConfirmedOrder();
             router.push(order ? "/cart/payment" : "/dashboard");
