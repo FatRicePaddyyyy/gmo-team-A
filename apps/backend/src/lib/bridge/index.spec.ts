@@ -55,12 +55,12 @@ afterEach(() => vi.unstubAllGlobals());
 
 describe("RegistryBridge.hello: 対応TLDの入れ物がレジストリごとに違う", () => {
   test("kitaqsign 形（resData.tlds）を読める", async () => {
-    stubRegistry(200, okEnvelope({ registryCode: "KQSGN", tlds: ["com", "net", "org", "info"] }));
+    stubRegistry(200, okEnvelope({ registryCode: "KQSGN", tlds: ["com", "net"] }));
 
     const res = await RegistryBridge.hello({ registry: "kitaqsign", env: mockEnv });
 
     expect(res.success).toBe(true);
-    expect(res.data?.tlds).toEqual(["com", "net", "org", "info"]);
+    expect(res.data?.tlds).toEqual(["com", "net"]);
   });
 
   // 実機の kitaqnic は resData.tlds を持たず、resData.info.supportedTlds に入れてくる。
