@@ -1,7 +1,8 @@
 import { createRoute, z } from "@hono/zod-openapi";
+import { createDBClient } from "../../lib/db";
 import { toUserMessage } from "../../lib/error-messages";
 import { createOpenAPIHono } from "../../lib/openapi-hono";
-import { ProductRepository } from "./repository";
+import { CategoryService } from "./service";
 
 const CreateProductRequestSchema = z
   .object({
@@ -152,11 +153,9 @@ export const createCategoryRouteHandler = app.openapi(
   async (ctx) => {
     try {
       const payload = ctx.req.valid("json");
+      const db = createDBClient(ctx.env);
 
-      const result = await ProductRepository.createCategoryAndProduct(
-        payload,
-        ctx.env,
-      );
+      const result = await CategoryService.create({ payload, db });
 
       if (!result.success) {
         return ctx.json(
@@ -169,7 +168,14 @@ export const createCategoryRouteHandler = app.openapi(
         );
       }
 
-      return ctx.json(result, 201);
+      return ctx.json(
+        {
+          success: true as const,
+          data: result.data,
+          error: null,
+        },
+        201,
+      );
     } catch (error) {
       console.error("Create product error:", error);
       return ctx.json(

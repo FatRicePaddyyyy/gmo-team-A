@@ -1,5 +1,5 @@
 import { eq } from "drizzle-orm";
-import { createDBClient } from "../../lib/db";
+import type { DBClient } from "../../lib/db";
 import { classifyDbError } from "../../lib/db-error";
 import { domains } from "../../lib/schema/general-schema";
 import type { Result } from "../../types/result";
@@ -10,13 +10,12 @@ type NewDomain = typeof domains.$inferInsert;
 export class DomainRepository {
   static async findById({
     id,
-    env,
+    db,
   }: {
     id: string;
-    env: CloudflareBindings;
+    db: DBClient;
   }): Promise<Result<Domain | null>> {
     try {
-      const db = createDBClient(env);
       const rows = await db.select().from(domains).where(eq(domains.id, id));
       return { success: true, data: rows[0] ?? null, error: null };
     } catch (error) {
@@ -27,13 +26,12 @@ export class DomainRepository {
 
   static async findByName({
     name,
-    env,
+    db,
   }: {
     name: string;
-    env: CloudflareBindings;
+    db: DBClient;
   }): Promise<Result<Domain | null>> {
     try {
-      const db = createDBClient(env);
       const rows = await db.select().from(domains).where(eq(domains.name, name));
       return { success: true, data: rows[0] ?? null, error: null };
     } catch (error) {
@@ -44,13 +42,12 @@ export class DomainRepository {
 
   static async create({
     data,
-    env,
+    db,
   }: {
     data: NewDomain;
-    env: CloudflareBindings;
+    db: DBClient;
   }): Promise<Result<Domain>> {
     try {
-      const db = createDBClient(env);
       const [created] = await db.insert(domains).values(data).returning();
       // Drizzle の returning() 型上は必ず 1 行返る前提だが、D1 の異常系で 0 件のケースを保険で検知する
       // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
@@ -67,14 +64,13 @@ export class DomainRepository {
   static async updateStatus({
     id,
     status,
-    env,
+    db,
   }: {
     id: string;
     status: string;
-    env: CloudflareBindings;
+    db: DBClient;
   }): Promise<Result<void>> {
     try {
-      const db = createDBClient(env);
       await db.update(domains).set({ status }).where(eq(domains.id, id));
       return { success: true, data: undefined, error: null };
     } catch (error) {
@@ -87,15 +83,14 @@ export class DomainRepository {
     id,
     expiresAt,
     status,
-    env,
+    db,
   }: {
     id: string;
     expiresAt: Date;
     status: string;
-    env: CloudflareBindings;
+    db: DBClient;
   }): Promise<Result<void>> {
     try {
-      const db = createDBClient(env);
       await db.update(domains).set({ expiresAt, status }).where(eq(domains.id, id));
       return { success: true, data: undefined, error: null };
     } catch (error) {
@@ -107,14 +102,13 @@ export class DomainRepository {
   static async updateExpiresAt({
     id,
     expiresAt,
-    env,
+    db,
   }: {
     id: string;
     expiresAt: Date;
-    env: CloudflareBindings;
+    db: DBClient;
   }): Promise<Result<void>> {
     try {
-      const db = createDBClient(env);
       await db.update(domains).set({ expiresAt }).where(eq(domains.id, id));
       return { success: true, data: undefined, error: null };
     } catch (error) {
@@ -126,14 +120,13 @@ export class DomainRepository {
   static async updateAuthInfo({
     id,
     authInfo,
-    env,
+    db,
   }: {
     id: string;
     authInfo: string;
-    env: CloudflareBindings;
+    db: DBClient;
   }): Promise<Result<void>> {
     try {
-      const db = createDBClient(env);
       await db.update(domains).set({ authInfo }).where(eq(domains.id, id));
       return { success: true, data: undefined, error: null };
     } catch (error) {
@@ -145,14 +138,13 @@ export class DomainRepository {
   static async updateAutoRenew({
     id,
     autoRenew,
-    env,
+    db,
   }: {
     id: string;
     autoRenew: boolean;
-    env: CloudflareBindings;
+    db: DBClient;
   }): Promise<Result<void>> {
     try {
-      const db = createDBClient(env);
       await db.update(domains).set({ autoRenew }).where(eq(domains.id, id));
       return { success: true, data: undefined, error: null };
     } catch (error) {
@@ -164,13 +156,12 @@ export class DomainRepository {
 
   static async listByUserId({
     userId,
-    env,
+    db,
   }: {
     userId: string;
-    env: CloudflareBindings;
+    db: DBClient;
   }): Promise<Result<Domain[]>> {
     try {
-      const db = createDBClient(env);
       const rows = await db.select().from(domains).where(eq(domains.ownerUserId, userId));
       return { success: true, data: rows, error: null };
     } catch (error) {

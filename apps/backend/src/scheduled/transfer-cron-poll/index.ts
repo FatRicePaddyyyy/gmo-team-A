@@ -1,3 +1,4 @@
+import { createDBClient } from "../../lib/db";
 import { runTransferCronPoll } from "./service";
 
 // Cron trigger のエントリ。wrangler.jsonc の triggers.crons で毎分発火する。
@@ -6,7 +7,8 @@ import { runTransferCronPoll } from "./service";
 export async function handleTransferCronPoll(env: CloudflareBindings, now: Date): Promise<void> {
   console.info(`[cron] transfer-poll start now=${now.toISOString()}`);
   try {
-    const summary = await runTransferCronPoll({ env, now });
+    const db = createDBClient(env);
+    const summary = await runTransferCronPoll({ db, env, now });
     console.info(
       `[cron] transfer-poll done polled=${JSON.stringify(summary.polled)} reconciled=${summary.reconciled} serverApproved=${summary.serverApproved} expired=${summary.expired}`,
     );

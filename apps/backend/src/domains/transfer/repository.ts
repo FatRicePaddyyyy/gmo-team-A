@@ -1,5 +1,5 @@
 import { eq } from "drizzle-orm";
-import { createDBClient } from "../../lib/db";
+import type { DBClient } from "../../lib/db";
 import { classifyDbError } from "../../lib/db-error";
 import { domains, transfers } from "../../lib/schema/general-schema";
 import type { Result } from "../../types/result";
@@ -12,14 +12,13 @@ export class TransferStatusRepository {
   static async update({
     id,
     status,
-    env,
+    db,
   }: {
     id: string;
     status: TransferStatus;
-    env: CloudflareBindings;
+    db: DBClient;
   }): Promise<Result<void>> {
     try {
-      const db = createDBClient(env);
       await db.update(transfers).set({ status }).where(eq(transfers.id, id));
       return { success: true, data: undefined, error: null };
     } catch (error) {
@@ -34,15 +33,14 @@ export class TransferStatusRepository {
     transferId,
     domainId,
     transferStatus,
-    env,
+    db,
   }: {
     transferId: string;
     domainId: string;
     transferStatus: "clientRejected" | "clientCancelled";
-    env: CloudflareBindings;
+    db: DBClient;
   }): Promise<Result<void>> {
     try {
-      const db = createDBClient(env);
       await db.batch([
         db.update(transfers).set({ status: transferStatus }).where(eq(transfers.id, transferId)),
         db.update(domains).set({ status: "ok" }).where(eq(domains.id, domainId)),
@@ -59,14 +57,13 @@ export class TransferStatusRepository {
   static async expireAndReleaseDomain({
     transferId,
     domainId,
-    env,
+    db,
   }: {
     transferId: string;
     domainId: string;
-    env: CloudflareBindings;
+    db: DBClient;
   }): Promise<Result<void>> {
     try {
-      const db = createDBClient(env);
       await db.batch([
         db.update(transfers).set({ status: "expired" }).where(eq(transfers.id, transferId)),
         db.update(domains).set({ status: "ok" }).where(eq(domains.id, domainId)),
@@ -87,16 +84,15 @@ export class TransferStatusRepository {
     domainId,
     transferStatus,
     newOwnerUserId,
-    env,
+    db,
   }: {
     transferId: string;
     domainId: string;
     transferStatus: "clientApproved" | "serverApproved";
     newOwnerUserId: string;
-    env: CloudflareBindings;
+    db: DBClient;
   }): Promise<Result<void>> {
     try {
-      const db = createDBClient(env);
       await db.batch([
         db.update(transfers).set({ status: transferStatus }).where(eq(transfers.id, transferId)),
         db.update(domains).set({ ownerUserId: newOwnerUserId, status: "ok" }).where(eq(domains.id, domainId)),
@@ -119,15 +115,14 @@ export class TransferStatusRepository {
     transferId,
     domainId,
     transferStatus,
-    env,
+    db,
   }: {
     transferId: string;
     domainId: string;
     transferStatus: "clientApproved" | "serverApproved";
-    env: CloudflareBindings;
+    db: DBClient;
   }): Promise<Result<void>> {
     try {
-      const db = createDBClient(env);
       // まず対象 transfer を settled にして pending 部分 UNIQUE から外す。
       // その後、同 domain に紐づく全 transfer を消し (履歴は諦める)、最後に domain を消す。
       // 履歴を残したい場合は将来 archive テーブル追加を検討。

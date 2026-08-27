@@ -1,7 +1,7 @@
 /// <reference types="../../../worker-configuration" />
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { deleteCategoryRouteHandler } from "./delete";
-import { ProductRepository } from "./repository";
+import { CategoryService } from "./service";
 
 describe("deleteCategoryRouteHandler", () => {
   const mockEnv = {} as CloudflareBindings;
@@ -11,8 +11,9 @@ describe("deleteCategoryRouteHandler", () => {
   });
 
   test("[正常系] 正常なリクエストでカテゴリが削除される", async () => {
-    vi.spyOn(ProductRepository, "deleteCategory").mockResolvedValue({
+    vi.spyOn(CategoryService, "delete").mockResolvedValue({
       success: true,
+      error: null,
     });
 
     const res = await deleteCategoryRouteHandler.request(
@@ -31,9 +32,12 @@ describe("deleteCategoryRouteHandler", () => {
     });
   });
 
-  test("[異常系] Repositoryがエラーを返した場合", async () => {
-    vi.spyOn(ProductRepository, "deleteCategory").mockResolvedValue({
+  test("[異常系] Serviceがエラーを返した場合", async () => {
+    // B-A: repository は分類 code (db_error / unique_violation / fk_violation) を返し、
+    // ハンドラ側 toUserMessage で日本語文言に変換する。spec もそれに追随する。
+    vi.spyOn(CategoryService, "delete").mockResolvedValue({
       success: false,
+      error: "db_error",
     });
 
     const res = await deleteCategoryRouteHandler.request(
@@ -48,12 +52,12 @@ describe("deleteCategoryRouteHandler", () => {
     const json = await res.json();
     expect(json).toEqual({
       success: false,
-      error: "カテゴリの削除に失敗しました",
+      error: "データの取得または保存に失敗しました。しばらく待ってから再試行してください。",
     });
   });
 
-  test("[異常系] Repositoryが例外を投げた場合", async () => {
-    vi.spyOn(ProductRepository, "deleteCategory").mockRejectedValue(
+  test("[異常系] Serviceが例外を投げた場合", async () => {
+    vi.spyOn(CategoryService, "delete").mockRejectedValue(
       new Error("予期しないエラーが発生しました"),
     );
 

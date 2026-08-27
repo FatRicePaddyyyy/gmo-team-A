@@ -1,6 +1,8 @@
 import { createRoute, z } from "@hono/zod-openapi";
+import { createDBClient } from "../../lib/db";
+import { toUserMessage } from "../../lib/error-messages";
 import { createOpenAPIHono } from "../../lib/openapi-hono";
-import { ProductRepository } from "./repository";
+import { CategoryService } from "./service";
 
 const DeleteCategoryParamsSchema = z
   .object({
@@ -65,17 +67,15 @@ export const deleteCategoryRouteHandler = app.openapi(
   async (ctx) => {
     try {
       const { categoryId } = ctx.req.valid("param");
+      const db = createDBClient(ctx.env);
 
-      const result = await ProductRepository.deleteCategory(
-        { categoryId },
-        ctx.env,
-      );
+      const result = await CategoryService.delete({ categoryId, db });
 
       if (!result.success) {
         return ctx.json(
           {
             success: false as const,
-            error: "カテゴリの削除に失敗しました",
+            error: toUserMessage(result.error),
           },
           500,
         );

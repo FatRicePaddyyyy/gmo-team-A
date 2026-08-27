@@ -1,7 +1,7 @@
 /// <reference types="../../../worker-configuration" />
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { createCategoryRouteHandler } from "./post";
-import { ProductRepository } from "./repository";
+import { CategoryService } from "./service";
 
 describe("createCategoryRouteHandler", () => {
   const mockEnv = {} as CloudflareBindings;
@@ -25,7 +25,7 @@ describe("createCategoryRouteHandler", () => {
       ],
     };
 
-    vi.spyOn(ProductRepository, "createCategoryAndProduct").mockResolvedValue({
+    vi.spyOn(CategoryService, "create").mockResolvedValue({
       success: true,
       data: mockData,
       error: null,
@@ -56,7 +56,7 @@ describe("createCategoryRouteHandler", () => {
   });
 
   test("[異常系] バリデーションエラー（category.nameが空文字列の場合）", async () => {
-    const createSpy = vi.spyOn(ProductRepository, "createCategoryAndProduct");
+    const createSpy = vi.spyOn(CategoryService, "create");
 
     const res = await createCategoryRouteHandler.request(
       "/api/v1/secret/category",
@@ -78,7 +78,7 @@ describe("createCategoryRouteHandler", () => {
   });
 
   test("[異常系] バリデーションエラー（productsが空配列の場合）", async () => {
-    const createSpy = vi.spyOn(ProductRepository, "createCategoryAndProduct");
+    const createSpy = vi.spyOn(CategoryService, "create");
 
     const res = await createCategoryRouteHandler.request(
       "/api/v1/secret/category",
@@ -99,10 +99,10 @@ describe("createCategoryRouteHandler", () => {
     expect(createSpy).not.toHaveBeenCalled();
   });
 
-  test("[異常系] Repositoryがエラーを返した場合", async () => {
+  test("[異常系] Serviceがエラーを返した場合", async () => {
     // B-A: repository は分類 code (db_error / unique_violation / fk_violation) を返し、
     // ハンドラ側 toUserMessage で日本語文言に変換する。spec もそれに追随する。
-    vi.spyOn(ProductRepository, "createCategoryAndProduct").mockResolvedValue({
+    vi.spyOn(CategoryService, "create").mockResolvedValue({
       success: false,
       data: null,
       error: "db_error",
@@ -132,8 +132,8 @@ describe("createCategoryRouteHandler", () => {
     });
   });
 
-  test("[異常系] Repositoryが例外を投げた場合", async () => {
-    vi.spyOn(ProductRepository, "createCategoryAndProduct").mockRejectedValue(
+  test("[異常系] Serviceが例外を投げた場合", async () => {
+    vi.spyOn(CategoryService, "create").mockRejectedValue(
       new Error("予期しないエラーが発生しました"),
     );
 

@@ -1,7 +1,11 @@
 import { eq } from "drizzle-orm";
-import { createDBClient } from "../../lib/db";
+import type { DBClient } from "../../lib/db";
 import { classifyDbError } from "../../lib/db-error";
 import { products, categories } from "../../lib/schema/general-schema";
+import type { Result, SimpleResult } from "../../types/result";
+
+type Category = typeof categories.$inferSelect;
+type Product = typeof products.$inferSelect;
 
 export interface CreateCategoryAndProductInput {
   category: {
@@ -12,65 +16,34 @@ export interface CreateCategoryAndProductInput {
   }[];
 }
 
-export type CreateCategoryAndProductResponse =
-  | {
-      success: true;
-      data: {
-        category: {
-          id: string;
-          name: string;
-        };
-        products: {
-          id: string;
-          name: string;
-          categoryId: string;
-        }[];
-      };
-      error: null;
-    }
-  | {
-      success: false;
-      data: null;
-      error: string;
-    };
-
-export interface DeleteProductInput {
-  productId: string;
+export interface CategoryWithProducts {
+  id: string;
+  name: string;
+  products: {
+    id: string;
+    name: string;
+    categoryId: string;
+  }[];
 }
 
-export interface DeleteCategoryInput {
-  categoryId: string;
+export interface CreatedCategoryAndProducts {
+  category: {
+    id: string;
+    name: string;
+  };
+  products: {
+    id: string;
+    name: string;
+    categoryId: string;
+  }[];
 }
 
-export type GetAllCategoriesAndProductsResponse =
-  | {
-      success: true;
-      data: {
-        categories: {
-          id: string;
-          name: string;
-          products: {
-            id: string;
-            name: string;
-            categoryId: string;
-          }[];
-        }[];
-      };
-      error: null;
-    }
-  | {
-      success: false;
-      data: null;
-      error: string;
-    };
-
-export class ProductRepository {
+export class CategoryRepository {
   static async createCategoryAndProduct(
     input: CreateCategoryAndProductInput,
-    env: CloudflareBindings,
-  ): Promise<CreateCategoryAndProductResponse> {
+    db: DBClient,
+  ): Promise<Result<CreatedCategoryAndProducts>> {
     try {
-      const db = createDBClient(env);
       const categoryId = crypto.randomUUID();
 
       const batchResponse = await db.batch([
@@ -102,6 +75,12 @@ export class ProductRepository {
       const categoryResult = batchResponse[0][0];
       const productsResult = batchResponse[1];
 
+      // Drizzle の returning() 型上は必ず 1 行返る前提だが、D1 の異常系で 0 件のケースを保険で検知する
+      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+      if (!categoryResult) {
+        return { success: false, data: null, error: "category_create_failed" };
+      }
+
       return {
         success: true,
         data: {
@@ -111,8 +90,7 @@ export class ProductRepository {
         error: null,
       };
     } catch (error) {
-      console.error("カテゴリ・プロダクト作成エラー:", error);
-
+      console.error("CategoryRepository.createCategoryAndProduct error:", error);
       return {
         success: false,
         data: null,
@@ -122,11 +100,9 @@ export class ProductRepository {
   }
 
   static async getAllCategoriesAndProducts(
-    env: CloudflareBindings,
-  ): Promise<GetAllCategoriesAndProductsResponse> {
+    db: DBClient,
+  ): Promise<Result<{ categories: CategoryWithProducts[] }>> {
     try {
-      const db = createDBClient(env);
-
       const batchResponse = await db.batch([
         db
           .select({
@@ -143,8 +119,8 @@ export class ProductRepository {
           .from(products),
       ]);
 
-      const allCategories = batchResponse[0];
-      const allProducts = batchResponse[1];
+      const allCategories: Pick<Category, "id" | "name">[] = batchResponse[0];
+      const allProducts: Pick<Product, "id" | "name" | "categoryId">[] = batchResponse[1];
 
       const categoriesWithProducts = allCategories.map((category) => ({
         id: category.id,
@@ -162,8 +138,7 @@ export class ProductRepository {
         error: null,
       };
     } catch (error) {
-      console.error("カテゴリ・プロダクト取得エラー:", error);
-
+      console.error("CategoryRepository.getAllCategoriesAndProducts error:", error);
       return {
         success: false,
         data: null,
@@ -172,47 +147,20 @@ export class ProductRepository {
     }
   }
 
-  static async deleteProduct(
-    input: DeleteProductInput,
-    env: CloudflareBindings,
-  ) {
-    try {
-      const db = createDBClient(env);
-      await db.batch([
-        db
-          .select({
-            id: products.id,
-            name: products.name,
-            categoryId: products.categoryId,
-          })
-          .from(products)
-          .where(eq(products.id, input.productId)),
-        db.delete(products).where(eq(products.id, input.productId)),
-      ]);
-
-      return { success: true };
-    } catch (error) {
-      console.error("プロダクト削除エラー:", error);
-      return { success: false };
-    }
-  }
-
   static async deleteCategory(
-    input: DeleteCategoryInput,
-    env: CloudflareBindings,
-  ) {
+    input: { categoryId: string },
+    db: DBClient,
+  ): Promise<SimpleResult> {
     try {
-      const db = createDBClient(env);
-
       await db.batch([
         db.delete(products).where(eq(products.categoryId, input.categoryId)),
         db.delete(categories).where(eq(categories.id, input.categoryId)),
       ]);
 
-      return { success: true };
+      return { success: true, error: null };
     } catch (error) {
-      console.error("カテゴリ削除エラー:", error);
-      return { success: false };
+      console.error("CategoryRepository.deleteCategory error:", error);
+      return { success: false, error: classifyDbError(error) };
     }
   }
 }

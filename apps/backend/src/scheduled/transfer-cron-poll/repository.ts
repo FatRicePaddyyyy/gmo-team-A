@@ -1,5 +1,5 @@
 import { and, eq, lt } from "drizzle-orm";
-import { createDBClient } from "../../lib/db";
+import type { DBClient } from "../../lib/db";
 import { classifyDbError } from "../../lib/db-error";
 import { domains, transfers } from "../../lib/schema/general-schema";
 import type { Result } from "../../types/result";
@@ -19,13 +19,12 @@ export class TransferCronPollRepository {
   // レジストリが losing / gaining どちらのケースでも同じルートで確定処理させる。
   static async findPendingTransferByDomainName({
     name,
-    env,
+    db,
   }: {
     name: string;
-    env: CloudflareBindings;
+    db: DBClient;
   }): Promise<Result<PendingTransferWithDomain | null>> {
     try {
-      const db = createDBClient(env);
       const domainRows = await db.select().from(domains).where(eq(domains.name, name));
       const domain = domainRows[0];
       // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
@@ -48,13 +47,12 @@ export class TransferCronPollRepository {
   // 過去 settled が存在する = backend の管轄 → ack を保留して retry (次回 cron)。
   static async hasAnyTransferForDomainName({
     name,
-    env,
+    db,
   }: {
     name: string;
-    env: CloudflareBindings;
+    db: DBClient;
   }): Promise<Result<boolean>> {
     try {
-      const db = createDBClient(env);
       const domainRows = await db.select().from(domains).where(eq(domains.name, name));
       const domain = domainRows[0];
       // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
@@ -71,13 +69,12 @@ export class TransferCronPollRepository {
   // レジストリ側の自動承認 (T+20 分) を過ぎても poll イベントで確定できなかったケースが該当する。
   static async findTimedOutPending({
     olderThan,
-    env,
+    db,
   }: {
     olderThan: Date;
-    env: CloudflareBindings;
+    db: DBClient;
   }): Promise<Result<PendingTransferWithDomain[]>> {
     try {
-      const db = createDBClient(env);
       const rows = await db
         .select({ transfer: transfers, domain: domains })
         .from(transfers)
@@ -94,13 +91,12 @@ export class TransferCronPollRepository {
   // 「そもそも自 backend で管理しているドメインか」を判定するために使う。
   static async findDomainByName({
     name,
-    env,
+    db,
   }: {
     name: string;
-    env: CloudflareBindings;
+    db: DBClient;
   }): Promise<Result<Domain | null>> {
     try {
-      const db = createDBClient(env);
       const rows = await db.select().from(domains).where(eq(domains.name, name));
       return { success: true, data: rows[0] ?? null, error: null };
     } catch (error) {
@@ -118,15 +114,14 @@ export class TransferCronPollRepository {
     domainId,
     registry,
     gainingRegistrar,
-    env,
+    db,
   }: {
     domainId: string;
     registry: "kitaqsign" | "kitaqnic";
     gainingRegistrar: string;
-    env: CloudflareBindings;
+    db: DBClient;
   }): Promise<Result<Transfer>> {
     try {
-      const db = createDBClient(env);
       const rows = await db.insert(transfers).values({
         domainId,
         registry,
@@ -151,13 +146,12 @@ export class TransferCronPollRepository {
   // owner 側 UI で「移管申請中」を表示できるようにするためのミラーリング。
   static async setDomainPendingTransfer({
     domainId,
-    env,
+    db,
   }: {
     domainId: string;
-    env: CloudflareBindings;
+    db: DBClient;
   }): Promise<Result<void>> {
     try {
-      const db = createDBClient(env);
       await db.update(domains).set({ status: "pendingTransfer" }).where(eq(domains.id, domainId));
       return { success: true, data: undefined, error: null };
     } catch (error) {

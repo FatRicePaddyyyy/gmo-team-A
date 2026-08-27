@@ -1,7 +1,7 @@
 /// <reference types="../../../worker-configuration" />
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { getAllCategoriesAndProductsRouteHandler } from "./get";
-import { ProductRepository } from "./repository";
+import { CategoryService } from "./service";
 
 describe("getAllCategoriesAndProductsRouteHandler", () => {
   const mockEnv = {} as CloudflareBindings;
@@ -27,10 +27,7 @@ describe("getAllCategoriesAndProductsRouteHandler", () => {
       ],
     };
 
-    vi.spyOn(
-      ProductRepository,
-      "getAllCategoriesAndProducts",
-    ).mockResolvedValue({
+    vi.spyOn(CategoryService, "getAll").mockResolvedValue({
       success: true,
       data: mockData,
       error: null,
@@ -54,10 +51,7 @@ describe("getAllCategoriesAndProductsRouteHandler", () => {
   });
 
   test("[正常系] カテゴリが0件でも成功する", async () => {
-    vi.spyOn(
-      ProductRepository,
-      "getAllCategoriesAndProducts",
-    ).mockResolvedValue({
+    vi.spyOn(CategoryService, "getAll").mockResolvedValue({
       success: true,
       data: { categories: [] },
       error: null,
@@ -80,13 +74,10 @@ describe("getAllCategoriesAndProductsRouteHandler", () => {
     });
   });
 
-  test("[異常系] Repositoryがエラーを返した場合", async () => {
+  test("[異常系] Serviceがエラーを返した場合", async () => {
     // B-A: repository は分類 code (db_error / unique_violation / fk_violation) を返し、
     // ハンドラ側 toUserMessage で日本語文言に変換する。spec もそれに追随する。
-    vi.spyOn(
-      ProductRepository,
-      "getAllCategoriesAndProducts",
-    ).mockResolvedValue({
+    vi.spyOn(CategoryService, "getAll").mockResolvedValue({
       success: false,
       data: null,
       error: "db_error",
@@ -109,11 +100,10 @@ describe("getAllCategoriesAndProductsRouteHandler", () => {
     });
   });
 
-  test("[異常系] Repositoryが例外を投げた場合", async () => {
-    vi.spyOn(
-      ProductRepository,
-      "getAllCategoriesAndProducts",
-    ).mockRejectedValue(new Error("予期しないエラーが発生しました"));
+  test("[異常系] Serviceが例外を投げた場合", async () => {
+    vi.spyOn(CategoryService, "getAll").mockRejectedValue(
+      new Error("予期しないエラーが発生しました"),
+    );
 
     const res = await getAllCategoriesAndProductsRouteHandler.request(
       "/api/v1/secure/category",

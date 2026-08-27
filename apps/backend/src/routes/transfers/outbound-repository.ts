@@ -1,5 +1,5 @@
 import { and, eq } from "drizzle-orm";
-import { createDBClient } from "../../lib/db";
+import type { DBClient } from "../../lib/db";
 import { classifyDbError } from "../../lib/db-error";
 import { domains, outboundTransferRequests } from "../../lib/schema/general-schema";
 import type { Result } from "../../types/result";
@@ -14,13 +14,12 @@ type NewDomain = typeof domains.$inferInsert;
 export class OutboundTransferRequestRepository {
   static async create({
     data,
-    env,
+    db,
   }: {
     data: NewOutboundTransferRequest;
-    env: CloudflareBindings;
+    db: DBClient;
   }): Promise<Result<OutboundTransferRequest>> {
     try {
-      const db = createDBClient(env);
       const [created] = await db.insert(outboundTransferRequests).values(data).returning();
       // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
       if (!created) {
@@ -35,13 +34,12 @@ export class OutboundTransferRequestRepository {
 
   static async findById({
     id,
-    env,
+    db,
   }: {
     id: string;
-    env: CloudflareBindings;
+    db: DBClient;
   }): Promise<Result<OutboundTransferRequest | null>> {
     try {
-      const db = createDBClient(env);
       const rows = await db.select().from(outboundTransferRequests).where(eq(outboundTransferRequests.id, id));
       return { success: true, data: rows[0] ?? null, error: null };
     } catch (error) {
@@ -54,14 +52,13 @@ export class OutboundTransferRequestRepository {
   static async findPending({
     domainName,
     registry,
-    env,
+    db,
   }: {
     domainName: string;
     registry: "kitaqsign" | "kitaqnic";
-    env: CloudflareBindings;
+    db: DBClient;
   }): Promise<Result<OutboundTransferRequest | null>> {
     try {
-      const db = createDBClient(env);
       const rows = await db.select().from(outboundTransferRequests).where(
         and(
           eq(outboundTransferRequests.domainName, domainName),
@@ -79,14 +76,13 @@ export class OutboundTransferRequestRepository {
   static async updateStatus({
     id,
     status,
-    env,
+    db,
   }: {
     id: string;
     status: "clientApproved" | "serverApproved" | "clientRejected" | "clientCancelled" | "expired";
-    env: CloudflareBindings;
+    db: DBClient;
   }): Promise<Result<void>> {
     try {
-      const db = createDBClient(env);
       await db.update(outboundTransferRequests).set({ status }).where(eq(outboundTransferRequests.id, id));
       return { success: true, data: undefined, error: null };
     } catch (error) {
@@ -101,15 +97,14 @@ export class OutboundTransferRequestRepository {
     outboundId,
     outboundStatus,
     newDomain,
-    env,
+    db,
   }: {
     outboundId: string;
     outboundStatus: "clientApproved" | "serverApproved";
     newDomain: NewDomain;
-    env: CloudflareBindings;
+    db: DBClient;
   }): Promise<Result<Domain>> {
     try {
-      const db = createDBClient(env);
       const results = await db.batch([
         db.update(outboundTransferRequests).set({ status: outboundStatus }).where(eq(outboundTransferRequests.id, outboundId)),
         db.insert(domains).values(newDomain).returning(),

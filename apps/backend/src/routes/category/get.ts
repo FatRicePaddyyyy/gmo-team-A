@@ -1,7 +1,8 @@
 import { createRoute, z } from "@hono/zod-openapi";
+import { createDBClient } from "../../lib/db";
 import { toUserMessage } from "../../lib/error-messages";
 import { createOpenAPIHono } from "../../lib/openapi-hono";
-import { ProductRepository } from "./repository";
+import { CategoryService } from "./service";
 
 const CategorySchema = z
   .object({
@@ -94,9 +95,8 @@ export const getAllCategoriesAndProductsRouteHandler = app.openapi(
   getAllCategoriesAndProductsRouteSchema,
   async (ctx) => {
     try {
-      const result = await ProductRepository.getAllCategoriesAndProducts(
-        ctx.env,
-      );
+      const db = createDBClient(ctx.env);
+      const result = await CategoryService.getAll({ db });
 
       if (!result.success) {
         return ctx.json(
@@ -109,7 +109,14 @@ export const getAllCategoriesAndProductsRouteHandler = app.openapi(
         );
       }
 
-      return ctx.json(result, 200);
+      return ctx.json(
+        {
+          success: true as const,
+          data: result.data,
+          error: null,
+        },
+        200,
+      );
     } catch (error) {
       console.error("Get all categories and products error:", error);
       return ctx.json(

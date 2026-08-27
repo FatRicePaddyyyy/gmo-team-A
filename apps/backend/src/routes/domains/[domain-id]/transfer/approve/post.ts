@@ -1,4 +1,5 @@
 import { createRoute, z } from "@hono/zod-openapi";
+import { createDBClient } from "../../../../../lib/db";
 import { toUserMessage } from "../../../../../lib/error-messages";
 import { createOpenAPIHono } from "../../../../../lib/openapi-hono";
 import { DomainService } from "../../../service";
@@ -37,8 +38,9 @@ const app = createOpenAPIHono();
 export const approveTransferRouteHandler = app.openapi(route, async (ctx) => {
   const { "domain-id": domainId } = ctx.req.valid("param");
   const userId = ctx.get("userId");
+  const db = createDBClient(ctx.env);
 
-  const result = await DomainService.approveTransfer({ domainId, userId, env: ctx.env });
+  const result = await DomainService.approveTransfer({ domainId, userId, db, env: ctx.env });
   if (!result.success) {
     if (result.error === "domain_not_found") {
       return ctx.json({ success: false as const, data: null, error: toUserMessage(result.error) }, 404);

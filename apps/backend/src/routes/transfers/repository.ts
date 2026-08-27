@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
 import { TransferStatusRepository } from "../../domains/transfer/repository";
 import type { TransferStatus } from "../../domains/transfer/repository";
-import { createDBClient } from "../../lib/db";
+import type { DBClient } from "../../lib/db";
 import { classifyDbError } from "../../lib/db-error";
 import { transfers } from "../../lib/schema/general-schema";
 import type { Result } from "../../types/result";
@@ -12,13 +12,12 @@ type NewTransfer = typeof transfers.$inferInsert;
 export class TransferRepository {
   static async create({
     data,
-    env,
+    db,
   }: {
     data: NewTransfer;
-    env: CloudflareBindings;
+    db: DBClient;
   }): Promise<Result<Transfer>> {
     try {
-      const db = createDBClient(env);
       const [created] = await db.insert(transfers).values(data).returning();
       // Drizzle の returning() 型上は必ず 1 行返る前提だが、D1 の異常系で 0 件のケースを保険で検知する
       // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
@@ -35,13 +34,12 @@ export class TransferRepository {
 
   static async findById({
     id,
-    env,
+    db,
   }: {
     id: string;
-    env: CloudflareBindings;
+    db: DBClient;
   }): Promise<Result<Transfer | null>> {
     try {
-      const db = createDBClient(env);
       const rows = await db.select().from(transfers).where(eq(transfers.id, id));
       return { success: true, data: rows[0] ?? null, error: null };
     } catch (error) {
@@ -53,26 +51,25 @@ export class TransferRepository {
   static async updateStatus({
     id,
     status,
-    env,
+    db,
   }: {
     id: string;
     status: TransferStatus;
-    env: CloudflareBindings;
+    db: DBClient;
   }): Promise<Result<void>> {
     // NB-8: 共通の TransferStatusRepository に委譲。
-    return TransferStatusRepository.update({ id, status, env });
+    return TransferStatusRepository.update({ id, status, db });
   }
 
   // B16: gaining ユーザーが自分で申請した移管一覧。
   static async findByGainingUserId({
     userId,
-    env,
+    db,
   }: {
     userId: string;
-    env: CloudflareBindings;
+    db: DBClient;
   }): Promise<Result<Transfer[]>> {
     try {
-      const db = createDBClient(env);
       const rows = await db.select().from(transfers).where(eq(transfers.gainingUserId, userId));
       return { success: true, data: rows, error: null };
     } catch (error) {

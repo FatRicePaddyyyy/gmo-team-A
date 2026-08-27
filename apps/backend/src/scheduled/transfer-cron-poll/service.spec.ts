@@ -3,10 +3,13 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 import { TransferStatusRepository } from "../../domains/transfer/repository";
 import { UserRepository } from "../../domains/user/repository";
 import { RegistryBridge } from "../../lib/bridge";
+import type { DBClient } from "../../lib/db";
 import { TransferCronPollRepository } from "./repository";
 import { runTransferCronPoll } from "./service";
 
 const env = {} as CloudflareBindings;
+// repository / bridge をすべてモックしているので実 DBClient は不要。
+const db = {} as DBClient;
 const now = new Date("2026-08-26T00:00:00.000Z");
 
 beforeEach(() => {
@@ -22,7 +25,7 @@ beforeEach(() => {
 
 describe("runTransferCronPoll", () => {
   test("[Phase 1] メッセージなしの場合は何も処理せず summary を 0 で返す", async () => {
-    const summary = await runTransferCronPoll({ env, now });
+    const summary = await runTransferCronPoll({ db, env, now });
 
     expect(summary.reconciled).toBe(0);
     expect(summary.serverApproved).toBe(0);
@@ -84,7 +87,7 @@ describe("runTransferCronPoll", () => {
       error: null,
     });
 
-    const summary = await runTransferCronPoll({ env, now });
+    const summary = await runTransferCronPoll({ db, env, now });
 
     expect(commitSpy).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -144,7 +147,7 @@ describe("runTransferCronPoll", () => {
     );
     const ackSpy = vi.spyOn(RegistryBridge, "ackMessage");
 
-    await runTransferCronPoll({ env, now });
+    await runTransferCronPoll({ db, env, now });
 
     expect(ackSpy).not.toHaveBeenCalled();
   });
@@ -199,7 +202,7 @@ describe("runTransferCronPoll", () => {
       error: null,
     });
 
-    const summary = await runTransferCronPoll({ env, now });
+    const summary = await runTransferCronPoll({ db, env, now });
 
     expect(commitSpy).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -260,7 +263,7 @@ describe("runTransferCronPoll", () => {
       error: null,
     });
 
-    const summary = await runTransferCronPoll({ env, now });
+    const summary = await runTransferCronPoll({ db, env, now });
 
     expect(expireSpy).toHaveBeenCalledWith(
       expect.objectContaining({ transferId: "tr-4", domainId: "dom-4" }),
