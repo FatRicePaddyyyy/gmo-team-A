@@ -1,13 +1,14 @@
 import { createRoute, z } from "@hono/zod-openapi";
 import { RegistryBridge } from "../../lib/bridge";
 import { createDBClient } from "../../lib/db";
+import { domainNameSchema } from "../../lib/domain-name-schema";
 import { toUserMessage } from "../../lib/error-messages";
 import { createOpenAPIHono } from "../../lib/openapi-hono";
 import { DomainService } from "./service";
 
 // Issue #25: registry は省略可能。省略時は TLD から自動判定する。
 const RequestSchema = z.object({
-  name: z.string().trim().min(1).openapi({ example: "example.com" }),
+  name: domainNameSchema().openapi({ example: "example.com" }),
   registry: z.enum(["kitaqsign", "kitaqnic"]).optional().openapi({
     example: "kitaqsign",
     description: "省略時は TLD から自動判定",
@@ -16,7 +17,8 @@ const RequestSchema = z.object({
     unit: z.enum(["Y", "M"]).openapi({ example: "Y" }),
     value: z.number().int().min(1).max(10).openapi({ example: 1 }),
   }),
-  nameServers: z.array(z.string()).optional().openapi({ example: ["ns1.example.com"] }),
+  // Issue #76: ネームサーバーもホスト名なので name と同じ形式で検証する。
+  nameServers: z.array(domainNameSchema()).optional().openapi({ example: ["ns1.example.com"] }),
 }).openapi("DomainCreateRequest");
 
 const DomainSchema = z.object({
@@ -78,6 +80,9 @@ export const createDomainRouteHandler = app.openapi(route, async (ctx) => {
   if (!result.success) {
     if (result.error === "domain_exists") {
       return ctx.json({ success: false as const, data: null, error: toUserMessage(result.error) }, 409);
+    }
+    if (result.error === "invalid_domain_name") {
+      return ctx.json({ success: false as const, data: null, error: toUserMessage(result.error) }, 400);
     }
     if (result.error === "invalid_tld" || result.error === "unsupported_tld") {
       return ctx.json({ success: false as const, data: null, error: toUserMessage(result.error) }, 422);

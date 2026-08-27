@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Eye, EyeOff, KeyRound } from "lucide-react";
+import { Check, Copy, Eye, EyeOff, KeyRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -38,6 +38,11 @@ export function TransferOutCard({
   const [authInfo, setAuthInfo] = useState("");
   const [showAuthInfo, setShowAuthInfo] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // 直前に設定して成功した authInfo。ページを離れるまで表示し続ける。
+  // EPP 仕様で読み取りができないので、この画面を閉じたら本人でも二度と確認できない。
+  // 移管先の事業者に伝える機会をここで一度だけ確保する。
+  const [issuedAuthInfo, setIssuedAuthInfo] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
   // 入力欄とヒント・エラーを aria で紐づける（ログイン画面と同じ書き方）
   const authInfoHintId = "auth-info-hint";
@@ -55,7 +60,24 @@ export function TransferOutCard({
     }
     setError(null);
     const okResult = await onUpdateAuthInfo(value);
-    if (okResult) setAuthInfo("");
+    if (okResult) {
+      setIssuedAuthInfo(value);
+      setAuthInfo("");
+      setCopied(false);
+    }
+  };
+
+  const handleCopy = async () => {
+    if (!issuedAuthInfo) return;
+    try {
+      await navigator.clipboard.writeText(issuedAuthInfo);
+      setCopied(true);
+      // 一定時間で「コピー済み」表示を戻す。UX 上「押した→反応」が伝われば良く、
+      // 何秒もチェックのままにしておく必要はない
+      window.setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error("authInfo copy failed:", err);
+    }
   };
 
   return (
@@ -133,6 +155,44 @@ export function TransferOutCard({
               message={authInfoFeedback.message}
               unauthorized={authInfoFeedback.unauthorized}
             />
+          )}
+
+          {issuedAuthInfo && (
+            <div
+              className="space-y-2 rounded-md border border-[var(--brand)]/40 bg-[var(--brand-light)] p-3"
+              role="status"
+              aria-live="polite"
+            >
+              <p className="text-xs font-semibold text-gray-900">
+                いま設定した認証コード（移管先の事業者にこの値を伝えてください）
+              </p>
+              <div className="flex items-center gap-2">
+                <code className="flex-1 rounded bg-white px-3 py-2 font-mono text-sm break-all text-gray-900">
+                  {issuedAuthInfo}
+                </code>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => void handleCopy()}
+                  aria-label="認証コードをコピー"
+                >
+                  {copied ? (
+                    <>
+                      <Check className="size-4" aria-hidden="true" />
+                      コピー済み
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="size-4" aria-hidden="true" />
+                      コピー
+                    </>
+                  )}
+                </Button>
+              </div>
+              <p className="text-xs text-gray-700">
+                この画面を離れると二度と表示できません（レジストリの仕様上、控えは残せません）。移管先に渡してから閉じてください。
+              </p>
+            </div>
           )}
 
           <Button
