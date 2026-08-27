@@ -21,7 +21,7 @@ interface TransferOutCardProps {
 }
 
 /**
- * 他社へドメインを渡すための設定。
+ * 他のレジストラへドメインを渡すための設定。
  *
  * 以前は移管ロック（clientTransferProhibited）のトグルも置いていたが、
  * kitaqsign / kitaqnic のどちらも設定を成功と返すだけで保持しないため
@@ -85,7 +85,7 @@ export function TransferOutCard({
       <CardContent className="space-y-5">
         <div>
           <h2 className="font-heading text-lg font-bold text-gray-900">
-            このドメインを他社へ渡す
+            このドメインを他のレジストラへ渡す
           </h2>
           <p className="mt-1 text-sm text-gray-600">
             このドメインを他の事業者に引っ越すための設定です。渡すには、ここで発行した認証コードを移管先の事業者に伝えます。

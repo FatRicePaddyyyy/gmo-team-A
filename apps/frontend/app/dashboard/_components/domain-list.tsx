@@ -23,7 +23,7 @@ export function DomainList({ state }: DomainListProps) {
             取得済みのドメイン
           </h2>
           <p className="mt-1 text-sm text-gray-600">
-            それぞれのドメインを開くと、期限の延長・ネームサーバーの変更・他社への引き渡し・廃止ができます。
+            それぞれのドメインを開くと、期限の延長・ネームサーバーの変更・他のレジストラへの引き渡し・廃止ができます。
           </p>
         </div>
         <Button

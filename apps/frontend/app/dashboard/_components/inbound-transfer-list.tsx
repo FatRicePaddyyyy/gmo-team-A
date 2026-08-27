@@ -39,7 +39,7 @@ export function InboundTransferList({ state }: InboundTransferListProps) {
           あなたのドメインへの移管申請
         </h2>
         <p className="mt-1 text-sm text-gray-600">
-          他社へドメインを渡す手続きです。心当たりがなければ却下してください。
+          他のレジストラへドメインを渡す手続きです。心当たりがなければ却下してください。
         </p>
       </div>
 
