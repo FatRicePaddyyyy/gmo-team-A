@@ -1,11 +1,7 @@
 import { defineConfig, devices } from "@playwright/test";
 
-// E2E テスト時はローカルバックエンドを使う。
-// Node 24 の undici は "localhost" を IPv6 (::1) 優先で解決するが、wrangler dev は
-// IPv4 (127.0.0.1) にしかバインドしないため、CI で ECONNREFUSED になる。
-// 明示的に IPv4 を指す 127.0.0.1 に固定する（CI からの env 上書きも尊重する）。
-process.env.NEXT_PUBLIC_BACKEND_URL =
-  process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://127.0.0.1:8787";
+// E2E テスト時はローカルバックエンドを使う
+process.env.NEXT_PUBLIC_BACKEND_URL = "http://localhost:8787";
 
 /**
  * project はレジストリの稼働状態に対する期待動作で分けている。
