@@ -76,7 +76,9 @@ export const FAQS: FaqItem[] = [
       <>
         はい。ドメインを取得すると登録者の氏名・住所・電話番号が{" "}
         <GlossaryTerm description={GLOSSARY.whois.description}>Whois</GlossaryTerm>{" "}
-        という仕組みで公開されます。
+        という仕組みで公開されます。公開された内容は、外部の Whois
+        検索サイトから誰でも確認できます（このサービス内では確認できません）。
+        個人で取得する場合は、氏名や住所の代わりに事業者の情報を表示する「公開代行」を検討してください。
       </>
     ),
   },
