@@ -1,30 +1,31 @@
 import Link from "next/link";
 import { Separator } from "@/components/ui/separator";
 
-/**
- * 実在するページへのリンクだけを置く。
- * 未実装のページはリンクにせず「準備中」と明記して、行き止まりを作らない。
- */
+/** 実在するページへのリンクだけを置く。 */
 const footerLinks = [
   {
     heading: "ドメインを取得する",
     links: [
       { label: "ドメインを検索する", href: "/" },
-      { label: "マイドメイン", href: "/dashboard" },
-      { label: "他のレジストラのドメインをここへ移す", href: "/transfer" },
+      { label: "TLD（末尾）を診断する", href: "/plan-finder" },
     ],
   },
   {
     heading: "ドメインを学ぶ",
     links: [
-      { label: "TLD（.com など）の選び方", href: "/learn" },
-      { label: "取得の流れ", href: "/#flow" },
-      { label: "よくある質問", href: "/#faq" },
+      { label: "TLD（.com など）の選び方", href: "/learn#learn" },
+      { label: "取得の流れ", href: "/learn#flow" },
+      { label: "よくある質問", href: "/learn#faq" },
+    ],
+  },
+  {
+    heading: "マイドメイン",
+    links: [
+      { label: "ドメイン一覧", href: "/dashboard" },
+      { label: "他のレジストラのドメインをここへ移す", href: "/transfer" },
     ],
   },
 ];
-
-const preparingLinks = ["レンタルサーバー", "SSL証明書", "お問い合わせ"];
 
 export function SiteFooter() {
   return (
@@ -46,20 +47,6 @@ export function SiteFooter() {
               </ul>
             </div>
           ))}
-
-          <div>
-            <h3 className="mb-3 text-sm font-semibold text-white">準備中の機能</h3>
-            <ul className="space-y-2">
-              {preparingLinks.map((label) => (
-                <li key={label} className="text-sm text-gray-500">
-                  {label}
-                  <span className="ml-2 rounded bg-gray-800 px-1.5 py-0.5 text-xs text-gray-400">
-                    準備中
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </div>
         </div>
 
         <Separator className="my-8 bg-gray-700" />
