@@ -243,6 +243,13 @@ jobs:
         working-directory: apps/frontend
         env:
           NEXT_PUBLIC_BACKEND_URL: http://localhost:8787
+          # Node 24 の undici は "localhost" を IPv6 (::1) 優先で名前解決するが、
+          # wrangler dev は IPv4 (127.0.0.1) にしかバインドしないため、
+          # Playwright の apiRequestContext が ECONNREFUSED で落ちる。
+          # ブラウザ側の URL は "localhost" のまま (CORS / cookie ドメイン整合のため)、
+          # Node の DNS 解決順序だけを IPv4 優先に切り替えて回避する。
+          # 既存のグローバル NODE_OPTIONS (--max_old_space_size=4096) も合成する。
+          NODE_OPTIONS: "--max_old_space_size=4096 --dns-result-order=ipv4first"
           # /api/v1/secret/create-seed-user を叩いてテストユーザーを作るために必要
           SECRET_KEY: ${{ secrets.SECRET_KEY }}
           # 移管 e2e (transfer-*.spec.ts) 用の teama-2 側 credentials。

@@ -52,8 +52,13 @@ test.describe(
       expect(createRes.ok(), "ドメイン取得成功").toBe(true);
       await api.dispose();
 
-      // 同じユーザーのままフロントの /transfer で申請
+      // 同じユーザーのままフロントの /transfer で申請。
+      // 一次防御 (ownedNames.includes) は useMyDomains の refresh 完了に依存するので、
+      // 「いま持っているドメイン:」の欄に fullDomain が現れてから submit する。
+      // ここを待たないと、DB 反映前に submit されて backend まで届き
+      // 403 self_transfer (「自分が所有するドメインには…」) 側の文言が出て flaky になる。
       await page.goto("/transfer");
+      await expect(page.getByText(fullDomain)).toBeVisible({ timeout: 10_000 });
       await page.getByRole("textbox", { name: "移管したいドメイン名" }).fill(fullDomain);
       // authInfo は self_transfer 判定より後の bridge チェックなので何でもよい (弾かれない)
       await page.getByRole("textbox", { name: "認証コード（AuthCode）" }).fill("dummy-authinfo");
