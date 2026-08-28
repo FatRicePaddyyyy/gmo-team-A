@@ -4,7 +4,7 @@ import { z } from "zod";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { signIn } from "@/auth-client";
-import { loadConfirmedOrder } from "@/shared/lib/order-store";
+import { postLoginDestination } from "../_lib/post-login-destination";
 
 const loginSchema = z.object({
   email: z
@@ -47,10 +47,9 @@ export const usePasswordLogin = () => {
         {
           onSuccess: () => {
             setIsLoading(false);
-            // 申し込み確定済みの内容があればお支払い内容の確認へ。
-            // 無ければ（マイドメインの確認だけでログインした場合）ダッシュボードへ。
-            const order = loadConfirmedOrder();
-            router.push(order ? "/cart/payment" : "/dashboard");
+            // 行き先の規則は _lib/post-login-destination に集約している。
+            // すでにログイン済みで /login を開いたときと同じ規則を使う。
+            router.push(postLoginDestination());
           },
           onError: () => {
             setIsLoading(false);

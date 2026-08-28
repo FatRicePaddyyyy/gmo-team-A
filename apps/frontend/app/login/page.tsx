@@ -1,19 +1,45 @@
 "use client";
 
-import { useId, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { FeedbackBanner } from "@/components/feedback-banner";
 import { Input } from "@/components/ui/input";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
+import { useRouter } from "next/navigation";
+import { useAuthStatus } from "@/shared/hooks/use-auth-status.hook";
 import { usePasswordLogin } from "./_hooks/use-password-login.hook";
+import { postLoginDestination } from "./_lib/post-login-destination";
 
 export default function LoginPage() {
+  const router = useRouter();
+  const { isPending, isSignedIn } = useAuthStatus();
   const { register, handleSubmit, errors, onSubmit, isLoading, error } = usePasswordLogin();
   const [showPassword, setShowPassword] = useState(false);
   const emailErrorId = useId();
   const passwordErrorId = useId();
+
+  // すでにログインしている人にログインフォームを見せない。
+  // ヘッダーには自分の名前が出ているのに本文は「ログイン」という、
+  // ちぐはぐな画面になっていた（Issue #151）。
+  // 履歴に積むと「戻る」で再びここへ来て弾かれるので replace で置き換える。
+  useEffect(() => {
+    if (!isPending && isSignedIn) {
+      router.replace(postLoginDestination());
+    }
+  }, [isPending, isSignedIn, router]);
+
+  // セッションの判定が終わるまで、そしてリダイレクトが済むまでフォームを描かない。
+  // 先に描くと、ログイン済みの人に一瞬フォームが見えてから飛ぶ。
+  // 判定が終わるまで画面を決めない、という /cart/payment と同じ扱い（Issue #70）。
+  if (isPending || isSignedIn) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="text-lg">読み込み中...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-screen flex-col bg-gray-50">
