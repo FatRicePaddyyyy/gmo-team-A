@@ -5,6 +5,8 @@ import { ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { FeedbackBanner } from "@/components/feedback-banner";
+import { GlossaryTerm } from "@/components/glossary-term";
+import { GLOSSARY } from "@/shared/lib/glossary";
 import type { DetailFeedback } from "../_hooks/use-domain-detail.hook";
 import { CLIENT_LOCK_STATUSES, type ClientLockStatus } from "../_hooks/use-domain-detail.hook";
 
@@ -21,8 +23,8 @@ import { CLIENT_LOCK_STATUSES, type ClientLockStatus } from "../_hooks/use-domai
 
 interface LockOption {
   key: ClientLockStatus;
-  label: string;
-  hint: string;
+  label: React.ReactNode;
+  hint: React.ReactNode;
 }
 
 // 表示順は「効果が強いものから」。移管禁止は攻撃者にドメインを奪われないための一次防御なので
@@ -30,8 +32,19 @@ interface LockOption {
 const LOCK_OPTIONS: readonly LockOption[] = [
   {
     key: "clientTransferProhibited",
-    label: "他のレジストラへの移管を禁止する",
-    hint: "第三者が勝手にドメインを他のレジストラへ移せなくなります。乗っ取り対策として推奨。",
+    label: (
+      <>
+        他の<GlossaryTerm description={GLOSSARY.registrar.description}>レジストラ</GlossaryTerm>への
+        <GlossaryTerm description={GLOSSARY.transfer.description}>移管</GlossaryTerm>を禁止する
+      </>
+    ),
+    hint: (
+      <>
+        第三者が勝手にドメインを他の
+        <GlossaryTerm description={GLOSSARY.registrar.description}>レジストラ</GlossaryTerm>
+        へ移せなくなります。乗っ取り対策として推奨。
+      </>
+    ),
   },
   {
     key: "clientDeleteProhibited",
@@ -41,7 +54,13 @@ const LOCK_OPTIONS: readonly LockOption[] = [
   {
     key: "clientUpdateProhibited",
     label: "設定変更を禁止する",
-    hint: "ネームサーバー・認証コードなどの変更を禁止します。自分で解除するまで変更できません。",
+    hint: (
+      <>
+        <GlossaryTerm description={GLOSSARY.nameServer.description}>ネームサーバー</GlossaryTerm>・
+        <GlossaryTerm description={GLOSSARY.authCode.description}>認証コード</GlossaryTerm>
+        などの変更を禁止します。自分で解除するまで変更できません。
+      </>
+    ),
   },
   {
     key: "clientRenewProhibited",
@@ -51,9 +70,14 @@ const LOCK_OPTIONS: readonly LockOption[] = [
   {
     key: "clientHold",
     label: "サイト掲載を止める",
-    hint: "名前解決を止めます。サイト・メールが即座に使えなくなります。復活は解除するだけです。",
+    hint: (
+      <>
+        <GlossaryTerm description={GLOSSARY.nameServer.description}>ネームサーバー</GlossaryTerm>
+        による名前解決を止めます。サイト・メールが即座に使えなくなります。復活は解除するだけです。
+      </>
+    ),
   },
-] as const;
+];
 
 interface LocksCardProps {
   currentStatuses: readonly string[];
