@@ -27,7 +27,6 @@ import {
 } from "../_lib/domain-status";
 import { DomainOverview } from "./_parts/domain-overview";
 import { TransferOutSteps, type TransferOutStepKey } from "./_parts/transfer-out-steps";
-import { AutoRenewCard } from "./_components/auto-renew-card";
 import { NameServerForm } from "./_components/name-server-form";
 import { IncomingTransferCard } from "./_components/incoming-transfer-card";
 import { LifecycleCard } from "./_components/lifecycle-card";
@@ -278,18 +277,6 @@ export default function DomainDetailPage() {
                         "このドメインはいま延長できない状態です。"}
                     </p>
                   )}
-
-                  {/*
-                    自動更新はDBの設定だけなので、レジストリ疎通不良（registryDown）でも
-                    延長不可（!renewable）でも切り替えられる。busyだけで止める。
-                  */}
-                  <AutoRenewCard
-                    autoRenew={domain.autoRenew}
-                    disabled={busy}
-                    running={running === "autoRenew"}
-                    feedback={feedback?.source === "autoRenew" ? feedback : null}
-                    onChange={state.updateAutoRenew}
-                  />
                 </TabsContent>
 
                 <TabsContent value="ns" className="space-y-4">
