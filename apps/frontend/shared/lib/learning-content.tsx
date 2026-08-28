@@ -109,7 +109,8 @@ export const MISCONCEPTIONS: FaqItem[] = [
         <GlossaryTerm description={GLOSSARY.server.description}>サーバー</GlossaryTerm>
         は別に必要です。サーバーはレンタルサーバー事業者と契約して借り、
         <GlossaryTerm description={GLOSSARY.nameServer.description}>ネームサーバー</GlossaryTerm>
-        の設定でドメインと結びつけます。このサービスではサーバーの取り扱いはありません（準備中）。
+        の設定でドメインと結びつけます。このサービスが扱うのはドメインだけなので、
+        サーバーは別途ご用意いただく必要があります。
       </>
     ),
   },
