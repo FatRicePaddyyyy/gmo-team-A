@@ -255,7 +255,10 @@ export default function DomainDetailPage() {
                 )}
 
                 <TabsContent value="overview" className="space-y-4">
-                  <DomainOverview domain={domain} />
+                  <DomainOverview
+                    domain={domain}
+                    onConfigureNameServers={() => setActiveTab("ns")}
+                  />
                 </TabsContent>
 
                 <TabsContent value="renew" className="space-y-4">

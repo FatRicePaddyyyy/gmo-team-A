@@ -8,8 +8,19 @@ import { Input } from "@/components/ui/input";
 import { FeedbackBanner } from "@/components/feedback-banner";
 import type { DetailFeedback } from "../_hooks/use-domain-detail.hook";
 
-/** レジストリの一般的な上限。最低 2 台ないと名前解決が止まりやすい */
+/** レジストリの一般的な上限 */
 const MAX_NAME_SERVERS = 13;
+
+/**
+ * 登録に必要な最低台数。
+ *
+ * 1 台だと、そのサーバーが止まった時点でサイトもメールも巻き添えで止まる。
+ * DNS は冗長化が前提の仕組みで、RFC 2182 (BCP 16) も 2 台以上を求めている。
+ * .jp のように 2 台以上を登録要件にしているレジストリもある。
+ *
+ * 弾く以上、なぜ弾いたのかを画面で必ず伝えること。理由の無い制約は
+ * 「入力が悪いのか、システムが壊れているのか」の区別がつかない。
+ */
 const MIN_NAME_SERVERS = 2;
 
 /** ホスト名として最低限の形（ラベルをドットで繋いだもの）か */
@@ -71,7 +82,9 @@ export function NameServerForm({
     const values = rows.map((row) => row.trim().toLowerCase()).filter(Boolean);
 
     if (values.length < MIN_NAME_SERVERS) {
-      setError(`ネームサーバーは ${MIN_NAME_SERVERS} 台以上を指定してください。`);
+      setError(
+        `ネームサーバーは ${MIN_NAME_SERVERS} 台以上の登録が必要です。1 台だけだと、そのサーバーが止まったときにサイトもメールも止まります。`,
+      );
       return;
     }
     const invalid = values.find((value) => !HOSTNAME_REGEX.test(value));
@@ -102,6 +115,11 @@ export function NameServerForm({
           </h2>
           <p className="mt-1 text-sm text-gray-600">
             このドメインでどのサーバーを使うかの設定です。レンタルサーバーを借りたときに、その会社から指定されたものを入れます。
+          </p>
+          {/* 保存を押してから弾かれるのでは遅い。入力を始める前に条件を出す */}
+          <p className="mt-1 text-xs text-gray-600">
+            {MIN_NAME_SERVERS} 台以上の登録が必要です。1
+            台だけだと、そのサーバーが止まったときにサイトもメールも止まるためです。
           </p>
         </div>
 

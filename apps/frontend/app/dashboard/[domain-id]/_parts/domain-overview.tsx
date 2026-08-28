@@ -67,10 +67,12 @@ function contactRoleLabel(role: string): string {
 
 interface DomainOverviewProps {
   domain: DomainDetail;
+  /** ネームサーバーのタブへ移動する。渡されないときは導線を出さない */
+  onConfigureNameServers?: () => void;
 }
 
 /** ドメインの現在の状態。ここは表示だけで、変更は下のカードが受け持つ */
-export function DomainOverview({ domain }: DomainOverviewProps) {
+export function DomainOverview({ domain, onConfigureNameServers }: DomainOverviewProps) {
   // レジストリに問い合わせられなかったとき、レジストリ由来の項目は
   // 「無い」ではなく「取れていない」。空欄で見せると誤解を生む。
   const registryDown = !domain.registryAvailable;
@@ -182,7 +184,32 @@ export function DomainOverview({ domain }: DomainOverviewProps) {
                       </li>
                     ))}
                   </ul>
-                ) : null
+                ) : (
+                  // 「—」だけだと、設定が無いことは分かっても、それで何が
+                  // 困るのかが分からない。取得直後はここが必ず空になるので、
+                  // 「取れたのに動かない」の理由に辿り着けるようにする。
+                  <div className="space-y-1">
+                    <p className="text-gray-900">未設定</p>
+                    <p className="text-xs text-gray-600">
+                      このままではサイトもメールも使えません。使うには、サイトの中身を置く
+                      <GlossaryTerm description={GLOSSARY.server.description}>サーバー</GlossaryTerm>
+                      を用意し、その
+                      <GlossaryTerm description={GLOSSARY.nameServer.description}>
+                        ネームサーバー
+                      </GlossaryTerm>
+                      を 2 台以上ここに設定します。
+                    </p>
+                    {onConfigureNameServers && (
+                      <button
+                        type="button"
+                        onClick={onConfigureNameServers}
+                        className="cursor-pointer text-xs font-semibold text-[var(--brand)] underline underline-offset-4"
+                      >
+                        ネームサーバーを設定する
+                      </button>
+                    )}
+                  </div>
+                )
               }
             />
             <Row
