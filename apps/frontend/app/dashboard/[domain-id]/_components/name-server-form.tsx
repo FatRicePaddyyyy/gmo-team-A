@@ -8,9 +8,20 @@ import { Input } from "@/components/ui/input";
 import { FeedbackBanner } from "@/components/feedback-banner";
 import type { DetailFeedback } from "../_hooks/use-domain-detail.hook";
 
-/** レジストリの一般的な上限。最低 2 台ないと名前解決が止まりやすい */
+/** レジストリの一般的な上限 */
 const MAX_NAME_SERVERS = 13;
-const MIN_NAME_SERVERS = 2;
+
+/**
+ * 保存に必要な最低台数。レジストリ側に台数の制約は無く（Swagger に minItems の
+ * 定義が無い）、1 台でも登録できる。
+ *
+ * ただし 1 台だと、そのサーバーが止まった時点でサイトもメールも巻き添えで止まる。
+ * 実運用では 2 台以上が事実上の標準なので、弾きはしないが勧める。
+ * 「できない」と「やめた方がいい」を混ぜると、利用者は理由が分からないまま
+ * 手が止まる。
+ */
+const MIN_NAME_SERVERS = 1;
+const RECOMMENDED_NAME_SERVERS = 2;
 
 /** ホスト名として最低限の形（ラベルをドットで繋いだもの）か */
 const HOSTNAME_REGEX = /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/;
@@ -44,10 +55,11 @@ export function NameServerForm({
   feedback,
   onSubmit,
 }: NameServerFormProps) {
-  // 最低 2 行は常に出す。空欄は送信時に落とす。
+  // 入力欄は勧めたい台数ぶん出しておく。空欄は送信時に落とすので、
+  // 1 台だけ書いてもそのまま保存できる。
   const toRows = (values: string[]) => {
     const rows = [...values];
-    while (rows.length < MIN_NAME_SERVERS) rows.push("");
+    while (rows.length < RECOMMENDED_NAME_SERVERS) rows.push("");
     return rows;
   };
 
@@ -71,7 +83,7 @@ export function NameServerForm({
     const values = rows.map((row) => row.trim().toLowerCase()).filter(Boolean);
 
     if (values.length < MIN_NAME_SERVERS) {
-      setError(`ネームサーバーは ${MIN_NAME_SERVERS} 台以上を指定してください。`);
+      setError("ネームサーバーを 1 台以上入力してください。");
       return;
     }
     const invalid = values.find((value) => !HOSTNAME_REGEX.test(value));
@@ -102,6 +114,12 @@ export function NameServerForm({
           </h2>
           <p className="mt-1 text-sm text-gray-600">
             このドメインでどのサーバーを使うかの設定です。レンタルサーバーを借りたときに、その会社から指定されたものを入れます。
+          </p>
+          {/* 台数はレジストリの制約ではないので、「できない」ではなく
+              「こうした方がいい」と理由つきで伝える */}
+          <p className="mt-1 text-xs text-gray-600">
+            1 台でも設定できますが、{RECOMMENDED_NAME_SERVERS} 台以上を推奨します。1
+            台だけだと、そのサーバーが止まったときにサイトもメールも止まります。
           </p>
         </div>
 
@@ -168,6 +186,14 @@ export function NameServerForm({
           {isUnchanged && !running && !unavailable && (
             <p className="mt-2 text-xs text-gray-500">
               現在の設定から変更がありません。
+            </p>
+          )}
+          {/* 1 台で保存した後も気づけるようにする。保存の直前だけ言っても、
+              後から見に来た人には伝わらない。 */}
+          {!unavailable && current.length === 1 && (
+            <p className="mt-2 text-xs text-amber-800">
+              いまは 1 台だけ設定されています。このサーバーが止まると、サイトもメールも止まります。
+              もう 1 台の追加を検討してください。
             </p>
           )}
         </div>
