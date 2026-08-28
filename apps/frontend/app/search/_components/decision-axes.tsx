@@ -60,7 +60,19 @@ export function DecisionAxes({ query, results, purpose }: DecisionAxesProps) {
   /** 「取得できない末尾がある」で終わらせず、どれのことなのかカードまで飛ばす */
   const eligibilityBody: ReactNode =
     purpose === null ? (
-      `いま ${available.length} 件が取得可能です。上の「だれのドメイン？」を選ぶと、あなたが取得できない末尾に理由が表示されます。`
+      // この画面に用途を選ぶ操作は無い（選ぶのは診断）。
+      // 無い操作を指すと、探して見つからず止まる。診断へ送る。
+      <>
+        いま {available.length} 件が取得可能です。ただし、だれが使うドメインかが分からないため、
+        あなたが取得できない末尾があっても、ここでは理由を出せません。{" "}
+        <Link
+          href="/plan-finder"
+          className="font-bold text-[var(--brand)] underline underline-offset-2"
+        >
+          4問の診断
+        </Link>
+        に答えると、取得できない末尾に理由が表示されます。
+      </>
     ) : blocked.length === 0 ? (
       `いま出ている ${available.length} 件は、すべてあなたが取得できます。`
     ) : (
