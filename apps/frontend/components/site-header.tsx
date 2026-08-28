@@ -73,9 +73,9 @@ export function SiteHeader() {
             横幅が変わっても、枠の外にあるナビが動かない。
             名前が長い場合は枠の中で truncate される。
           */}
-          <div className="flex w-32 justify-end">
+          <div className="flex w-56 justify-end">
             {isPending ? null : signedInName ? (
-              <AccountMenu name={signedInName} />
+              <AccountMenu name={signedInName} email={session?.user.email ?? null} />
             ) : (
               <Button
                 variant="brand"

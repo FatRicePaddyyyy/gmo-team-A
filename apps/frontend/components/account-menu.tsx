@@ -11,6 +11,8 @@ import { Button } from "@/components/ui/button";
 interface AccountMenuProps {
   /** 表示名。名前が未設定ならメールアドレスが入る */
   name: string;
+  /** メニュー内の見出しに表示するメールアドレス。name と同じ（＝名前未設定）なら省略する */
+  email?: string | null;
 }
 
 /**
@@ -22,7 +24,7 @@ interface AccountMenuProps {
  * shadcn の dropdown-menu は未導入なので、既存の依存である Base UI の Menu を
  * 直接使う（キーボード操作・Escape・フォーカス管理が入っている）。
  */
-export function AccountMenu({ name }: AccountMenuProps) {
+export function AccountMenu({ name, email }: AccountMenuProps) {
   const router = useRouter();
   const [signingOut, setSigningOut] = useState(false);
 
@@ -44,7 +46,14 @@ export function AccountMenu({ name }: AccountMenuProps) {
         render={
           <Button variant="ghost" className="h-11 min-w-0">
             <UserRound aria-hidden="true" />
-            <span className="truncate">{name}</span>
+            <span className="flex min-w-0 flex-col items-start leading-tight">
+              <span className="max-w-full truncate">{name}</span>
+              {email && email !== name && (
+                <span className="max-w-full truncate text-xs font-normal text-gray-500">
+                  {email}
+                </span>
+              )}
+            </span>
             <ChevronDown className="size-4 shrink-0" aria-hidden="true" />
           </Button>
         }
