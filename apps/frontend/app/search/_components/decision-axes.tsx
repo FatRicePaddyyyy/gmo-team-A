@@ -17,6 +17,11 @@ interface DecisionAxesProps {
   query: string;
   results: DomainResult[];
   purpose: Purpose | null;
+  /**
+   * 診断（/plan-finder）が勧めた末尾。
+   * 診断を済ませた人にもう一度「診断しよう」と言わないための目印に使う。
+   */
+  recommendedTld?: string | null;
 }
 
 /** 名前の長さから、その場で言えることだけを返す。事実で終わらせず、必ず良し悪しの判断を添える */
@@ -38,7 +43,12 @@ function nameAdvice(name: string): string {
  * 長い解説は `/learn` にあるので、ここからは1行リンクだけを出す。
  * そのリンクには `?from=` を付け、解説から**この検索結果にそのまま帰れる**ようにする。
  */
-export function DecisionAxes({ query, results, purpose }: DecisionAxesProps) {
+export function DecisionAxes({
+  query,
+  results,
+  purpose,
+  recommendedTld = null,
+}: DecisionAxesProps) {
   const available = results.filter((result) => result.available);
   if (available.length === 0) return null;
 
@@ -73,7 +83,24 @@ export function DecisionAxes({ query, results, purpose }: DecisionAxesProps) {
         に答えると、取れない末尾とその理由が分かります。
       </>
     ) : blocked.length === 0 ? (
-      `いま出ている ${available.length} 件は、すべてあなたが取得できます。`
+      // 条件で弾かれないなら、次に迷うのは「どれにするか」。
+      // 診断を済ませた人には勧めない（同じことを二度やらせない）。
+      <>
+        いま出ている {available.length} 件は、すべてあなたが取得できます。
+        {!recommendedTld && (
+          <>
+            {" "}
+            どれが自分に合うか迷ったら、
+            <Link
+              href="/plan-finder"
+              className="font-bold text-[var(--brand)] underline underline-offset-2"
+            >
+              4問の診断
+            </Link>
+            へ。
+          </>
+        )}
+      </>
     ) : (
       <>
         いま出ている {available.length} 件のうち、あなたが取得できるのは {allowed.length} 件です。
