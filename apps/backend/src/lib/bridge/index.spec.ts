@@ -157,12 +157,14 @@ describe("RegistryBridge.restore: 実機は 409 + 2304 を返す", () => {
     expect(res.error).toBe("domain_not_found");
   });
 
-  test("[異常系] 403 は権限なし", async () => {
+  // Swagger 定義の 403 は「sponsoring registrar 以外の呼び出し」= 当社では預かっていないドメイン。
+  // ユーザー権限の 403 ではないので not_sponsored に分ける (issue #156)。
+  test("[異常系] 403 は not_sponsored にマップされる", async () => {
     stubRegistry(403, errEnvelope(2201, "Authorization error"));
 
     const res = await RegistryBridge.restore({ name: "example.com", registry: "kitaqsign", env: mockEnv });
 
-    expect(res.error).toBe("forbidden");
+    expect(res.error).toBe("not_sponsored");
   });
 });
 
@@ -216,13 +218,13 @@ describe("RegistryBridge.delete: restore と同じく 409 + 2304", () => {
     expect(res.error).toBe("domain_not_found");
   });
 
-  // sponsoring registrar 以外の呼び出し。restore と同じ扱いに揃える。
-  test("[異常系] 403 は forbidden にマップされる", async () => {
+  // sponsoring registrar 以外の呼び出し。restore と同じく not_sponsored に集約 (issue #156)。
+  test("[異常系] 403 は not_sponsored にマップされる", async () => {
     stubRegistry(403, errEnvelope(2201, "Authorization error"));
 
     const res = await RegistryBridge.delete({ name: "example.com", registry: "kitaqsign", env: mockEnv });
 
-    expect(res.error).toBe("forbidden");
+    expect(res.error).toBe("not_sponsored");
   });
 });
 
@@ -230,8 +232,9 @@ describe("RegistryBridge.delete: restore と同じく 409 + 2304", () => {
 
 describe("RegistryBridge.update: 403/404 の権限系吸収", () => {
   // sponsoring registrar 以外の呼び出し。Swagger には 200/404 のみだが、
-  // 実運用では 403 が返り得るので bridge で forbidden にマップして routes 側で 403 応答にする。
-  test("[異常系] 403 は forbidden にマップされる", async () => {
+  // 実運用では 403 が返り得るので bridge で not_sponsored にマップする (issue #156)。
+  // ユーザー権限の 403 ではなく「そのドメインは当社の管轄外」の意味。
+  test("[異常系] 403 は not_sponsored にマップされる", async () => {
     stubRegistry(403, errEnvelope(2201, "Authorization error"));
 
     const res = await RegistryBridge.update({
@@ -241,7 +244,7 @@ describe("RegistryBridge.update: 403/404 の権限系吸収", () => {
       env: mockEnv,
     });
 
-    expect(res.error).toBe("forbidden");
+    expect(res.error).toBe("not_sponsored");
   });
 
   test("[異常系] 404 + reason にドメイン名を含む → domain_not_found にマップされる", async () => {
@@ -541,7 +544,8 @@ describe("RegistryBridge.transferApprove: 401/403/404/409 の意味分け", () =
     expect(res.error).toBe("transfer_not_found");
   });
 
-  test("[異常系] 403 (sponsoring registrar 以外) → forbidden", async () => {
+  test("[異常系] 403 (sponsoring registrar 以外) → not_sponsored", async () => {
+    // ユーザー権限ではなく「そのドメインは当社の管轄外」の意味なので not_sponsored に集約 (issue #156)。
     stubRegistry(403, errEnvelope(2201, "Authorization error"));
 
     const res = await RegistryBridge.transferApprove({
@@ -550,7 +554,7 @@ describe("RegistryBridge.transferApprove: 401/403/404/409 の意味分け", () =
       env: mockEnv,
     });
 
-    expect(res.error).toBe("forbidden");
+    expect(res.error).toBe("not_sponsored");
   });
 });
 

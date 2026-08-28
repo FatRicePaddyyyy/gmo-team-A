@@ -56,7 +56,13 @@ export const deleteDomainRouteHandler = app.openapi(route, async (ctx) => {
     if (result.error === "not_found" || result.error === "domain_not_found") {
       return ctx.json({ success: false as const, data: null, error: toUserMessage(result.error) }, 404);
     }
-    if (result.error === "operation_prohibited" || result.error === "domain_pending_transfer") {
+    // not_sponsored (レジストリの 403 = 当社では預かっていないドメイン) は権限問題ではなく
+    // DB とレジストリの食い違い。409 に倒して状態不一致であることを伝える。
+    if (
+      result.error === "operation_prohibited" ||
+      result.error === "domain_pending_transfer" ||
+      result.error === "not_sponsored"
+    ) {
       return ctx.json({ success: false as const, data: null, error: toUserMessage(result.error) }, 409);
     }
     if (result.error === "forbidden") {

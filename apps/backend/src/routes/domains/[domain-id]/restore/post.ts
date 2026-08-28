@@ -59,7 +59,9 @@ export const restoreDomainRouteHandler = app.openapi(route, async (ctx) => {
     if (result.error === "forbidden") {
       return ctx.json({ success: false as const, data: null, error: toUserMessage(result.error) }, 403);
     }
-    if (result.error === "operation_prohibited") {
+    // レジストリの 403 (sponsoring registrar 以外 = 当社では預かっていないドメイン) は
+    // 会員の権限問題ではなく DB とレジストリの食い違い。409 で「状態が合わない」意味に倒す。
+    if (result.error === "not_sponsored" || result.error === "operation_prohibited") {
       return ctx.json({ success: false as const, data: null, error: toUserMessage(result.error) }, 409);
     }
     // メンテナンスは「内部で異常が起きた」のではなく「待てば戻る」状態なので、
