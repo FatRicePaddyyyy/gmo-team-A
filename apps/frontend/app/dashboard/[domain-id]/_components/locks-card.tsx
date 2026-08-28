@@ -65,7 +65,7 @@ const LOCK_OPTIONS: readonly LockOption[] = [
   {
     key: "clientRenewProhibited",
     label: "更新を禁止する",
-    hint: "有効期限の延長 (renew) を禁止します。長期的に手放す予定のドメインに使います。",
+    hint: "有効期限の延長を禁止します。長期的に手放す予定のドメインに使います。",
   },
   {
     key: "clientHold",
