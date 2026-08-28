@@ -11,15 +11,6 @@
       "migrations_dir": "drizzle"
     }
   ],
-  // レジストリ hello (supportedTlds) の応答を短時間キャッシュする。
-  // ドメイン登録・移管申請のホットパスで hello を毎回叩くとレイテンシとエラー面が増えるので、
-  // TTL 10 分でキャッシュする。TLD 追加・削除は最大 10 分遅れて反映される。
-  "kv_namespaces": [
-    {
-      "binding": "REGISTRY_HELLO_CACHE",
-      "id": "9e1a28e8384a4582a06b56fbb0977e64"
-    }
-  ],
   "vars": {
     "BACKEND_URL": "http://localhost:8787",
     "FRONTEND_URL": "http://localhost:3000",
@@ -73,12 +64,6 @@
           "database_name": "db-production",
           "database_id": "2ba676de-7422-4e9e-971f-f084f812c5fb",
           "migrations_dir": "drizzle"
-        }
-      ],
-      "kv_namespaces": [
-        {
-          "binding": "REGISTRY_HELLO_CACHE",
-          "id": "806232c2ae224c58adab367b744b2777"
         }
       ],
       // B-C 対策: Wrangler の env override はトップレベル設定を継承しない項目もあるので、
