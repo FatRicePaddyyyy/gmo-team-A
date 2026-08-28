@@ -45,7 +45,6 @@ export class TransferService {
 
     // B17: 引数の registry と TLD から判定した registry が一致するかを検証する。
     // レジストリの hello (supportedTlds) を突き合わせるので、静的テーブルのドリフトに引きずられない。
-    // 結果は KV に 10 分キャッシュされているのでホットパスでも許容範囲。
     const resolved = await RegistryBridge.resolveRegistry({ name: normalizedName, env });
     if (!resolved.success) {return resolved;}
     if (resolved.data !== registry) {

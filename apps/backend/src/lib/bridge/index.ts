@@ -189,10 +189,6 @@ function fallbackRegistryByTld(tld: string, env: CloudflareBindings): Registry |
   return null;
 }
 
-// hello 応答を KV にキャッシュする TTL (秒)。
-// レジストリ側で TLD が追加/削除されても最大 10 分で反映される。
-const HELLO_CACHE_TTL_SECONDS = 600;
-
 // レジストリへの HTTP 呼び出しをリトライする最大試行回数 (初回含む)。
 // 5xx / ネットワークエラーはレジストリ側の一時障害の可能性が高いので即座に再試行する。
 // 4xx / EPP result.code エラーは再試行しても直らないので retry しない。
@@ -231,51 +227,6 @@ async function withRetry<R extends { response: Response }>(
   throw lastThrown;
 }
 
-function helloCacheKey(registry: Registry): string {
-  return `hello:${registry}`;
-}
-
-async function readHelloFromCache(
-  registry: Registry,
-  env: CloudflareBindings,
-): Promise<GreetingResponse | null> {
-  try {
-    const raw = await env.REGISTRY_HELLO_CACHE.get(helloCacheKey(registry), "json");
-    if (!raw) {return null;}
-    // KV の値は自分で書いた JSON なので shape は信頼してよいが、念のため normalize と同じ検証を通す。
-    if (!isObject(raw)) {return null;}
-    const registryCode = raw.registryCode;
-    const tlds = raw.tlds;
-    if (
-      typeof registryCode !== "string" ||
-      !Array.isArray(tlds) ||
-      !tlds.every((t): t is string => typeof t === "string")
-    ) {
-      return null;
-    }
-    return { registryCode, tlds };
-  } catch (e) {
-    console.warn(`hello cache read failed for registry=${registry}:`, e);
-    return null;
-  }
-}
-
-async function writeHelloToCache(
-  registry: Registry,
-  env: CloudflareBindings,
-  greeting: GreetingResponse,
-): Promise<void> {
-  try {
-    await env.REGISTRY_HELLO_CACHE.put(
-      helloCacheKey(registry),
-      JSON.stringify(greeting),
-      { expirationTtl: HELLO_CACHE_TTL_SECONDS },
-    );
-  } catch (e) {
-    console.warn(`hello cache write failed for registry=${registry}:`, e);
-  }
-}
-
 export class RegistryBridge {
   // レジストリの疎通確認と対応TLD取得（認証不要のヘルスチェック）
   //
@@ -292,11 +243,6 @@ export class RegistryBridge {
     registry: Registry;
     env: CloudflareBindings;
   }): Promise<Result<GreetingResponse>> {
-    // 1) KV キャッシュを先に見る。ホットパス (registerDomain / requestTransfer / check)
-    //    で hello を毎回叩くとレイテンシとエラー面が増えるので、TTL 10 分でキャッシュする。
-    const cached = await readHelloFromCache(registry, env);
-    if (cached) {return { success: true, data: cached, error: null };}
-
     try {
       const { data, error, response } = await withRetry(
         `hello ${registry}`,
@@ -313,8 +259,6 @@ export class RegistryBridge {
       const normalized = normalizeGreeting(registry, resData);
       if (!normalized) {return { success: false, data: null, error: "invalid_registry_response" };}
 
-      // 成功したら KV に書き戻す。write 失敗はキャッシュしないだけで結果は返す。
-      await writeHelloToCache(registry, env, normalized);
       return { success: true, data: normalized, error: null };
     } catch (e) {
       console.error("RegistryBridge.hello error:", e);
