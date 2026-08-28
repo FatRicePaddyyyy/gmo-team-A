@@ -101,7 +101,12 @@ export function SearchResultSection({
       </section>
 
       {!loading && !error && hasSearched && (
-        <DecisionAxes query={query} results={results} purpose={state.purpose} />
+        <DecisionAxes
+          query={query}
+          results={results}
+          purpose={state.purpose}
+          recommendedTld={recommendedTld}
+        />
       )}
     </>
   );

@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { CheckoutStepper } from "@/components/checkout-stepper";
 import { FeedbackBanner } from "@/components/feedback-banner";
 import { GlossaryTerm } from "@/components/glossary-term";
+import { LearningNote } from "@/components/learning-note";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { $createDomain } from "@/clients";
@@ -20,7 +21,7 @@ import {
   type ConfirmedOrder,
 } from "@/shared/lib/order-store";
 import { buildFlowSteps } from "@/shared/lib/progress-store";
-import { findTld } from "@/shared/lib/tld-catalog";
+import { findTld, MISCONCEPTION } from "@/shared/lib/tld-catalog";
 import { GLOSSARY } from "@/shared/lib/glossary";
 import { PAYMENT_METHOD } from "@/shared/lib/payment-methods";
 import { NoOrderNotice } from "../_components/no-order-notice";
@@ -239,6 +240,23 @@ export default function CartPaymentPage() {
                 ダッシュボードへ進む
               </Link>
             )}
+          </div>
+        )}
+
+        {/* ここから先は取り消せない。押す直前に、押したら何が起きるかを書く。
+            確定後に「間違えた」「1年で終わりだと思わなかった」と気づいても戻せないため、
+            画面のいちばん下、ボタンのすぐ上に置く。 */}
+        {!orderInvalidated && (
+          <div className="mb-6 space-y-3">
+            <LearningNote title={MISCONCEPTION.refund.title} tone="warn">
+              <p>{MISCONCEPTION.refund.body}</p>
+            </LearningNote>
+            <LearningNote title={MISCONCEPTION.renewal.title} tone="warn">
+              <p>
+                {MISCONCEPTION.renewal.body}
+                このお申し込みは1年分です。
+              </p>
+            </LearningNote>
           </div>
         )}
 
