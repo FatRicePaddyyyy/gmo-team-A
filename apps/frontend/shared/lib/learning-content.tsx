@@ -103,8 +103,15 @@ export const MISCONCEPTIONS: FaqItem[] = [
   },
   {
     question: "ドメインを取れば、すぐサイトが見られる？",
-    answer:
-      "見られません。ドメインは住所にあたるもので、サイトの中身を置くサーバーは別に必要です。",
+    answer: (
+      <>
+        見られません。ドメインは住所にあたるもので、サイトの中身を置く
+        <GlossaryTerm description={GLOSSARY.server.description}>サーバー</GlossaryTerm>
+        は別に必要です。サーバーはレンタルサーバー事業者と契約して借り、
+        <GlossaryTerm description={GLOSSARY.nameServer.description}>ネームサーバー</GlossaryTerm>
+        の設定でドメインと結びつけます。このサービスではサーバーの取り扱いはありません（準備中）。
+      </>
+    ),
   },
   {
     question: "安い末尾を選べば得？",

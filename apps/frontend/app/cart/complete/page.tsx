@@ -106,7 +106,15 @@ export default function CartCompletePage() {
           </LearningNote>
 
           <LearningNote title={MISCONCEPTION.publish.title} tone="warn">
-            <p>{MISCONCEPTION.publish.body}</p>
+            {/* 取得の直前なので、「あと何が要るのか」まで言い切る。
+                ここで止めると「取ったのに見られない」と後で驚かせる。 */}
+            <p>
+              ドメインは住所にあたるものです。サイトの中身を置く
+              <GlossaryTerm description={GLOSSARY.server.description}>サーバー</GlossaryTerm>
+              は別に必要で、
+              <GlossaryTerm description={GLOSSARY.nameServer.description}>ネームサーバー</GlossaryTerm>
+              の設定でつなぎます。
+            </p>
           </LearningNote>
 
           <div className="flex items-start gap-2 rounded-lg border border-border bg-gray-50 px-4 py-3 text-sm text-gray-700">
