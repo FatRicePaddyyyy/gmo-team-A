@@ -111,6 +111,9 @@ export function DomainSearchResult({
     target?.scrollIntoView({ behavior: "smooth", block: "center" });
   }, [recommendedTld, recommendedAvailable, query]);
   const hasLimitedOffer = available.some((r) => r.limitedOffer);
+  // 取得できる人が限られる末尾（.co.jp など）が一覧にあるか。
+  // 「空いている＝自分が取れる」と読まれるのを、選ぶ前に一度だけ止める。
+  const hasRestricted = available.some((r) => r.restricted);
 
   // 「このドメインについてくわしく」の開閉。説明文からも開けるようにするため、
   // 各行に任せず親で持つ。
@@ -211,6 +214,15 @@ export function DomainSearchResult({
           <LearningNote title={MISCONCEPTION.price.title} tone="warn" collapsible>
             <p>{MISCONCEPTION.price.body}</p>
           </LearningNote>
+
+          {/* 取得条件のある末尾が並んでいるときだけ。
+              条件の無い結果に出しても「自分には関係ない話」になり、
+              次に本当に効かせたいときに読み飛ばされる。 */}
+          {hasRestricted && (
+            <LearningNote title={MISCONCEPTION.tld.title} tone="warn" collapsible>
+              <p>{MISCONCEPTION.tld.body}</p>
+            </LearningNote>
+          )}
         </div>
       )}
 
