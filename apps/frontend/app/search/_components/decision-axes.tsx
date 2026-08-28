@@ -63,15 +63,14 @@ export function DecisionAxes({ query, results, purpose }: DecisionAxesProps) {
       // この画面に用途を選ぶ操作は無い（選ぶのは診断）。
       // 無い操作を指すと、探して見つからず止まる。診断へ送る。
       <>
-        いま {available.length} 件が取得可能です。ただし、だれが使うドメインかが分からないため、
-        あなたが取得できない末尾があっても、ここでは理由を出せません。{" "}
+        {available.length} 件が空いていますが、全部をあなたが取れるとは限りません。{" "}
         <Link
           href="/plan-finder"
           className="font-bold text-[var(--brand)] underline underline-offset-2"
         >
           4問の診断
         </Link>
-        に答えると、取得できない末尾に理由が表示されます。
+        に答えると、取れない末尾とその理由が分かります。
       </>
     ) : blocked.length === 0 ? (
       `いま出ている ${available.length} 件は、すべてあなたが取得できます。`
