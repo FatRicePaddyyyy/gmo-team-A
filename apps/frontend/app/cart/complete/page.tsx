@@ -14,6 +14,7 @@ import { loadConfirmedOrder, type ConfirmedOrder } from "@/shared/lib/order-stor
 import { buildFlowSteps } from "@/shared/lib/progress-store";
 import { purposeLabel } from "@/shared/lib/purpose";
 import { findTld, MISCONCEPTION } from "@/shared/lib/tld-catalog";
+import { GLOSSARY } from "@/shared/lib/glossary";
 import { NoOrderNotice } from "../_components/no-order-notice";
 
 const COMPLETE_STEPS = buildFlowSteps("login");
@@ -80,8 +81,7 @@ export default function CartCompletePage() {
                   {item.name}
                   <GlossaryTerm
                     description={
-                      findTld(item.tld)?.summary ??
-                      "インターネット上の住所（ドメイン名）の末尾につく「TLD」です。"
+                      findTld(item.tld)?.summary ?? GLOSSARY.tld.description
                     }
                   >
                     <span style={{ color: "var(--brand)" }}>{item.tld}</span>

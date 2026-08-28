@@ -11,6 +11,8 @@ import { useDomainSearch } from "./search/_hooks/use-domain-search.hook";
 import { useProgress } from "@/shared/hooks/use-progress.hook";
 import { buildFlowSteps } from "@/shared/lib/progress-store";
 import { stripKnownTld } from "@/shared/lib/tld-catalog";
+import { GlossaryTerm } from "@/components/glossary-term";
+import { GLOSSARY } from "@/shared/lib/glossary";
 
 const SCROLL_INTENT_KEY = "manabi-domain:search-scroll-intent";
 
@@ -91,7 +93,13 @@ export default function Home() {
         inputRef={searchInputRef}
         initialQuery={inputValue}
         heading="使いたい名前が空いているか、調べてみましょう。"
-        description="空き状況と一緒に、その末尾（TLD）が何なのか・いくらかかり続けるのかも表示します。"
+        description={
+          <>
+            空き状況と一緒に、その末尾（
+            <GlossaryTerm description={GLOSSARY.tld.description}>TLD</GlossaryTerm>
+            ）が何なのか・いくらかかり続けるのかも表示します。
+          </>
+        }
         footer={<PlanFinderLink className="mt-4" />}
       />
 
