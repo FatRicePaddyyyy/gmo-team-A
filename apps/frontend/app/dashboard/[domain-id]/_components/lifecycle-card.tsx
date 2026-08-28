@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { ConfirmAction } from "@/components/confirm-action";
 import { FeedbackBanner } from "@/components/feedback-banner";
+import { GlossaryTerm } from "@/components/glossary-term";
+import { GLOSSARY } from "@/shared/lib/glossary";
 import type { DetailFeedback } from "../_hooks/use-domain-detail.hook";
 
 interface LifecycleCardProps {
@@ -52,9 +54,18 @@ export function LifecycleCard({
             {canRestore ? "廃止したドメインを戻す" : "このドメインを手放す"}
           </h2>
           <p className="mt-1 text-sm text-gray-600">
-            {canRestore
-              ? "猶予期間のうちなら元に戻せます。期間を過ぎると他の人が取得できるようになります。"
-              : "使わなくなったドメインを廃止します。しばらくは復旧できますが、猶予期間を過ぎると元に戻せません。"}
+            {canRestore ? (
+              <>
+                <GlossaryTerm description={GLOSSARY.gracePeriod.description}>猶予期間</GlossaryTerm>
+                のうちなら元に戻せます。期間を過ぎると他の人が取得できるようになります。
+              </>
+            ) : (
+              <>
+                使わなくなったドメインを廃止します。しばらくは復旧できますが、
+                <GlossaryTerm description={GLOSSARY.gracePeriod.description}>猶予期間</GlossaryTerm>
+                を過ぎると元に戻せません。
+              </>
+            )}
           </p>
         </div>
 
@@ -70,7 +81,13 @@ export function LifecycleCard({
         {confirmingDelete ? (
           <ConfirmAction
             question={`${domainName} を廃止しますか？`}
-            detail="廃止するとサイトやメールがすぐ使えなくなります。しばらくの間は復旧できますが、猶予期間を過ぎると他の人が取得できるようになります。"
+            detail={
+              <>
+                廃止するとサイトやメールがすぐ使えなくなります。しばらくの間は復旧できますが、
+                <GlossaryTerm description={GLOSSARY.gracePeriod.description}>猶予期間</GlossaryTerm>
+                を過ぎると他の人が取得できるようになります。
+              </>
+            }
             confirmLabel="廃止する"
             running={runningDelete}
             onConfirm={async () => {

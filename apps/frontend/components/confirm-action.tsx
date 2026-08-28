@@ -5,7 +5,8 @@ interface ConfirmActionProps {
   /** 「本当に○○しますか？」の見出し */
   question: string;
   /** 取り返しがつくのか・何が起きるのかの補足 */
-  detail: string;
+  /** 用語解説（GlossaryTerm）を混ぜられるよう ReactNode にしている */
+  detail: React.ReactNode;
   confirmLabel: string;
   running: boolean;
   /** 非同期でよい。完了を待ってから閉じられるよう Promise を返せる */

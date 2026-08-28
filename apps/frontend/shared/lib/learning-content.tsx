@@ -1,3 +1,5 @@
+import { GlossaryTerm } from "@/components/glossary-term";
+import { GLOSSARY } from "@/shared/lib/glossary";
 import type { TldPrice } from "@/components/domain-price-table";
 import type { FaqItem } from "@/components/faq-accordion";
 import type { Step } from "@/components/steps-guide";
@@ -60,13 +62,23 @@ export const FAQS: FaqItem[] = [
   },
   {
     question: "更新を忘れるとどうなりますか？",
-    answer:
-      "有効期限が切れると、サイトもメールも止まります。一定の猶予期間を過ぎるとドメインは削除され、他の人が取得できる状態になります。更新日が近づいたらマイドメインで確認しましょう。",
+    answer: (
+      <>
+        有効期限が切れると、サイトもメールも止まります。一定の
+        <GlossaryTerm description={GLOSSARY.gracePeriod.description}>猶予期間</GlossaryTerm>
+        を過ぎるとドメインは削除され、他の人が取得できる状態になります。更新日が近づいたらマイドメインで確認しましょう。
+      </>
+    ),
   },
   {
     question: "取得すると自分の名前や住所が公開されますか？",
-    answer:
-      "はい。ドメインを取得すると登録者の氏名・住所・電話番号が Whois という仕組みで公開されます。",
+    answer: (
+      <>
+        はい。ドメインを取得すると登録者の氏名・住所・電話番号が{" "}
+        <GlossaryTerm description={GLOSSARY.whois.description}>Whois</GlossaryTerm>{" "}
+        という仕組みで公開されます。
+      </>
+    ),
   },
   {
     question: ".co.jp は個人でも取れますか？",
