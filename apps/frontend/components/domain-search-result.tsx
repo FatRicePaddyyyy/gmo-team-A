@@ -92,6 +92,8 @@ export function DomainSearchResult({
   // 「なぜ選べないか」を開いている末尾。隠すのではなく、押したら理由を学べるようにする
   const [explainedTld, setExplainedTld] = useState<string | null>(null);
   // 勧めた末尾は先頭に出す。下までスクロールしないと見つからないと、診断の結果が死ぬ
+  const detailValueOf = (tld: string) => `detail-${tld}`;
+
   const available = results
     .filter((r) => r.available && !r.checkFailed)
     .sort((a, b) =>
@@ -109,6 +111,25 @@ export function DomainSearchResult({
     target?.scrollIntoView({ behavior: "smooth", block: "center" });
   }, [recommendedTld, recommendedAvailable, query]);
   const hasLimitedOffer = available.some((r) => r.limitedOffer);
+
+  // 「このドメインについてくわしく」の開閉。説明文からも開けるようにするため、
+  // 各行に任せず親で持つ。
+  const [openDetails, setOpenDetails] = useState<readonly string[]>([]);
+  const setDetailOpen = (value: string, open: boolean) =>
+    setOpenDetails((prev) =>
+      open ? [...prev.filter((v) => v !== value), value] : prev.filter((v) => v !== value),
+    );
+
+  // 説明の中で「くわしく」に触れておきながら、どれを押せばいいのか
+  // 探させていた。文中の語をそのまま押せるようにして、先頭の行を開いて見せる。
+  const firstDetailTld = available.find((r) => r.detail)?.tld ?? null;
+  const openFirstDetail = () => {
+    if (!firstDetailTld) return;
+    setDetailOpen(detailValueOf(firstDetailTld), true);
+    document
+      .getElementById(tldAnchorId(firstDetailTld))
+      ?.scrollIntoView({ behavior: "smooth", block: "center" });
+  };
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-8">
@@ -170,7 +191,19 @@ export function DomainSearchResult({
               <span className="font-semibold">.com</span> や{" "}
               <span className="font-semibold">.jp</span> のような末尾を「TLD」と呼びます。
               値段だけでなく<span className="font-semibold">取れる人の条件</span>も違います。
-              各行の「このドメインについてくわしく」を開くと、選び方が分かります。
+              各行の
+              {firstDetailTld ? (
+                <button
+                  type="button"
+                  onClick={openFirstDetail}
+                  className="mx-0.5 cursor-pointer font-semibold text-[var(--brand)] underline underline-offset-4"
+                >
+                  「このドメインについてくわしく」
+                </button>
+              ) : (
+                "「このドメインについてくわしく」"
+              )}
+              を開くと、選び方が分かります。
             </p>
           </LearningNote>
 
@@ -280,9 +313,19 @@ export function DomainSearchResult({
                 )}
 
                 {result.detail && (
-                  <Accordion className="mt-2 border-t border-border">
+                  <Accordion
+                    className="mt-2 border-t border-border"
+                    value={
+                      openDetails.includes(detailValueOf(result.tld))
+                        ? [detailValueOf(result.tld)]
+                        : []
+                    }
+                    onValueChange={(next) =>
+                      setDetailOpen(detailValueOf(result.tld), next.length > 0)
+                    }
+                  >
                     <AccordionItem
-                      value={`detail-${result.tld}`}
+                      value={detailValueOf(result.tld)}
                       className="border-b-0 last:border-b-0"
                     >
                       <AccordionTrigger className="text-[var(--brand)]">
