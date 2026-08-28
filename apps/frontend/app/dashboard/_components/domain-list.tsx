@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { InfoHint } from "@/components/info-hint";
 import { GlossaryTerm } from "@/components/glossary-term";
 import { GLOSSARY } from "@/shared/lib/glossary";
@@ -18,22 +19,26 @@ interface DomainListProps {
 /**
  * 取得済みドメインの一覧セクション。取得も操作も `useMyDomains` が持つ。
  *
- * 並び替え・絞り込みは置いていない（issue #83 で入れたが外した）。
- * デモで持つドメインは数件で、全部が一画面に収まる。数件しか無い一覧に
- * 絞り込みを付けると、操作の前に「まず絞る」という手順が増えるだけになる。
- * 有効期限が近い順に並べる既定だけ残す。
+ * 絞り込みはドメイン名の検索だけ置く。状態での絞り込みと並び替えは外した
+ * （issue #83 で入れたが、数件の一覧では「まず絞る」手順が増えるだけだった）。
+ * 並びは有効期限が近い順で固定する。
+ *
+ * 検索は手元にある一覧に対して行う。バックエンドには問い合わせない。
+ * 保有数が数件のうちは取り直す方が遅く、打つたびに通信するのも無駄。
  */
 export function DomainList({ state }: DomainListProps) {
   const { domains, loading, loadError, loadUnauthorized, refresh } = state;
+  const [nameFilter, setNameFilter] = useState("");
 
   // 期限が近いものほど手を打つ必要があるので、上に置く。
-  const visibleDomains = useMemo(
-    () =>
-      [...domains].sort(
+  const visibleDomains = useMemo(() => {
+    const query = nameFilter.trim().toLowerCase();
+    return domains
+      .filter((domain) => !query || domain.name.toLowerCase().includes(query))
+      .sort(
         (a, b) => new Date(a.expiresAt).getTime() - new Date(b.expiresAt).getTime(),
-      ),
-    [domains],
-  );
+      );
+  }, [domains, nameFilter]);
 
   return (
     <section className="space-y-4">
@@ -116,11 +121,26 @@ export function DomainList({ state }: DomainListProps) {
 
       {domains.length > 0 && (
         <>
-          <div className="space-y-3">
-            {visibleDomains.map((domain) => (
-              <DomainRow key={domain.id} domain={domain} />
-            ))}
-          </div>
+          <Input
+            value={nameFilter}
+            onChange={(event) => setNameFilter(event.target.value)}
+            placeholder="ドメイン名で検索"
+            className="h-11 max-w-xs"
+            aria-label="ドメイン名で検索"
+          />
+
+          {visibleDomains.length === 0 ? (
+            // domains.length > 0 の分岐内なので、ここに来るのは検索で0件になったときだけ
+            <p className="rounded-xl border border-dashed border-gray-300 bg-white p-8 text-center text-sm text-gray-600">
+              「{nameFilter.trim()}」に一致するドメインはありません。
+            </p>
+          ) : (
+            <div className="space-y-3">
+              {visibleDomains.map((domain) => (
+                <DomainRow key={domain.id} domain={domain} />
+              ))}
+            </div>
+          )}
         </>
       )}
     </section>
