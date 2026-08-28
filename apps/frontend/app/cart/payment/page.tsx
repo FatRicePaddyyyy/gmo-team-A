@@ -21,6 +21,7 @@ import {
 } from "@/shared/lib/order-store";
 import { buildFlowSteps } from "@/shared/lib/progress-store";
 import { findTld } from "@/shared/lib/tld-catalog";
+import { GLOSSARY } from "@/shared/lib/glossary";
 import { PAYMENT_METHOD } from "@/shared/lib/payment-methods";
 import { NoOrderNotice } from "../_components/no-order-notice";
 
@@ -183,8 +184,7 @@ export default function CartPaymentPage() {
                   {item.name}
                   <GlossaryTerm
                     description={
-                      findTld(item.tld)?.summary ??
-                      "インターネット上の住所（ドメイン名）の末尾につく「TLD」です。"
+                      findTld(item.tld)?.summary ?? GLOSSARY.tld.description
                     }
                   >
                     <span style={{ color: "var(--brand)" }}>{item.tld}</span>

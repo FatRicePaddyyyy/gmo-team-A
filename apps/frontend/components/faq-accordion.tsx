@@ -9,7 +9,8 @@ import {
 
 export interface FaqItem {
   question: string;
-  answer: string;
+  /** 用語解説（GlossaryTerm）を混ぜられるよう ReactNode にしている */
+  answer: React.ReactNode;
 }
 
 interface FaqAccordionProps {

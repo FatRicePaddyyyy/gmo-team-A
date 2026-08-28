@@ -14,6 +14,7 @@ import { loadConfirmedOrder, type ConfirmedOrder } from "@/shared/lib/order-stor
 import { buildFlowSteps } from "@/shared/lib/progress-store";
 import { purposeLabel } from "@/shared/lib/purpose";
 import { findTld, MISCONCEPTION } from "@/shared/lib/tld-catalog";
+import { GLOSSARY } from "@/shared/lib/glossary";
 import { NoOrderNotice } from "../_components/no-order-notice";
 
 const COMPLETE_STEPS = buildFlowSteps("login");
@@ -80,8 +81,7 @@ export default function CartCompletePage() {
                   {item.name}
                   <GlossaryTerm
                     description={
-                      findTld(item.tld)?.summary ??
-                      "インターネット上の住所（ドメイン名）の末尾につく「TLD」です。"
+                      findTld(item.tld)?.summary ?? GLOSSARY.tld.description
                     }
                   >
                     <span style={{ color: "var(--brand)" }}>{item.tld}</span>
@@ -106,7 +106,15 @@ export default function CartCompletePage() {
           </LearningNote>
 
           <LearningNote title={MISCONCEPTION.publish.title} tone="warn">
-            <p>{MISCONCEPTION.publish.body}</p>
+            {/* 取得の直前なので、「あと何が要るのか」まで言い切る。
+                ここで止めると「取ったのに見られない」と後で驚かせる。 */}
+            <p>
+              ドメインは住所にあたるものです。サイトの中身を置く
+              <GlossaryTerm description={GLOSSARY.server.description}>サーバー</GlossaryTerm>
+              は別に必要で、
+              <GlossaryTerm description={GLOSSARY.nameServer.description}>ネームサーバー</GlossaryTerm>
+              の設定でつなぎます。
+            </p>
           </LearningNote>
 
           <div className="flex items-start gap-2 rounded-lg border border-border bg-gray-50 px-4 py-3 text-sm text-gray-700">

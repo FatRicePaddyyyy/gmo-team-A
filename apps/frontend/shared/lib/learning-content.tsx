@@ -1,3 +1,5 @@
+import { GlossaryTerm } from "@/components/glossary-term";
+import { GLOSSARY } from "@/shared/lib/glossary";
 import type { TldPrice } from "@/components/domain-price-table";
 import type { FaqItem } from "@/components/faq-accordion";
 import type { Step } from "@/components/steps-guide";
@@ -60,13 +62,25 @@ export const FAQS: FaqItem[] = [
   },
   {
     question: "更新を忘れるとどうなりますか？",
-    answer:
-      "有効期限が切れると、サイトもメールも止まります。一定の猶予期間を過ぎるとドメインは削除され、他の人が取得できる状態になります。更新日が近づいたらマイドメインで確認しましょう。",
+    answer: (
+      <>
+        有効期限が切れると、サイトもメールも止まります。一定の
+        <GlossaryTerm description={GLOSSARY.gracePeriod.description}>猶予期間</GlossaryTerm>
+        を過ぎるとドメインは削除され、他の人が取得できる状態になります。更新日が近づいたらマイドメインで確認しましょう。
+      </>
+    ),
   },
   {
     question: "取得すると自分の名前や住所が公開されますか？",
-    answer:
-      "はい。ドメインを取得すると登録者の氏名・住所・電話番号が Whois という仕組みで公開されます。",
+    answer: (
+      <>
+        はい。ドメインを取得すると登録者の氏名・住所・電話番号が{" "}
+        <GlossaryTerm description={GLOSSARY.whois.description}>Whois</GlossaryTerm>{" "}
+        という仕組みで公開されます。公開された内容は、外部の Whois
+        検索サイトから誰でも確認できます（このサービス内では確認できません）。
+        個人で取得する場合は、氏名や住所の代わりに事業者の情報を表示する「公開代行」を検討してください。
+      </>
+    ),
   },
   {
     question: ".co.jp は個人でも取れますか？",
@@ -89,8 +103,16 @@ export const MISCONCEPTIONS: FaqItem[] = [
   },
   {
     question: "ドメインを取れば、すぐサイトが見られる？",
-    answer:
-      "見られません。ドメインは住所にあたるもので、サイトの中身を置くサーバーは別に必要です。",
+    answer: (
+      <>
+        見られません。ドメインは住所にあたるもので、サイトの中身を置く
+        <GlossaryTerm description={GLOSSARY.server.description}>サーバー</GlossaryTerm>
+        は別に必要です。サーバーはレンタルサーバー事業者と契約して借り、
+        <GlossaryTerm description={GLOSSARY.nameServer.description}>ネームサーバー</GlossaryTerm>
+        の設定でドメインと結びつけます。このサービスが扱うのはドメインだけなので、
+        サーバーは別途ご用意いただく必要があります。
+      </>
+    ),
   },
   {
     question: "安い末尾を選べば得？",
