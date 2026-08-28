@@ -679,18 +679,24 @@ describe("結合: POST /api/v1/secure/domains/{id}/restore", () => {
     expect(json.error).toContain("できません");
   });
 
-  test("[異常系] 権限なし → 403 + ユーザー向けメッセージ", async () => {
+  test("[異常系] レジストリ 403 (not_sponsored) → 409 + 「当社では管理していない」旨のメッセージ + DB 掃除", async () => {
+    // Issue #156: 別レジストラに移管されたドメインが自社 DB に残っていて、復旧しようとすると
+    // レジストリが 403 を返す。従来は「権限がありません」と誤読される文言だったのを、
+    // 「当社では預かっていない」旨の文言に切り替え、その場で DB からも掃除する。
     mockRestoreDeps();
-    vi.spyOn(RegistryBridge, "restore").mockResolvedValue({ success: false, data: null, error: "forbidden" });
+    vi.spyOn(RegistryBridge, "restore").mockResolvedValue({ success: false, data: null, error: "not_sponsored" });
+    const deleteSpy = vi.spyOn(DomainRepository, "deleteById").mockResolvedValue({ success: true, data: undefined, error: null });
 
     const res = await restoreDomainRouteHandler.request(
       "/api/v1/secure/domains/dom-001/restore",
       { method: "POST" },
       mockEnv,
     );
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(409);
     const json = await res.json() as any;
-    expect(json.error).toContain("権限");
+    expect(json.error).toContain("当社では管理していない");
+    // ゴミ行を掃除しているか
+    expect(deleteSpy).toHaveBeenCalledWith(expect.objectContaining({ id: "dom-001" }));
   });
 });
 

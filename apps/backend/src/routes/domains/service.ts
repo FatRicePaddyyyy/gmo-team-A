@@ -294,6 +294,10 @@ export class DomainService {
    * 対象: 呼び出し元 userId が owner のドメイン全件。
    * 判定:
    *  - RegistryBridge.info が domain_not_found (2303) を返せば「消滅した」→ deleteById
+   *  - RegistryBridge.info が not_sponsored (403) を返せば「別レジストラに移った」→ deleteById
+   *    (移管 cron の poll メッセージ取りこぼしで DB に行が残るケースを掃除する。
+   *     本番で ruru.com がこの状態になっていた: レジストリは 403 を返すが DB には行があり、
+   *     利用者から見ると「復旧」ボタンが押せるのに 403 で失敗する、という状態だった。)
    *  - 通信断・メンテ (registry_unreachable 系) は残す (一時障害で一覧が空になる方が困る)
    *  - pendingTransfer は transfer-cron-poll に委ね、ここでは触らない (FK 制約でも失敗する)
    *  - status 遷移や有効期限のずれはここでは同期しない — 詳細ページの info が担当する
@@ -322,14 +326,16 @@ export class DomainService {
         });
         if (infoResult.success) {return;}
         if (isRegistryUnreachable(infoResult.error)) {return;}
-        if (infoResult.error !== "domain_not_found") {
+        // domain_not_found = レジストリ側で消滅、not_sponsored = 別レジストラが預かっている。
+        // どちらも「もう当社の管轄ではない」ので DB から掃除する。
+        if (infoResult.error !== "domain_not_found" && infoResult.error !== "not_sponsored") {
           console.warn(
             `DomainService.refreshMyDomains: info failed for ${row.name}: ${infoResult.error}`,
           );
           return;
         }
 
-        // レジストリで完全に消滅している → DB から掃除。
+        // レジストリで完全に消滅している or 別レジストラの管轄 → DB から掃除。
         // pending 移管が残っていた場合の FK 失敗はログして残す (次の cron / 操作で解決)。
         const delResult = await DomainRepository.deleteById({ id: row.id, db });
         if (!delResult.success) {
@@ -385,6 +391,18 @@ export class DomainService {
           ),
           error: null,
         };
+      }
+      // not_sponsored / domain_not_found = 当社の管轄外だった。DB のゴミ行を掃除して
+      // 次回以降マイドメインにも詳細にも出さないようにする (issue #156)。
+      // 掃除後は 404 相当として上位に返す (呼び出し側は domain_not_found を 404 に落とす)。
+      if (infoResult.error === "not_sponsored" || infoResult.error === "domain_not_found") {
+        const del = await DomainRepository.deleteById({ id: domainId, db });
+        if (!del.success) {
+          console.warn(
+            `DomainService.info: ${infoResult.error} の domain ${domain.name} を掃除できませんでした (FK の可能性): ${del.error}`,
+          );
+        }
+        return { success: false, data: null, error: "domain_not_found" };
       }
       return infoResult;
     }
@@ -660,7 +678,19 @@ export class DomainService {
       registry: domain.registry,
       env,
     });
-    if (!deleteResult.success) {return deleteResult;}
+    if (!deleteResult.success) {
+      // not_sponsored = 当社が預かっていないドメインだった。自社 DB の行を掃除する
+      // (restore と同じ理由。issue #156)。
+      if (deleteResult.error === "not_sponsored") {
+        const del = await DomainRepository.deleteById({ id: domainId, db });
+        if (!del.success) {
+          console.warn(
+            `DomainService.delete: not_sponsored の domain ${domain.name} を掃除できませんでした (FK の可能性): ${del.error}`,
+          );
+        }
+      }
+      return deleteResult;
+    }
 
     // 廃止後の status を "pendingDelete" 決め打ちにしない。
     // delete のレスポンスは resData が空で status を返さないため info で取り直す。
@@ -897,7 +927,21 @@ export class DomainService {
       registry: domain.registry,
       env,
     });
-    if (!restoreResult.success) {return restoreResult;}
+    if (!restoreResult.success) {
+      // not_sponsored = レジストリ側で「そのドメインは当社の管轄ではない」と返ってきた。
+      // 自社 DB の行がゴミとして残っている状態なので、その場で掃除してもう表示しないようにする。
+      // 本番の ruru.com がこの状態だった (issue #156): 移管 cron のメッセージ取りこぼしで
+      // domains 行だけ残り、利用者は復旧ボタンを押しても 403 で失敗し続けていた。
+      if (restoreResult.error === "not_sponsored") {
+        const del = await DomainRepository.deleteById({ id: domainId, db });
+        if (!del.success) {
+          console.warn(
+            `DomainService.restore: not_sponsored の domain ${domain.name} を掃除できませんでした (FK の可能性): ${del.error}`,
+          );
+        }
+      }
+      return restoreResult;
+    }
 
     // 復旧後の status を "ok" 決め打ちにしない。
     // restore のレスポンスは resData が空で status を返さないため、info で取り直す。

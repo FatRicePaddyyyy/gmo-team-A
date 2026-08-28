@@ -49,7 +49,9 @@ export const rejectTransferRouteHandler = app.openapi(route, async (ctx) => {
     if (result.error === "forbidden") {
       return ctx.json({ success: false as const, data: null, error: toUserMessage(result.error) }, 403);
     }
-    if (result.error === "transfer_not_found") {
+    // not_sponsored (レジストリの 403 = 当社では預かっていないドメイン) は権限問題ではなく
+    // DB とレジストリの食い違い。409 に倒して状態不一致であることを伝える。
+    if (result.error === "transfer_not_found" || result.error === "not_sponsored") {
       return ctx.json({ success: false as const, data: null, error: toUserMessage(result.error) }, 409);
     }
     // メンテナンスは「内部で異常が起きた」のではなく「待てば戻る」状態なので、

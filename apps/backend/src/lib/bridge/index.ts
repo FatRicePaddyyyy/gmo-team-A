@@ -556,6 +556,11 @@ export class RegistryBridge {
         }),
       );
       if (response.status === 404) {return { success: false, data: null, error: "domain_not_found" };}
+      // info でも 403 が返ることがある (sponsoring registrar 以外に対する参照禁止)。
+      // Swagger の GET には 403 は書かれていないが、restore/delete/update と同じ
+      // 「そのドメインは当社が預かっていない」意味なので not_sponsored に集約する。
+      // refreshMyDomains はこの結果を見て domain 行を掃除する。
+      if (response.status === 403) {return { success: false, data: null, error: "not_sponsored" };}
       if (error) {return { success: false, data: null, error: mapRegistryError(error, response.status) };}
       const extracted = extractResData(data);
       if (!extracted.success) {return extracted;}
@@ -653,8 +658,10 @@ export class RegistryBridge {
         }),
       );
       // Swagger 上 update は 200/404 のみだが、実運用では sponsoring registrar 以外の呼び出しで
-      // 403 が返り得る (restore / delete と同じ扱い)。routes 側で 403 に落とせるように forbidden にマップ。
-      if (response.status === 403) {return { success: false, data: null, error: "forbidden" };}
+      // 403 が返り得る (restore / delete と同じ扱い)。
+      // これは「ログイン中の会員の権限」ではなく「そのドメインを預かっているレジストラが当社ではない」
+      // という意味なので、forbidden (= ユーザー権限) ではなく not_sponsored に分けて返す。
+      if (response.status === 403) {return { success: false, data: null, error: "not_sponsored" };}
 
       // 実測 (kitaqnic 2026-08-27): client*Prohibited のドメインを update すると
       // HTTP 500 + result.code 2304 "Object status prohibits operation" が返る (Swagger 上は 200 想定)。
@@ -724,8 +731,10 @@ export class RegistryBridge {
           params: { path: { name } },
         }),
       );
-      // sponsoring registrar 以外の呼び出し等 (restore と同じ扱い)
-      if (response.status === 403) {return { success: false, data: null, error: "forbidden" };}
+      // sponsoring registrar 以外の呼び出し (restore と同じ扱い)。
+      // ユーザー権限の 403 ではなく「そのドメインを当社が預かっていない」意味なので
+      // not_sponsored に分ける。
+      if (response.status === 403) {return { success: false, data: null, error: "not_sponsored" };}
       if (response.status === 404) {return { success: false, data: null, error: "domain_not_found" };}
       // すでに pendingDelete のドメインを再度廃止しようとした場合など
       if (isOperationProhibited(response, error ?? data)) {
@@ -757,7 +766,11 @@ export class RegistryBridge {
           params: { path: { name } },
         }),
       );
-      if (response.status === 403) {return { success: false, data: null, error: "forbidden" };}
+      // Swagger 定義 (POST /api/v1/epp/domains/{name}/restore) の 403 =
+      // 「sponsoring registrar 以外の呼び出し」= 当社ではない他のレジストラが
+      // そのドメインを預かっている状態。ログイン会員の権限とは無関係。
+      // forbidden は「ユーザー権限がない」意味で使っているので、ここは分けて not_sponsored を返す。
+      if (response.status === 403) {return { success: false, data: null, error: "not_sponsored" };}
       if (response.status === 404) {return { success: false, data: null, error: "domain_not_found" };}
       // pendingDelete でないドメインを復旧しようとした場合など
       if (isOperationProhibited(response, error ?? data)) {
@@ -850,7 +863,8 @@ export class RegistryBridge {
       // 運用チームがログで気付けるようにする (実測 401 の body: result.code 2200 "Authentication error")。
       if (response.status === 401) {return { success: false, data: null, error: mapRegistryError(error, response.status) };}
       // 403 は sponsoring registrar 以外の呼び出し (Kitaqsign Swagger 定義)。
-      if (response.status === 403) {return { success: false, data: null, error: "forbidden" };}
+      // ユーザー権限ではなく「当社が預かっていないドメイン」を意味するので not_sponsored に分ける。
+      if (response.status === 403) {return { success: false, data: null, error: "not_sponsored" };}
       // 404 は "対象ドメイン不在" (実測: result.code 2303 "Object does not exist")。
       // 409 は "ドメインは存在するが pendingTransfer でない" (実測: result.code 2301 "Object not pending transfer")。
       // どちらもユーザー視点では「その移管申請は無い」ので transfer_not_found に集約する。
